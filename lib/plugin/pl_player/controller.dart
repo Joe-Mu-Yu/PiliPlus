@@ -908,6 +908,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             }
           }
           playerStatus.value = .playing;
+
+          videoPlayerServiceHandler?.onStatusChange(
+            .playing,
+            isBuffering.value,
+            isLive,
+          );
         } else {
           _disableAutoEnterPip();
           playerStatus.value = .paused;
@@ -964,11 +970,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }),
       stream.buffering.listen((bool buffering) {
         isBuffering.value = buffering;
-        videoPlayerServiceHandler?.onStatusChange(
-          playerStatus.value,
-          buffering,
-          isLive,
-        );
+        final playerStatus = this.playerStatus.value;
+        if (!playerStatus.isCompleted) {
+          videoPlayerServiceHandler?.onStatusChange(
+            playerStatus,
+            buffering,
+            isLive,
+          );
+        }
       }),
       if (kDebugMode)
         stream.log.listen(((PlayerLog log) {
