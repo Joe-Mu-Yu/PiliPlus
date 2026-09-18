@@ -7,7 +7,6 @@ import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/src/extension_navigation.dart';
 import 'package:material_ui/material_ui.dart';
@@ -69,7 +68,7 @@ void imageSaveDialog({
                           iconSize: _iconSize,
                           tooltip: '稍后再看',
                           onPressed: () => {
-                            SmartDialog.dismiss(),
+                            Get.back(),
                             UserHttp.toViewLater(aid: aid, bvid: bvid),
                           },
                           icon: const Icon(Icons.watch_later_outlined),
@@ -80,7 +79,7 @@ void imageSaveDialog({
                             iconSize: _iconSize,
                             tooltip: '分享',
                             onPressed: () {
-                              SmartDialog.dismiss();
+                              Get.back();
                               ImageUtils.onShareImg(cover);
                             },
                             icon: const Icon(Icons.share),
@@ -90,7 +89,7 @@ void imageSaveDialog({
                             iconSize: 18,
                             tooltip: '复制链接',
                             onPressed: () {
-                              SmartDialog.dismiss();
+                              Get.back();
                               Utils.copyText(cover);
                             },
                             icon: const Icon(Icons.copy),
@@ -103,7 +102,7 @@ void imageSaveDialog({
                               cover,
                             ]);
                             if (saveStatus) {
-                              SmartDialog.dismiss();
+                              Get.back();
                             }
                           },
                           icon: const Icon(Icons.download),
