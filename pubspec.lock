@@ -102,7 +102,7 @@ packages:
     description:
       path: audio_service
       ref: main
-      resolved-ref: e0860cf42618880b7e4fc5843d1e297c93d23922
+      resolved-ref: "41da864d0af815e0349b29102035c4b1d8dd3f1d"
       url: "https://github.com/bggRGjQaUbCoE/audio_service.git"
     source: git
     version: "0.18.19"
