@@ -35,6 +35,12 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (!flutterEngine.plugins.has(RecorderBackgroundPlugin::class.java)) {
+            flutterEngine.plugins.add(RecorderBackgroundPlugin())
+        }
+        if (!flutterEngine.plugins.has(GalleryMediaStorePlugin::class.java)) {
+            flutterEngine.plugins.add(GalleryMediaStorePlugin())
+        }
         nativeFeedback = NativeFeedback(this, flutterEngine)
         nativeSelectionToolbar = NativeSelectionToolbar(this, flutterEngine)
         miuixNavigationOverlay = MiuixNavigationOverlay(this, flutterEngine)

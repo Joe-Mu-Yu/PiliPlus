@@ -84,7 +84,12 @@ dependencies:
       url: https://github.com/bggRGjQaUbCoE/extended_nested_scroll_view.git
       ref: dev
   ffi: ^2.2.0
+  ffmpeg_kit_extended_flutter: 0.6.2
   file_picker: ^12.0.0
+  open_filex: ^4.7.0
+  permission_handler: ^13.0.2
+  pure_live:
+    path: third_party/pure_live
   fixnum: ^1.1.1
   fl_chart: ^1.0.0
   flex_seed_scheme: ^5.0.0
@@ -279,3 +284,8 @@ flutter:
     - family: custom_icon
       fonts:
         - asset: assets/fonts/custom_icon.ttf
+
+ffmpeg_kit_extended_config:
+  type: base
+  gpl: false
+  small: false

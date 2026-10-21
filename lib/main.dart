@@ -16,6 +16,7 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
+import 'package:PiliPlus/services/pure_live_recording_preferences.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/calc_window_position.dart';
@@ -41,6 +42,7 @@ import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:pure_live/host/recording_i18n.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as path;
@@ -100,6 +102,12 @@ void main() async {
     await Utils.copyText(e.toString());
     if (kDebugMode) debugPrint('GStorage init error: $e');
     exit(0);
+  }
+  PureLiveRecordingPreferences.configure(GStorage.setting);
+  try {
+    await RecordingI18n.initialize();
+  } catch (e) {
+    if (kDebugMode) debugPrint('Pure Live translations unavailable: $e');
   }
   ScaledWidgetsFlutterBinding.instance.scaleFactor = Pref.uiScale;
   await Future.wait([

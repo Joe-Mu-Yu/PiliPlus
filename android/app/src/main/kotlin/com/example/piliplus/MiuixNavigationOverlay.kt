@@ -215,6 +215,11 @@ internal class MiuixNavigationOverlay(
     }
 
     private fun selectDestination(index: Int) {
+        if (index !in uiState.destinations.indices) return
+        // Update the native source immediately so the selected icon and the
+        // moving indicator stay in sync with the tap. Flutter remains the
+        // routing source of truth and will confirm the same index in `update`.
+        uiState = uiState.copy(selectedIndex = index)
         channel.invokeMethod("selectDestination", index)
     }
 

@@ -153,6 +153,14 @@ internal class FloatingTabMotionState(
         animateTo(index)
     }
 
+    suspend fun select(index: Int) {
+        selectionSync.markCommitted(index)
+        isPressed = false
+        isDragging = false
+        directPosition = null
+        animateTo(index)
+    }
+
     private suspend fun animateTo(index: Int) {
         position.animateTo(
             targetValue = index.toFloat(),

@@ -19,7 +19,6 @@ import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:get/get.dart';
@@ -76,10 +75,6 @@ class MainController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    if (Pref.autoUpdate) {
-      Update.checkUpdate();
-    }
-
     setNavBarConfig();
 
     controller = mainTabBarView
@@ -240,14 +235,7 @@ class MainController extends GetxController
   void setNavBarConfig() {
     List<int>? navBarSort =
         (GStorage.setting.get(SettingBoxKey.navBarSort) as List?)?.fromCast();
-    late final List<NavigationBarType> navigationBars;
-    if (navBarSort == null || navBarSort.isEmpty) {
-      navigationBars = NavigationBarType.values;
-    } else {
-      navigationBars = navBarSort
-          .map(NavigationBarType.values.elementAt)
-          .toList();
-    }
+    final navigationBars = NavigationBarType.fromSavedIndexes(navBarSort);
     this.navigationBars = navigationBars;
     final defPage = Pref.defaultHomePage;
     selectedIndex.value = math.max(0, navigationBars.indexOf(defPage));

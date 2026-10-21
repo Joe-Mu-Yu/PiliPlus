@@ -189,6 +189,9 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
   final RxDouble _progress = 1.0.obs;
   bool _inApp = false;
   bool _off = false;
+  bool _livePlayerMode = false;
+  String? _livePlatformId;
+  String? _liveAnchorName;
 
   InAppWebViewController? _webViewController;
 
@@ -200,7 +203,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
     super.initState();
     final parameters = Get.parameters;
     _url = (widget.url ?? parameters['url']!).http2https;
-    _title = _url.obs;
+    _title = (widget.title ?? parameters['title'] ?? _url).obs;
     userAgent = switch (parameters['uaType']) {
       'pc' => BrowserUa.pc,
       'mob' => BrowserUa.mob,
@@ -209,6 +212,9 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
     if (Get.arguments case final Map map) {
       _inApp = map['inApp'] ?? false;
       _off = map['off'] ?? false;
+      _livePlayerMode = map['livePlayer'] ?? false;
+      _livePlatformId = map['livePlatformId'] as String?;
+      _liveAnchorName = map['liveAnchorName'] as String?;
     }
 
     if (Platform.isAndroid) {
@@ -414,13 +420,74 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
       appBar: widget.url != null
           ? null
           : AppBar(
-              title: Obx(
-                () => Text(
-                  _title.value.isNotEmpty ? _title.value : _url,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              toolbarHeight: _livePlayerMode ? 68 : null,
+              backgroundColor: _livePlayerMode
+                  ? ColorScheme.of(context).surface
+                  : null,
+              foregroundColor: _livePlayerMode
+                  ? ColorScheme.of(context).onSurface
+                  : null,
+              surfaceTintColor: _livePlayerMode ? Colors.transparent : null,
+              elevation: _livePlayerMode ? 0 : null,
+              title: _livePlayerMode
+                  ? Obx(
+                      () {
+                        final scheme = ColorScheme.of(context);
+                        final anchorName = _liveAnchorName?.trim();
+                        final title = anchorName?.isNotEmpty == true
+                            ? anchorName!
+                            : _title.value.isNotEmpty
+                            ? _title.value
+                            : _url;
+                        return Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 19,
+                              backgroundColor: scheme.secondaryContainer,
+                              foregroundColor: scheme.onSecondaryContainer,
+                              child: Icon(_livePlatformIcon),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$_livePlatformLabel · 直播间',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    )
+                  : Obx(
+                      () => Text(
+                        _title.value.isNotEmpty ? _title.value : _url,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
               bottom: PreferredSize(
                 preferredSize: Size.zero,
                 child: Obx(
@@ -429,7 +496,17 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
                       : const SizedBox.shrink(),
                 ),
               ),
-              actions: _isPop ? null : _actions,
+              actions: _isPop
+                  ? null
+                  : [
+                      if (_livePlayerMode)
+                        IconButton(
+                          tooltip: '刷新直播间',
+                          onPressed: () => _webViewController?.reload(),
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ..._actions,
+                    ],
             ),
       body: _isPop
           ? null
@@ -619,4 +696,28 @@ document.styleSheets[0].insertRule('#app__display-area > div.control-panel {disp
             ),
     );
   }
+
+  String get _livePlatformLabel {
+    final platform = _livePlatformId?.toLowerCase();
+    if (platform != null) {
+      return switch (platform) {
+        'douyin' => '抖音',
+        'douyu' => '斗鱼',
+        'bilibili' => '哔哩哔哩',
+        _ => platform,
+      };
+    }
+    final host = Uri.tryParse(_url)?.host.toLowerCase() ?? '';
+    if (host.contains('douyin')) return '抖音';
+    if (host.contains('douyu')) return '斗鱼';
+    if (host.contains('bilibili')) return '哔哩哔哩';
+    return '直播';
+  }
+
+  IconData get _livePlatformIcon => switch (_livePlatformId?.toLowerCase()) {
+    'douyin' => Icons.music_note_rounded,
+    'douyu' => Icons.sports_esports_outlined,
+    'bilibili' => Icons.tv_outlined,
+    _ => Icons.live_tv_outlined,
+  };
 }

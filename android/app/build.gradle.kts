@@ -74,6 +74,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
         if (project.hasProperty("dev")) {
             resValues = true
         }

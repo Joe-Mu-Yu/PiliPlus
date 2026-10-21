@@ -600,6 +600,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     VoidCallback? onInit,
     Volume? volume,
     bool autoFullScreenFlag = false,
+    Map<String, String>? mediaHeaders,
   }) async {
     try {
       _processing = true;
@@ -635,7 +636,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         return;
       }
       // 配置Player 音轨、字幕等等
-      await _createVideoController(dataSource, seekTo, volume);
+      await _createVideoController(
+        dataSource,
+        seekTo,
+        volume,
+        mediaHeaders: mediaHeaders,
+      );
 
       if (_playerCount == 0) {
         _removeListeners();
@@ -719,7 +725,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  Future<Player> _initPlayer() async {
+  Future<Player> _initPlayer({Map<String, String>? mediaHeaders}) async {
     assert(_videoPlayerController == null);
     final opt = {
       'video-sync': Pref.videoSync,
@@ -752,7 +758,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
-    player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
+    player.setMediaHeader(
+      userAgent: mediaHeaders == null ? BrowserUa.pc : null,
+      referer: mediaHeaders == null ? HttpString.baseUrl : null,
+      headers: mediaHeaders,
+    );
 
     _startListeners(player);
 
@@ -766,8 +776,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   Future<void> _createVideoController(
     DataSource dataSource,
     Duration? seekTo,
-    Volume? volume,
-  ) async {
+    Volume? volume, {
+    Map<String, String>? mediaHeaders,
+  }) async {
     isBuffering.value = false;
     _heartDuration = 0;
     danmakuController?.clear();
@@ -775,7 +786,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     var player = _videoPlayerController;
 
     if (player == null) {
-      player = await _initPlayer();
+      player = await _initPlayer(mediaHeaders: mediaHeaders);
       if (_playerCount == 0) {
         _removeListeners();
         player.dispose();

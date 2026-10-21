@@ -50,6 +50,7 @@ class _MainAppState extends PopScopeState<MainApp>
   late ColorScheme _colorScheme;
   Brightness? _brightness;
   bool _isMainRouteActive = true;
+  bool _nativeNavigationUnavailable = false;
 
   @override
   bool get initCanPop => false;
@@ -428,6 +429,7 @@ class _MainAppState extends PopScopeState<MainApp>
 
   bool get _usesNativeMiuixNavigation =>
       Platform.isAndroid &&
+      !_nativeNavigationUnavailable &&
       _isMainRouteActive &&
       _mainController.useBottomNav &&
       _mainController.floatingNavBar &&
@@ -484,7 +486,19 @@ class _MainAppState extends PopScopeState<MainApp>
         bottomLiftDp: Pref.floatingNavBottomLift,
         followMyHyperModifierNavigationLift:
             Pref.followMyHyperModifierNavigationLift,
-      );
+      ).catchError((_) async {
+        // Do not expose Flutter's fallback until the native overlay confirms
+        // it has hidden; otherwise a transient bridge failure can leave both
+        // bars visible at once.
+        try {
+          await PiliAndroidHelper.hideMiuixNavigation();
+        } catch (_) {
+          return;
+        }
+        if (mounted && !_nativeNavigationUnavailable) {
+          setState(() => _nativeNavigationUnavailable = true);
+        }
+      });
     });
     return const SizedBox.shrink();
   });
@@ -579,7 +593,9 @@ class _MainAppState extends PopScopeState<MainApp>
     final useNativeMiuixNavigation = _usesNativeMiuixNavigation;
     if (Platform.isAndroid && !useNativeMiuixNavigation) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) PiliAndroidHelper.hideMiuixNavigation();
+        if (mounted) {
+          PiliAndroidHelper.hideMiuixNavigation().catchError((_) {});
+        }
       });
     }
     final EdgeInsets padding;
