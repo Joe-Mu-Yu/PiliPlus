@@ -76,6 +76,7 @@ internal class FlutterSurfaceBackdropSampler(
     private var lastCaptureStartedAt = Long.MIN_VALUE
     private var lastSnapshotAt = Long.MIN_VALUE
     private var smoothedFrameIntervalMs = 0f
+    private var flutterFrameSettleDeadline = Long.MIN_VALUE
     private var pointerDown = false
     private var keepCapturingUntil = Long.MIN_VALUE
     private var postTouchCaptureDeadline = Long.MIN_VALUE
@@ -155,6 +156,10 @@ internal class FlutterSurfaceBackdropSampler(
      * this wake-up does not start an idle capture loop.
      */
     fun onFlutterFrameRendered() {
+        // PixelCopy may complete before Flutter's new frame is composited into
+        // its SurfaceView. Capture through the short settle window so late
+        // refresh and image paints replace an older snapshot.
+        flutterFrameSettleDeadline = SystemClock.uptimeMillis() + FLUTTER_FRAME_SETTLE_MS
         scheduleCapture(preemptDelayed = true)
     }
 
@@ -182,6 +187,7 @@ internal class FlutterSurfaceBackdropSampler(
                 pointerDown = true
                 keepCapturingUntil = Long.MIN_VALUE
                 postTouchCaptureDeadline = Long.MIN_VALUE
+                flutterFrameSettleDeadline = Long.MIN_VALUE
                 // Do not fold the idle gap into the active-frame FPS metric.
                 lastSnapshotAt = Long.MIN_VALUE
                 smoothedFrameIntervalMs = 0f
@@ -413,8 +419,13 @@ internal class FlutterSurfaceBackdropSampler(
         )
     }
 
-    private fun shouldKeepCapturing(): Boolean =
-        pointerDown || SystemClock.uptimeMillis() < keepCapturingUntil
+    private fun shouldKeepCapturing(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now >= flutterFrameSettleDeadline) {
+            flutterFrameSettleDeadline = Long.MIN_VALUE
+        }
+        return pointerDown || now < keepCapturingUntil || now < flutterFrameSettleDeadline
+    }
 
     private fun captureIntervalMs(): Long {
         val refreshRate = activity.window.decorView.display?.refreshRate
@@ -495,6 +506,7 @@ internal class FlutterSurfaceBackdropSampler(
         const val MIN_CAPTURE_INTERVAL_MS = 4L
         const val POST_TOUCH_SETTLE_MS = 180L
         const val MAX_POST_TOUCH_CAPTURE_MS = 4_000L
+        const val FLUTTER_FRAME_SETTLE_MS = 320L
         // The renderer signal preempts this polling. Once Flutter reports a
         // committed frame, retry at display cadence for up to two seconds.
         const val INITIAL_RETRY_WAITING_FOR_FLUTTER_MS = 250L

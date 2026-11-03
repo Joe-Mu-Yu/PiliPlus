@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -13,9 +15,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -27,14 +28,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -43,28 +48,27 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aritxonly.deadliner.ui.navigation.MiuixFloatingTabBar
-import com.aritxonly.deadliner.ui.navigation.MiuixFloatingTabBarDefaults
-import com.aritxonly.deadliner.ui.navigation.MiuixFloatingTabItem
-import com.aritxonly.deadliner.ui.navigation.MiuixFloatingTabLayout
-import com.aritxonly.deadliner.ui.theme.AdvancedMaterialSpec
-import com.aritxonly.deadliner.ui.theme.LocalAdvancedMaterialSpec
+import top.yukonga.miuix.kmp.basic.Badge
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDefaults
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Play
+import top.yukonga.miuix.kmp.icon.extended.Recording
+import top.yukonga.miuix.kmp.icon.extended.ScreenMirroring
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import kotlin.math.roundToInt
+import kotlin.math.abs
 
 /**
- * Application bridge for Deadliner's unmodified floating tab bar. Flutter owns
- * routes and state; the copied Compose implementation owns all chrome motion
- * and glass rendering. The bridge imports a PixelCopy snapshot of Flutter
- * into a Compose [LayerBackdrop] source for the untouched glass pipeline.
+ * Flutter owns routes and state; the Miuix library provides the floating bar
+ * and item visuals. The app keeps its existing swipe-to-select gesture around
+ * the official items without drawing a separate selection indicator.
  */
 @Composable
 internal fun DeadlinerNavigationOverlayContent(
@@ -116,83 +120,108 @@ internal fun DeadlinerNavigationOverlayContent(
         val icon = when (destination.key) {
             "home" -> MiuixIcons.Home
             "dynamics" -> MiuixIcons.Messages
+            "mine" -> MiuixIcons.ContactsCircle
+            "follow" -> MiuixIcons.ScreenMirroring
+            "recorderCenter" -> MiuixIcons.Recording
+            "movies" -> MiuixIcons.Play
             else -> MiuixIcons.ContactsCircle
         }
-        MiuixFloatingTabItem(
-            key = destination.key,
-            label = destination.label,
-            selectedIcon = rememberVectorPainter(icon),
-            unselectedIcon = rememberVectorPainter(icon),
-            badge = destination.badge,
-            iconScale = if (destination.key == "home") 0.95f else 1f,
-        )
+        destination to icon
     }
-    val backdrop = rememberLayerBackdrop()
+    var draggedIndex by remember { mutableIntStateOf(state.selectedIndex) }
+    val density = LocalDensity.current
+    val horizontalPaddingPx = with(density) {
+        FloatingNavigationBarDefaults.HorizontalPadding.toPx()
+    }
+    val itemStridePx = with(density) {
+        (FloatingNavigationBarDefaults.IconSize +
+            FloatingNavigationBarDefaults.IconPadding * 2 +
+            FloatingNavigationBarDefaults.ItemSpacing).toPx()
+    }
+    val selectDestination by rememberUpdatedState(onDestinationSelected)
+
+    LaunchedEffect(state.selectedIndex) {
+        draggedIndex = state.selectedIndex
+    }
 
     MaterialTheme(colorScheme = materialColors) {
         MiuixTheme(colors = miuixColors) {
-            CompositionLocalProvider(
-                LocalAdvancedMaterialSpec provides AdvancedMaterialSpec(enabled = true),
+            AnimatedVisibility(
+                visible = state.visible,
+                enter = fadeIn(tween(180)) + slideInVertically(tween(260)) { it / 2 },
+                exit = fadeOut(tween(140)) + slideOutVertically(tween(220)) { it / 2 },
             ) {
-                AnimatedVisibility(
-                    visible = state.visible,
-                    enter = fadeIn(tween(180)) + slideInVertically(tween(260)) { it / 2 },
-                    exit = fadeOut(tween(140)) + slideOutVertically(tween(220)) { it / 2 },
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Column(
+                    if (state.backdropDebug) {
+                        BackdropDebugPanel(
+                            snapshot = backdropSnapshot,
+                            debugState = backdropDebugState,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    FloatingNavigationBar(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(
-                                start = 16.dp,
-                                top = 24.dp,
-                                end = 16.dp,
-                                bottom = 4.dp + state.bottomLiftDp.dp,
-                            ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                            .offset(y = -state.bottomLiftDp.dp)
+                            .pointerInput(items.size, horizontalPaddingPx, itemStridePx) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    var dragging = false
+                                    var targetIndex = draggedIndex
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                            ?: break
+                                        if (!change.pressed) break
+                                        val deltaX = change.position.x - down.position.x
+                                        if (!dragging && abs(deltaX) > viewConfiguration.touchSlop) {
+                                            dragging = true
+                                        }
+                                        if (dragging) {
+                                            change.consume()
+                                            targetIndex = (
+                                                (change.position.x - horizontalPaddingPx) /
+                                                    itemStridePx
+                                                ).toInt().coerceIn(items.indices)
+                                            draggedIndex = targetIndex
+                                        }
+                                    }
+                                    if (dragging) selectDestination(targetIndex)
+                                }
+                            }
+                            .onGloballyPositioned { coordinates ->
+                                val position = coordinates.positionInWindow()
+                                onBackdropBoundsChanged(
+                                    FlutterBackdropBounds(
+                                        left = position.x.toInt(),
+                                        top = position.y.toInt(),
+                                        width = coordinates.size.width,
+                                        height = coordinates.size.height,
+                                    ),
+                                )
+                            },
                     ) {
-                        if (state.backdropDebug) {
-                            BackdropDebugPanel(
-                                snapshot = backdropSnapshot,
-                                debugState = backdropDebugState,
-                            )
-                            Spacer(Modifier.height(8.dp))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(MiuixFloatingTabBarDefaults.Height),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            FlutterBackdropLayer(
-                                snapshot = backdropSnapshot,
-                                backdrop = backdrop,
-                            )
-                            MiuixFloatingTabBar(
-                                items = items,
-                                selectedKey = state.destinations
-                                    .getOrNull(state.selectedIndex)
-                                    ?.key
-                                    .orEmpty(),
-                                onItemSelected = { selected ->
-                                    onDestinationSelected(
-                                        items.indexOfFirst { it.key == selected.key }
-                                            .coerceAtLeast(0),
-                                    )
+                        items.forEachIndexed { index, (destination, icon) ->
+                            val badge = destination.badge?.let { badgeText ->
+                                @Composable {
+                                    if (badgeText.isEmpty()) {
+                                        Badge()
+                                    } else {
+                                        Badge { Text(badgeText) }
+                                    }
+                                }
+                            }
+                            FloatingNavigationBarItem(
+                                selected = draggedIndex == index,
+                                onClick = {
+                                    draggedIndex = index
+                                    selectDestination(index)
                                 },
-                                modifier = Modifier.onGloballyPositioned { coordinates ->
-                                    val position = coordinates.positionInWindow()
-                                    onBackdropBoundsChanged(
-                                        FlutterBackdropBounds(
-                                            left = position.x.roundToInt(),
-                                            top = position.y.roundToInt(),
-                                            width = coordinates.size.width,
-                                            height = coordinates.size.height,
-                                        ),
-                                    )
-                                },
-                                layout = MiuixFloatingTabLayout.Stacked,
-                                backdrop = backdropSnapshot?.let { backdrop },
+                                icon = icon,
+                                label = destination.label,
+                                badge = badge,
                             )
                         }
                     }
@@ -201,12 +230,9 @@ internal fun DeadlinerNavigationOverlayContent(
         }
     }
 }
-
 /**
- * Shows every observable boundary in the cross-surface pipeline. The preview
- * is the unmodified PixelCopy bitmap; the actual navigation bar immediately
- * below it is the LayerBackdrop consumer, making source and output directly
- * comparable on a physical device.
+ * Shows the PixelCopy diagnostic sample and sampler metrics. The standard
+ * navigation bar itself uses Miuix's solid surface and does not consume it.
  */
 @Composable
 private fun BackdropDebugPanel(
@@ -281,9 +307,9 @@ private fun BackdropDebugPanel(
                 DebugLine(metricsText, colors.onSurface)
                 DebugLine(
                     if (snapshot == null) {
-                        "LayerBackdrop：等待 Bitmap"
+                        "Miuix 浮栏：默认主题纯色"
                     } else {
-                        "LayerBackdrop：已注册；下方底栏为输出"
+                        "Miuix 浮栏：surfaceContainer；采样仅用于调试"
                     },
                     colors.onSurface,
                 )
@@ -303,39 +329,3 @@ private fun DebugLine(text: String, color: Color) {
         ),
     )
 }
-
-/**
- * Imports an asynchronously copied Flutter crop into Compose's layer tree.
- *
- * The crop is recorded into Miuix's [LayerBackdrop] but is nearly invisible in
- * the normal Compose output. Modifier order is important: [graphicsLayer]
- * wraps the source recorder, so its alpha only affects final composition and
- * not the pixels stored in [LayerBackdrop]. A tiny non-zero alpha avoids layer
- * culling observed on some HyperOS renderers.
- */
-@Composable
-private fun FlutterBackdropLayer(
-    snapshot: FlutterBackdropSnapshot?,
-    backdrop: top.yukonga.miuix.kmp.blur.LayerBackdrop,
-) {
-    if (snapshot == null) return
-    val density = LocalDensity.current
-    val sourceSize =
-        (snapshot.sourceWidthPx / density.density).dp to
-            (snapshot.sourceHeightPx / density.density).dp
-    Box(
-        modifier = Modifier
-            .graphicsLayer(alpha = BACKDROP_SOURCE_ALPHA)
-            .requiredSize(width = sourceSize.first, height = sourceSize.second)
-            .layerBackdrop(backdrop),
-    ) {
-        Image(
-            bitmap = snapshot.bitmap.asImageBitmap(),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-private const val BACKDROP_SOURCE_ALPHA = 0.001f

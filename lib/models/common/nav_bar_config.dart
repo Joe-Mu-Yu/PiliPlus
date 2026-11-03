@@ -4,8 +4,8 @@ import 'package:PiliPlus/pages/dynamics/view.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/pure_live_follow/view.dart';
 import 'package:PiliPlus/pages/mine/view.dart';
+import 'package:PiliPlus/pages/movies/view.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
-import 'package:PiliPlus/pages/webview/view.dart';
 import 'package:material_ui/material_ui.dart';
 
 enum NavigationBarType implements EnumWithLabel {
@@ -43,7 +43,7 @@ enum NavigationBarType implements EnumWithLabel {
     '影视',
     Icon(Icons.movie_outlined),
     Icon(Icons.movie),
-    WebviewPage(url: 'https://www.sotvla6.cc/index.php', title: '影视剧'),
+    MovieHomePage(),
   ),
   ;
 

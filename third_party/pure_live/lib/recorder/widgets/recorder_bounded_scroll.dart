@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pure_live/common/widgets/pure_live_scroll_physics.dart';
 
 /// A fixed, adaptive status selector.
@@ -35,7 +35,10 @@ class RecorderStatusSelector extends StatelessWidget {
             children.add(
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 3,
+                    vertical: 3,
+                  ),
                   child: AnimatedBuilder(
                     animation: controller,
                     builder: (context, _) {
@@ -43,7 +46,8 @@ class RecorderStatusSelector extends StatelessWidget {
                       return Material(
                         color: selected
                             ? theme.colorScheme.primaryContainer
-                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.46),
+                            : theme.colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.46),
                         borderRadius: BorderRadius.circular(11),
                         clipBehavior: Clip.hardEdge,
                         child: InkWell(
@@ -60,7 +64,9 @@ class RecorderStatusSelector extends StatelessWidget {
                                   color: selected
                                       ? theme.colorScheme.onPrimaryContainer
                                       : theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -100,7 +106,8 @@ class RecorderBoundedTaskList extends StatefulWidget {
   final EdgeInsetsGeometry padding;
 
   @override
-  State<RecorderBoundedTaskList> createState() => _RecorderBoundedTaskListState();
+  State<RecorderBoundedTaskList> createState() =>
+      _RecorderBoundedTaskListState();
 }
 
 class _RecorderBoundedTaskListState extends State<RecorderBoundedTaskList> {
@@ -116,7 +123,9 @@ class _RecorderBoundedTaskListState extends State<RecorderBoundedTaskList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_controller.hasClients) return;
       final position = _controller.position;
-      final bounded = position.pixels.clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+      final bounded = position.pixels
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
       if ((bounded - position.pixels).abs() > 0.01) _controller.jumpTo(bounded);
     });
   }
@@ -154,8 +163,13 @@ class _RecorderScrollBehavior extends MaterialScrollBehavior {
   const _RecorderScrollBehavior();
 
   @override
-  ScrollPhysics getScrollPhysics(BuildContext context) => const PureLiveBoundedScrollPhysics();
+  ScrollPhysics getScrollPhysics(BuildContext context) =>
+      const PureLiveBoundedScrollPhysics();
 
   @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) => child;
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
 }

@@ -477,11 +477,9 @@ class _MainAppState extends PopScopeState<MainApp>
         surfaceContainer: _colorScheme.surfaceContainer.toARGB32(),
         onSurface: _colorScheme.onSurface.toARGB32(),
         outline: _colorScheme.outline.toARGB32(),
-        // Compose cannot record Flutter's SurfaceView into a LayerBackdrop.
-        // The Android bridge therefore imports only the small region behind
-        // the bar on touch motion and completed Flutter frames, including
-        // refresh/image updates, without adding a Flutter overlay.
-        backdropSampling: true,
+        // The official Miuix floating bar uses a solid surface by default.
+        // Capture Flutter only when its diagnostic panel is explicitly enabled.
+        backdropSampling: _mainController.miuixBackdropSampling,
         backdropDebug: _mainController.miuixBackdropSampling,
         bottomLiftDp: Pref.floatingNavBottomLift,
         followMyHyperModifierNavigationLift:

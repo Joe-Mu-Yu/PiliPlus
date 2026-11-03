@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/miuix_switch.dart';
+import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -72,6 +73,10 @@ class _SetSwitchItemState extends State<SetSwitchItem> {
     }
 
     await GStorage.setting.put(widget.setKey, val);
+
+    if (widget.setKey == SettingBoxKey.enableSystemProxy) {
+      Request.refreshProxyConfiguration();
+    }
 
     widget.onChanged?.call(val);
     if (widget.needReboot) SmartDialog.showToast('重启生效');

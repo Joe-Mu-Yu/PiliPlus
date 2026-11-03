@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pure_live/host/recording_common.dart' show Obx, RxBool;
 
 /// Material-based settings widgets for the PiliPlus host integration.

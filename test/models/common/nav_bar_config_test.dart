@@ -1,5 +1,5 @@
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
-import 'package:PiliPlus/pages/webview/view.dart';
+import 'package:PiliPlus/pages/movies/view.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,10 +13,7 @@ void main() {
     expect(NavigationBarType.recorderCenter.label, '录制');
     expect(NavigationBarType.movies.index, 5);
     expect(NavigationBarType.movies.label, '影视');
-    expect(NavigationBarType.movies.page, isA<WebviewPage>());
-    final moviesPage = NavigationBarType.movies.page as WebviewPage;
-    expect(moviesPage.url, 'https://www.sotvla6.cc/index.php');
-    expect(moviesPage.title, '影视剧');
+    expect(NavigationBarType.movies.page, isA<MovieHomePage>());
   });
 
   test(

@@ -7,6 +7,19 @@ import 'package:flutter/foundation.dart' show PlatformDispatcher;
 import 'package:material_ui/material_ui.dart';
 
 abstract final class ThemeUtils {
+  static const _cardShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(16)),
+  );
+  static const _dialogShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(24)),
+  );
+  static const _sheetShape = RoundedSuperellipseBorder(
+    borderRadius: Style.bottomSheetRadius,
+  );
+  static const _controlShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(12)),
+  );
+
   static late ThemeData lightTheme;
 
   static late ThemeData darkTheme;
@@ -98,6 +111,7 @@ abstract final class ThemeUtils {
         color: colorScheme.surfaceContainer,
         elevation: 1,
         margin: EdgeInsets.zero,
+        shape: _cardShape,
         shadowColor: Colors.transparent,
         surfaceTintColor: isDark ? colorScheme.onSurfaceVariant : null,
       ),
@@ -117,13 +131,12 @@ abstract final class ThemeUtils {
           color: colorScheme.onSurface,
         ),
         backgroundColor: colorScheme.surface,
+        shape: _dialogShape,
         constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: Style.bottomSheetRadius,
-        ),
+        shape: _sheetShape,
       ),
       // ignore: deprecated_member_use
       sliderTheme: const SliderThemeData(year2023: false),
@@ -159,8 +172,18 @@ abstract final class ThemeUtils {
       listTileTheme: const ListTileThemeData(controlAffinity: .leading),
       filledButtonTheme: const FilledButtonThemeData(
         style: ButtonStyle(
+          shape: WidgetStatePropertyAll(_controlShape),
           shadowColor: WidgetStatePropertyAll(Colors.transparent),
         ),
+      ),
+      elevatedButtonTheme: const ElevatedButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
+      ),
+      outlinedButtonTheme: const OutlinedButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
+      ),
+      textButtonTheme: const TextButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {

@@ -9,6 +9,7 @@ import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
@@ -41,6 +42,19 @@ class _HomePageState extends CommonPageState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    _colorScheme = ColorScheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+      ),
+      child: _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
     Widget tabBar;
     if (_homeController.tabs.length > 1) {
       tabBar = Padding(
@@ -52,6 +66,9 @@ class _HomePageState extends CommonPageState<HomePage>
             controller: _homeController.tabController,
             tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
             isScrollable: true,
+            labelColor: _colorScheme.onSurface,
+            unselectedLabelColor: _colorScheme.onSurfaceVariant,
+            indicatorColor: _colorScheme.primary,
             dividerColor: Colors.transparent,
             dividerHeight: 0,
             splashBorderRadius: Style.mdRadius,
@@ -68,14 +85,15 @@ class _HomePageState extends CommonPageState<HomePage>
       if (_homeController.hideTopBar &&
           _mainController.barHideType == .instant) {
         tabBar = Material(
-          color: _colorScheme.surface,
+          color: Theme.of(context).colorScheme.surface,
           child: tabBar,
         );
       }
     } else {
       tabBar = const SizedBox(height: 6);
     }
-    return ColoredBox(
+    return Material(
+      type: MaterialType.canvas,
       color: _colorScheme.surface,
       child: Column(
         children: [

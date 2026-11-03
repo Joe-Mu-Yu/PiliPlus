@@ -20,7 +20,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, listEquals;
+import 'package:flutter/foundation.dart'
+    show ValueNotifier, kDebugMode, listEquals;
 
 class Request {
   static const _gzipDecoder = GZipDecoder();
@@ -34,6 +35,13 @@ class Request {
   static Dio get http11Dio =>
       _http11Dio ??= _enableHttp2 ? _cloneHttp11Dio() : dio;
   factory Request() => _instance;
+  static final ValueNotifier<int> proxyConfigurationVersion = ValueNotifier(0);
+
+  /// Rebuilds pooled clients after the app proxy settings change.
+  static void refreshProxyConfiguration() {
+    _resetAdaptersForNetworkChange();
+    proxyConfigurationVersion.value++;
+  }
 
   /// 设置cookie
   static void setCookie() {

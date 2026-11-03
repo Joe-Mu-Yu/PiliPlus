@@ -1,3 +1,6 @@
+import 'dart:async' show unawaited;
+import 'dart:collection' show UnmodifiableListView;
+import 'dart:convert' show jsonEncode;
 import 'dart:io' show Platform;
 
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart'
@@ -7,6 +10,7 @@ import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/main.dart' show webViewEnvironment;
 import 'package:PiliPlus/models/common/enum_with_label.dart';
 import 'package:PiliPlus/models/common/webview_menu_type.dart';
+import 'package:PiliPlus/pages/webview/movie_webview_shell.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
@@ -17,9 +21,12 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart' as dww;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter/services.dart'
+    show DeviceOrientation, SystemChrome, SystemUiMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 final _prefixRegex = RegExp(r'^(?!(https?://))\S+://', caseSensitive: false);
 
@@ -41,6 +48,8 @@ class WebviewPage extends StatefulWidget {
     this.url,
     this.oid,
     this.title,
+    this.movieShell = false,
+    this.moviePosterUrl,
   });
 
   final String? url;
@@ -48,6 +57,13 @@ class WebviewPage extends StatefulWidget {
   // note
   final int? oid;
   final String? title;
+
+  /// Adds native browser chrome for the Movies tab without covering the site.
+  final bool movieShell;
+
+  /// Poster from the native movie catalog, used when the source detail page
+  /// only supplies its generic placeholder image.
+  final String? moviePosterUrl;
 
   static Future<dww.Webview?> openLinux({
     required String url,
@@ -189,6 +205,10 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
   final RxDouble _progress = 1.0.obs;
   bool _inApp = false;
   bool _off = false;
+  bool _movieFullscreen = false;
+  bool _movieRouteVisible = true;
+  bool _movieWakelockEnabled = false;
+  final Map<String, DateTime> _moviePlayingFrames = {};
   bool _livePlayerMode = false;
   String? _livePlatformId;
   String? _liveAnchorName;
@@ -226,10 +246,33 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
 
   @override
   void dispose() {
+    _movieRouteVisible = false;
+    _moviePlayingFrames.clear();
+    _syncMovieWakelock();
+    if (_movieFullscreen) {
+      unawaited(_restoreMovieOrientation());
+    }
     if (Platform.isAndroid) routeObserver.unsubscribe(this);
     if (Platform.isLinux) _closeLinuxWebview();
     _webViewController = null;
     super.dispose();
+  }
+
+  @override
+  void didPushNext() {
+    _movieRouteVisible = false;
+    _syncMovieWakelock();
+    super.didPushNext();
+  }
+
+  @override
+  void didPopNext() {
+    _movieRouteVisible = true;
+    _webViewController?.evaluateJavascript(
+      source: 'window.__hyperPiliMoviePlaybackUpdate?.();',
+    );
+    _syncMovieWakelock();
+    super.didPopNext();
   }
 
   bool _isPop = false;
@@ -380,6 +423,203 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
     }
   }
 
+  Widget _wrapMovieShell(Widget child) =>
+      widget.movieShell ? MovieWebViewShell(child: child) : child;
+
+  bool _isMovieSiteUrl(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    return const ['sotvla6.cc', 'sotvla.cc'].any(
+      (domain) => host == domain || host.endsWith('.$domain'),
+    );
+  }
+
+  void _onMoviePlaybackState(List<dynamic> args) {
+    if (!mounted || args.length < 2 || args[0] is! String || args[1] is! bool) {
+      return;
+    }
+
+    final now = DateTime.now();
+    _moviePlayingFrames.removeWhere(
+      (_, updatedAt) => now.difference(updatedAt) > const Duration(seconds: 5),
+    );
+    final frameId = args[0] as String;
+    if (args[1] as bool) {
+      _moviePlayingFrames[frameId] = now;
+    } else {
+      _moviePlayingFrames.remove(frameId);
+    }
+    _syncMovieWakelock();
+  }
+
+  void _syncMovieWakelock() {
+    if (!widget.movieShell || !Platform.isAndroid) return;
+    final shouldEnable = _movieRouteVisible && _moviePlayingFrames.isNotEmpty;
+    if (_movieWakelockEnabled == shouldEnable) return;
+    _movieWakelockEnabled = shouldEnable;
+    unawaited(WakelockPlus.toggle(enable: shouldEnable));
+  }
+
+  static const _moviePlaybackScript = '''
+    (() => {
+      if (window.__hyperPiliMoviePlaybackInstalled) return;
+      window.__hyperPiliMoviePlaybackInstalled = true;
+      const frameId = Math.random().toString(36).slice(2);
+      const publish = () => {
+        const playing = Array.from(document.querySelectorAll('video')).some(
+          video => !video.paused && !video.ended
+        );
+        try {
+          window.flutter_inappwebview?.callHandler(
+            'moviePlaybackState', frameId, playing
+          );
+        } catch (_) {}
+      };
+      window.__hyperPiliMoviePlaybackUpdate = publish;
+      document.addEventListener('play', publish, true);
+      document.addEventListener('playing', publish, true);
+      document.addEventListener('pause', publish, true);
+      document.addEventListener('ended', publish, true);
+      document.addEventListener('loadedmetadata', publish, true);
+      new MutationObserver(publish).observe(document, {
+        childList: true,
+        subtree: true,
+      });
+      publish();
+      window.setInterval(publish, 1500);
+    })();
+  ''';
+
+  Future<void> _enterMovieFullscreen() async {
+    if (!widget.movieShell || !Platform.isAndroid) return;
+    _movieFullscreen = true;
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  Future<void> _restoreMovieOrientation() async {
+    _movieFullscreen = false;
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
+
+  Future<void> _applyMovieWebTheme(InAppWebViewController controller) async {
+    final colors = Theme.of(context).colorScheme;
+    String cssColor(Color color) =>
+        '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+    final schemeMode = colors.brightness == Brightness.dark ? 'dark' : 'light';
+    final shadowOpacity = colors.brightness == Brightness.dark
+        ? '0.36'
+        : '0.12';
+    final css =
+        '''
+      :root {
+        color-scheme: $schemeMode;
+        --bg-deep: ${cssColor(colors.surfaceContainerLowest)};
+        --bg-card: ${cssColor(colors.surfaceContainer)};
+        --bg-elevated: ${cssColor(colors.surfaceContainerHigh)};
+        --border: ${cssColor(colors.outlineVariant)};
+        --text: ${cssColor(colors.onSurface)};
+        --muted: ${cssColor(colors.onSurfaceVariant)};
+        --accent: ${cssColor(colors.primary)};
+        --accent-2: ${cssColor(colors.secondary)};
+        --shadow: 0 12px 32px rgba(0, 0, 0, $shadowOpacity);
+      }
+      html, body.page-detail, body.page-play {
+        color: var(--text) !important;
+        background: var(--bg-deep) !important;
+      }
+      body.page-detail .site-header,
+      body.page-play .site-header,
+      body.page-detail .site-footer,
+      body.page-play .site-footer,
+      body.page-detail .sotv-guide-modal,
+      body.page-play .sotv-guide-modal,
+      body.page-detail .sotv-announce-modal,
+      body.page-play .sotv-announce-modal,
+      body.page-detail .ad-slot,
+      body.page-play .ad-slot,
+      body.page-detail .play-sidebar-outside-ad,
+      body.page-play .play-sidebar-outside-ad {
+        display: none !important;
+      }
+      body.page-detail .main-content,
+      body.page-play .main-content,
+      body.page-detail .detail-container,
+      body.page-detail .detail-main,
+      body.page-detail .detail-info,
+      body.page-detail .detail-poster,
+      body.page-play .play-main,
+      body.page-play .play-page-sidebar-col,
+      body.page-play .play-sidebar {
+        color: var(--text) !important;
+        background-color: var(--bg-deep) !important;
+        border-color: var(--border) !important;
+      }
+      body.page-detail .play-ep-cell,
+      body.page-play .play-ep-cell,
+      body.page-detail .play-nav-btn,
+      body.page-play .play-nav-btn,
+      body.page-detail .play-line-select-wrap,
+      body.page-play .play-line-select-wrap {
+        color: var(--text) !important;
+        background-color: var(--bg-card) !important;
+        border-color: var(--border) !important;
+      }
+      body.page-detail .play-ep-cell.is-active,
+      body.page-play .play-ep-cell.is-active {
+        background-color: var(--accent) !important;
+        border-color: var(--accent) !important;
+      }
+      body.page-detail a,
+      body.page-play a {
+        color: inherit;
+      }
+      body.page-detail .play-main--below-ad,
+      body.page-play .play-main--below-ad,
+      body.page-detail .play-page-sidebar-col--below-ad,
+      body.page-play .play-page-sidebar-col--below-ad {
+        display: none !important;
+      }
+    ''';
+    await controller.evaluateJavascript(
+      source:
+          '''
+        (() => {
+          const body = document.body;
+          if (!body || !(body.classList.contains('page-detail') || body.classList.contains('page-play'))) return;
+          let style = document.getElementById('hyper-pili-movie-theme');
+          if (!style) {
+            style = document.createElement('style');
+            style.id = 'hyper-pili-movie-theme';
+            document.head.appendChild(style);
+          }
+          style.textContent = `$css`;
+        })();
+      ''',
+    );
+    final posterUrl = widget.moviePosterUrl;
+    if (posterUrl != null && posterUrl.isNotEmpty) {
+      await controller.evaluateJavascript(
+        source:
+            '''
+          (() => {
+            if (!document.body?.classList.contains('page-detail')) return;
+            const poster = document.querySelector('.detail-poster img.sotv-poster-img');
+            if (poster) poster.src = ${jsonEncode(posterUrl)};
+          })();
+        ''',
+      );
+    }
+  }
+
   Widget _buildLinuxView(BuildContext context) {
     // 记笔记页
     if (widget.url != null) {
@@ -417,7 +657,10 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
       return _buildLinuxView(context);
     }
     return Scaffold(
-      appBar: widget.url != null
+      backgroundColor: widget.movieShell
+          ? Theme.of(context).colorScheme.surface
+          : null,
+      appBar: widget.movieShell || widget.url != null
           ? null
           : AppBar(
               toolbarHeight: _livePlayerMode ? 68 : null,
@@ -511,187 +754,240 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
       body: _isPop
           ? null
           : SafeArea(
-              child: InAppWebView(
-                webViewEnvironment: webViewEnvironment,
-                initialSettings: InAppWebViewSettings(
-                  clearCache: true,
-                  javaScriptEnabled: true,
-                  forceDark: ForceDark.AUTO,
-                  useHybridComposition: true,
-                  algorithmicDarkeningAllowed: true,
-                  useShouldOverrideUrlLoading: true,
-                  userAgent: userAgent,
-                  mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-                ),
-                initialUrlRequest: URLRequest(
-                  url: WebUri.uri(Uri.tryParse(_url) ?? Uri()),
-                ),
-                onWebViewCreated: (InAppWebViewController controller) {
-                  _webViewController = controller
-                    ..addJavaScriptHandler(
-                      handlerName: 'finishButtonClicked',
-                      callback: (args) {
-                        Get.back();
-                      },
-                    )
-                    ..addJavaScriptHandler(
-                      handlerName: 'infoBarClicked',
-                      callback: (args) async {
-                        WebUri? uri = await controller.getUrl();
-                        if (uri != null) {
-                          String? oid = uri.queryParameters['oid'];
-                          if (oid != null) {
-                            PiliScheme.videoPush(int.parse(oid), null);
+              child: _wrapMovieShell(
+                InAppWebView(
+                  webViewEnvironment: webViewEnvironment,
+                  initialUserScripts: widget.movieShell && Platform.isAndroid
+                      ? UnmodifiableListView<UserScript>([
+                          UserScript(
+                            source: _moviePlaybackScript,
+                            injectionTime:
+                                UserScriptInjectionTime.AT_DOCUMENT_START,
+                            forMainFrameOnly: false,
+                            allowedOriginRules: {'*'},
+                          ),
+                        ])
+                      : null,
+                  initialSettings: InAppWebViewSettings(
+                    clearCache: true,
+                    javaScriptEnabled: true,
+                    forceDark: ForceDark.AUTO,
+                    useHybridComposition: true,
+                    algorithmicDarkeningAllowed: true,
+                    useShouldOverrideUrlLoading: true,
+                    javaScriptCanOpenWindowsAutomatically: !widget.movieShell,
+                    supportMultipleWindows: !widget.movieShell,
+                    userAgent: userAgent,
+                    mixedContentMode:
+                        MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                  ),
+                  initialUrlRequest: URLRequest(
+                    url: WebUri.uri(Uri.tryParse(_url) ?? Uri()),
+                  ),
+                  onWebViewCreated: (InAppWebViewController controller) {
+                    _webViewController = controller
+                      ..addJavaScriptHandler(
+                        handlerName: 'moviePlaybackState',
+                        callback: _onMoviePlaybackState,
+                      )
+                      ..addJavaScriptHandler(
+                        handlerName: 'finishButtonClicked',
+                        callback: (args) {
+                          Get.back();
+                        },
+                      )
+                      ..addJavaScriptHandler(
+                        handlerName: 'infoBarClicked',
+                        callback: (args) async {
+                          WebUri? uri = await controller.getUrl();
+                          if (uri != null) {
+                            String? oid = uri.queryParameters['oid'];
+                            if (oid != null) {
+                              PiliScheme.videoPush(int.parse(oid), null);
+                            }
                           }
-                        }
-                      },
-                    );
-                },
-                onProgressChanged: (controller, progress) {
-                  _progress.value = progress / 100;
-                },
-                onTitleChanged: (controller, title) {
-                  _title.value = title ?? '';
-                },
-                onCloseWindow: (controller) => Get.back(),
-                onLoadStop: (controller, uri) {
-                  final url = uri.toString();
-                  if (url.startsWith('https://www.bilibili.com/h5/note-app')) {
-                    controller
-                      ..evaluateJavascript(
-                        source: """
+                        },
+                      );
+                  },
+                  onProgressChanged: (controller, progress) {
+                    _progress.value = progress / 100;
+                  },
+                  onTitleChanged: (controller, title) {
+                    _title.value = title ?? '';
+                  },
+                  onEnterFullscreen: (_) => unawaited(
+                    _enterMovieFullscreen(),
+                  ),
+                  onExitFullscreen: (_) => unawaited(
+                    _restoreMovieOrientation(),
+                  ),
+                  onCloseWindow: (controller) => Get.back(),
+                  onLoadStart: (controller, uri) {
+                    if (widget.movieShell) {
+                      _moviePlayingFrames.clear();
+                      _syncMovieWakelock();
+                    }
+                  },
+                  onLoadStop: (controller, uri) {
+                    final url = uri.toString();
+                    if (widget.movieShell && _isMovieSiteUrl(url)) {
+                      unawaited(_applyMovieWebTheme(controller));
+                    }
+                    if (url.startsWith(
+                      'https://www.bilibili.com/h5/note-app',
+                    )) {
+                      controller
+                        ..evaluateJavascript(
+                          source: """
 document.querySelector('.finish-btn').addEventListener('click', function() {
     window.flutter_inappwebview.callHandler('finishButtonClicked');
 });
 """,
-                      )
-                      ..evaluateJavascript(
-                        source: """
+                        )
+                        ..evaluateJavascript(
+                          source: """
 document.querySelector('.info-bar').addEventListener('click', function() {
     window.flutter_inappwebview.callHandler('infoBarClicked');
 });
 """,
-                      );
-                  } else if (url.startsWith('https://live.bilibili.com')) {
-                    controller.evaluateJavascript(
-                      source: '''
+                        );
+                    } else if (url.startsWith('https://live.bilibili.com')) {
+                      controller.evaluateJavascript(
+                        source: '''
 document.styleSheets[0].insertRule('div.open-app-btn.bili-btn-warp {display:none;}', 0);
 document.styleSheets[0].insertRule('#app__display-area > div.control-panel {display:none;}', 0);
                   ''',
-                    );
-                  }
-                  // _webViewController?.evaluateJavascript(
-                  //   source: '''
-                  //     document.querySelector('#internationalHeader').remove();
-                  //     document.querySelector('#message-navbar').remove();
-                  //   ''',
-                  // );
-                },
-                onDownloadStartRequest: Platform.isAndroid
-                    ? (controller, request) {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            String suggestedFilename = request.suggestedFilename
-                                .toString();
-                            final fileSize = CacheManager.formatSize(
-                              request.contentLength,
-                            );
-                            try {
-                              suggestedFilename = Uri.decodeComponent(
-                                suggestedFilename,
+                      );
+                    }
+                    // _webViewController?.evaluateJavascript(
+                    //   source: '''
+                    //     document.querySelector('#internationalHeader').remove();
+                    //     document.querySelector('#message-navbar').remove();
+                    //   ''',
+                    // );
+                  },
+                  onDownloadStartRequest: Platform.isAndroid
+                      ? (controller, request) {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              String suggestedFilename = request
+                                  .suggestedFilename
+                                  .toString();
+                              final fileSize = CacheManager.formatSize(
+                                request.contentLength,
                               );
-                            } catch (e) {
-                              if (kDebugMode) debugPrint(e.toString());
-                            }
-                            final url = request.url.toString();
-                            return AlertDialog(
-                              title: Text(
-                                '下载文件: $suggestedFilename ?',
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                              content: SelectionText(url),
-                              actions: [
-                                TextButton(
-                                  onPressed: Get.back,
-                                  child: Text(
-                                    '取消',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline,
+                              try {
+                                suggestedFilename = Uri.decodeComponent(
+                                  suggestedFilename,
+                                );
+                              } catch (e) {
+                                if (kDebugMode) debugPrint(e.toString());
+                              }
+                              final url = request.url.toString();
+                              return AlertDialog(
+                                title: Text(
+                                  '下载文件: $suggestedFilename ?',
+                                  style: const TextStyle(fontSize: 18),
+                                ),
+                                content: SelectionText(url),
+                                actions: [
+                                  TextButton(
+                                    onPressed: Get.back,
+                                    child: Text(
+                                      '取消',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    Get.back();
-                                    PageUtils.launchURL(url);
-                                  },
-                                  child: Text('确定 ($fileSize)'),
-                                ),
-                              ],
-                            );
-                          },
+                                  TextButton(
+                                    onPressed: () {
+                                      Get.back();
+                                      PageUtils.launchURL(url);
+                                    },
+                                    child: Text('确定 ($fileSize)'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          _progress.value = 1;
+                        }
+                      : null,
+                  shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
+                    String url = ajaxRequest.url.toString();
+                    if (url.startsWith('//api.bilibili.com/x/note/add') &&
+                        widget.title != null) {
+                      return ajaxRequest
+                        ..data = ajaxRequest.data.toString().replaceFirst(
+                          '&title=--&',
+                          '&title=${widget.title}&',
                         );
-                        _progress.value = 1;
-                      }
-                    : null,
-                shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
-                  String url = ajaxRequest.url.toString();
-                  if (url.startsWith('//api.bilibili.com/x/note/add') &&
-                      widget.title != null) {
-                    return ajaxRequest
-                      ..data = ajaxRequest.data.toString().replaceFirst(
-                        '&title=--&',
-                        '&title=${widget.title}&',
-                      );
-                  }
-                  return null;
-                },
-                shouldInterceptRequest: (controller, request) async {
-                  String url = request.url.toString();
-                  if (url.startsWith(
-                    'https://passport.bilibili.com/x/passport-login/web',
-                  )) {
-                    _progress.value = 1;
-                    return WebResourceResponse();
-                  }
-                  return null;
-                },
-                shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  if (!_inApp) {
-                    final hasMatch = await PiliScheme.routePush(
-                      navigationAction.request.url?.uriValue ?? Uri(),
-                      selfHandle: true,
-                      off: _off,
-                    );
-                    // if (kDebugMode) debugPrint('webview: [$url], [$hasMatch]');
-                    if (hasMatch) {
+                    }
+                    return null;
+                  },
+                  shouldInterceptRequest: (controller, request) async {
+                    String url = request.url.toString();
+                    if (widget.movieShell &&
+                        _isMovieSiteUrl(url) &&
+                        Uri.tryParse(url)?.path.endsWith('/announce.js') ==
+                            true) {
+                      return WebResourceResponse();
+                    }
+                    if (url.startsWith(
+                      'https://passport.bilibili.com/x/passport-login/web',
+                    )) {
                       _progress.value = 1;
-                      return .CANCEL;
+                      return WebResourceResponse();
                     }
-                  }
-                  final url = navigationAction.request.url.toString();
-                  if (_prefixRegex.hasMatch(url)) {
-                    if (context.mounted) {
-                      final snackBar = SnackBar(
-                        persist: false,
-                        showCloseIcon: true,
-                        content: const Text('当前网页将要打开外部链接，是否打开'),
-                        action: SnackBarAction(
-                          label: '打开',
-                          onPressed: () => PageUtils.launchURL(url),
-                        ),
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                    }
-                    _progress.value = 1;
-                    return .CANCEL;
-                  }
+                    return null;
+                  },
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
+                        final url =
+                            navigationAction.request.url?.toString() ?? '';
+                        if (widget.movieShell &&
+                            navigationAction.isForMainFrame &&
+                            !_isMovieSiteUrl(url)) {
+                          _progress.value = 1;
+                          return .CANCEL;
+                        }
+                        if (!_inApp) {
+                          final hasMatch = await PiliScheme.routePush(
+                            Uri.tryParse(url) ?? Uri(),
+                            selfHandle: true,
+                            off: _off,
+                          );
+                          // if (kDebugMode) debugPrint('webview: [$url], [$hasMatch]');
+                          if (hasMatch) {
+                            _progress.value = 1;
+                            return .CANCEL;
+                          }
+                        }
+                        if (_prefixRegex.hasMatch(url)) {
+                          if (context.mounted) {
+                            final snackBar = SnackBar(
+                              persist: false,
+                              showCloseIcon: true,
+                              content: const Text('当前网页将要打开外部链接，是否打开'),
+                              action: SnackBarAction(
+                                label: '打开',
+                                onPressed: () => PageUtils.launchURL(url),
+                              ),
+                            );
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(snackBar);
+                          }
+                          _progress.value = 1;
+                          return .CANCEL;
+                        }
 
-                  return .ALLOW;
-                },
+                        return .ALLOW;
+                      },
+                ),
               ),
             ),
     );

@@ -866,6 +866,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   @override
   Widget build(BuildContext context) {
     if (_fullscreen) return _buildFullscreen();
+    final pageBackground = ColorScheme.of(context).surfaceContainerLowest;
     final player = _player;
     final controller = _videoController;
     final room = _activeSource?.room;
@@ -876,7 +877,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
         ? room!.nick!
         : (widget.favorite.anchorName ?? widget.favorite.platformId);
     return SimpleScaffold(
-      backgroundColor: const Color(0xFFF7F8FC),
+      backgroundColor: pageBackground,
       appBar: AppBar(
         titleSpacing: 0,
         title: Column(
@@ -903,7 +904,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
         ],
       ),
       body: Material(
-        color: const Color(0xFFF7F8FC),
+        color: pageBackground,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
