@@ -1,17 +1,17 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_json/flutter_json.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/modules/auth/models/user_config_model.dart';
+import 'package:pure_live/modules/auth/utils/firebase_manager.dart';
 import 'package:remixicon/remixicon.dart';
 
 class FirebaseUserConfigDocumentLoader {
   const FirebaseUserConfigDocumentLoader();
 
   Future<Map<String, dynamic>?> load(String documentId) async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').doc(documentId).get();
+    final snapshot = await FirebaseManager.getInstance().firestore.collection('users').doc(documentId).get();
     return snapshot.exists ? snapshot.data() : null;
   }
 }

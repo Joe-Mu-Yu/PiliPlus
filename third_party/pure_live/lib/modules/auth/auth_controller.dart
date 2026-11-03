@@ -25,9 +25,10 @@ class FirebaseAuthControllerBackend {
 
   Future<void> initialize() => FirebaseManager.getInstance().initial();
 
-  fb.User? get currentUser => fb.FirebaseAuth.instance.currentUser;
+  fb.User? get currentUser => FirebaseManager.getInstance().auth.currentUser;
 
-  Stream<fb.User?> authStateChanges() => fb.FirebaseAuth.instance.authStateChanges();
+  Stream<fb.User?> authStateChanges() =>
+      FirebaseManager.getInstance().auth.authStateChanges();
 
   Future<void> syncConfigs(String userId) async {
     final manager = FirebaseManager.getInstance();

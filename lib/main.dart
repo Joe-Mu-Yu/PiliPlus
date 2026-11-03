@@ -16,6 +16,7 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
+import 'package:PiliPlus/services/private_device_services.dart';
 import 'package:PiliPlus/services/pure_live_recording_preferences.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
@@ -105,6 +106,11 @@ void main() async {
     exit(0);
   }
   PureLiveRecordingPreferences.configure(GStorage.setting);
+  final privateDeviceServices = Get.put(
+    PrivateDeviceServices(),
+    permanent: true,
+  );
+  await privateDeviceServices.initialize();
   try {
     await RecordingI18n.initialize();
   } catch (e) {

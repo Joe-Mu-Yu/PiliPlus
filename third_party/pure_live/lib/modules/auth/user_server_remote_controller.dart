@@ -25,19 +25,19 @@ class UserServerRemoteController extends ServerRemotePageController<UserItem> {
   String get currentUserUid => Get.find<AuthController>().user!.uid;
 
   Future<List<String>> readCloudUserIds() async {
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    final snapshot = await FirebaseManager.getInstance().firestore.collection('users').get();
     return snapshot.docs.map((doc) => doc.id).toList();
   }
 
   Future<Map<String, String>> readCloudRoles(List<String>? uids) async {
-    Query<Map<String, dynamic>> query = FirebaseFirestore.instance.collection('permissions');
+    Query<Map<String, dynamic>> query = FirebaseManager.getInstance().firestore.collection('permissions');
     if (uids != null) query = query.where(FieldPath.documentId, whereIn: uids);
     final snapshot = await query.get();
     return {for (final doc in snapshot.docs) doc.id: doc.data()['role'] ?? 'user'};
   }
 
   Future<void> writeCloudUser(String docId, Map<String, dynamic> updateData) =>
-      FirebaseFirestore.instance.collection('users').doc(docId).update(updateData);
+      FirebaseManager.getInstance().firestore.collection('users').doc(docId).update(updateData);
 
   @override
   void onInit() {
@@ -108,7 +108,7 @@ class UserServerRemoteController extends ServerRemotePageController<UserItem> {
     required String keyword,
     required DocumentSnapshot? after,
   }) async {
-    Query baseQuery = FirebaseFirestore.instance.collection('users');
+    Query baseQuery = FirebaseManager.getInstance().firestore.collection('users');
 
     if (keyword.isNotEmpty) {
       String start = keyword.toLowerCase();

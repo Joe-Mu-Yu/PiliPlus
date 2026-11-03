@@ -18,31 +18,31 @@ class FirebaseEmailAuthBackend {
   bool get supportsPasswordReset => true;
 
   Future<UserCredential> signInWithEmail(String email, String password) {
-    return FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+    return FirebaseManager.getInstance().auth.signInWithEmailAndPassword(email: email, password: password);
   }
 
   Future<UserCredential> createUserWithEmail(String email, String password) {
-    return FirebaseAuth.instance.createUserWithEmailAndPassword(email: email, password: password);
+    return FirebaseManager.getInstance().auth.createUserWithEmailAndPassword(email: email, password: password);
   }
 
   Future<void> saveUserProfile(String userId, Map<String, dynamic> data) {
-    return FirebaseFirestore.instance.collection('users').doc(userId).set(data);
+    return FirebaseManager.getInstance().firestore.collection('users').doc(userId).set(data);
   }
 
   Future<void> sendPasswordResetEmail(String email) {
-    return FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+    return FirebaseManager.getInstance().auth.sendPasswordResetEmail(email: email);
   }
 
   Future<UserCredential> signInWithPopup(AuthProvider provider) {
-    return FirebaseAuth.instance.signInWithPopup(provider);
+    return FirebaseManager.getInstance().auth.signInWithPopup(provider);
   }
 
   Future<UserCredential> signInWithProvider(AuthProvider provider) {
-    return FirebaseAuth.instance.signInWithProvider(provider);
+    return FirebaseManager.getInstance().auth.signInWithProvider(provider);
   }
 
   Future<UserCredential> signInWithCredential(AuthCredential credential) {
-    return FirebaseAuth.instance.signInWithCredential(credential);
+    return FirebaseManager.getInstance().auth.signInWithCredential(credential);
   }
 }
 

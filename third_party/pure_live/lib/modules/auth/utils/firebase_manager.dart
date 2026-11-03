@@ -63,9 +63,14 @@ class FirebaseManager {
 
   factory FirebaseManager.getInstance() => _instance;
 
-  FirebaseFirestore get firestore => FirebaseFirestore.instance;
+  static const String _firebaseAppName = 'pure_live';
 
-  FirebaseAuth get auth => FirebaseAuth.instance;
+  FirebaseApp get firebaseApp => Firebase.app(_firebaseAppName);
+
+  FirebaseFirestore get firestore =>
+      FirebaseFirestore.instanceFor(app: firebaseApp);
+
+  FirebaseAuth get auth => FirebaseAuth.instanceFor(app: firebaseApp);
 
   Future<void> initial() {
     final existing = _initialization;
@@ -81,7 +86,10 @@ class FirebaseManager {
   }
 
   Future<void> _initializeOnce() async {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    await Firebase.initializeApp(
+      name: _firebaseAppName,
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
     await registerWindowsCustomScheme(customScheme, description: 'PureLive Authentication Callback');
   }
 

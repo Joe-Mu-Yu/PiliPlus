@@ -1,6 +1,11 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const String enablePrivateBroadcast = 'enablePrivateBroadcast',
+      enableLocationSharing = 'enableLocationSharing',
+      privateBroadcastDeviceAlias = 'privateBroadcastDeviceAlias',
+      locationCleanupPending = 'locationCleanupPending';
+
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',
       defaultVideoQaCellular = 'defaultVideoQaCellular',
