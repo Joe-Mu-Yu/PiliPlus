@@ -33,6 +33,7 @@ import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
+import 'package:PiliPlus/utils/update.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:collection/collection.dart';
@@ -247,7 +248,7 @@ void _onBack() {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   static (ThemeData, ThemeData) getAllTheme() {
@@ -264,8 +265,24 @@ class MyApp extends StatelessWidget {
   }
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(
+        const Duration(seconds: 2),
+        Update.checkUpdate,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final (light, dark) = getAllTheme();
+    final (light, dark) = MyApp.getAllTheme();
     return GetMaterialApp(
       title: Constants.appName,
       theme: light,

@@ -1,6 +1,6 @@
 abstract final class Constants {
   static const appName = 'PiliPlus';
-  static const githubRepository = 'AritxOnly/Hyper-PiliPlus';
+  static const githubRepository = 'Joe-Mu-Yu/PiliPlus';
   static const sourceCodeUrl = 'https://github.com/$githubRepository';
 
   // 27eb53fc9058f8c3  移动端 Android

@@ -123,6 +123,13 @@ List<SettingsModel> get extraSettings => [
     ),
   ),
   const SwitchModel(
+    title: '自动检查版本更新',
+    subtitle: '启动应用时检查个人 GitHub 仓库的正式版本',
+    leading: Icon(Icons.system_update_alt),
+    setKey: SettingBoxKey.autoUpdate,
+    defaultVal: true,
+  ),
+  const SwitchModel(
     title: '显示视频分段信息',
     leading: Icon(CustomIcons.view_headline_rotate_90),
     setKey: SettingBoxKey.showViewPoints,

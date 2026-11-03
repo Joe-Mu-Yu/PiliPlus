@@ -20,7 +20,11 @@ abstract final class Update {
   // 检查更新
   static Future<void> checkUpdate([bool isAuto = true]) async {
     if (kDebugMode) return;
-    SmartDialog.dismiss();
+    if (isAuto &&
+        !GStorage.setting.get(SettingBoxKey.autoUpdate, defaultValue: true)) {
+      return;
+    }
+    if (!isAuto) SmartDialog.dismiss();
     try {
       final res = await Request().get(
         Api.latestApp,
