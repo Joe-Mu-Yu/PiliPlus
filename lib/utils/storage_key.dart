@@ -1,6 +1,11 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const String enablePrivateBroadcast = 'enablePrivateBroadcast',
+      enableLocationSharing = 'enableLocationSharing',
+      privateBroadcastDeviceAlias = 'privateBroadcastDeviceAlias',
+      locationCleanupPending = 'locationCleanupPending';
+
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',
       defaultVideoQaCellular = 'defaultVideoQaCellular',
@@ -74,7 +79,6 @@ abstract final class SettingBoxKey {
       previewQuality = 'previewQuality',
       checkDynamic = 'checkDynamic',
       dynamicPeriod = 'dynamicPeriod',
-      schemeVariant = 'schemeVariant',
       showViewPoints = 'showViewPoints',
       showRelatedVideo = 'showRelatedVideo',
       showVideoReply = 'showVideoReply',
@@ -153,16 +157,15 @@ abstract final class SettingBoxKey {
       showDynDispute = 'showDynDispute',
       touchSlopH = 'touchSlopH',
       floatingNavBar = 'floatingNavBar',
+      floatingNavBottomLift = 'floatingNavBottomLift',
+      followMyHyperModifierNavigationLift =
+          'followMyHyperModifierNavigationLift',
+      miuixBackdropSampling = 'miuixBackdropSampling',
       removeSafeArea = 'removeSafeArea',
       angleDegrees = 'angleDegrees',
       liveStream = 'liveStream',
       enableDocProvider = 'enableDocProvider',
-      enableEmoteTooltip = 'enableEmoteTooltip',
-      mineTabs = 'mineTabs',
-      buvid = 'buvid',
-      blockAtOnlyReply = 'blockAtOnlyReply',
-      blockReplyAtCount = 'blockReplyAtCount',
-      filterIntro = 'filterIntro';
+      enableEmoteTooltip = 'enableEmoteTooltip';
 
   static const String minimizeOnExit = 'minimizeOnExit',
       windowSize = 'windowSize',
@@ -223,7 +226,7 @@ abstract final class SettingBoxKey {
   static const String themeMode = 'themeMode',
       defaultTextScale = 'textScale',
       appFontWeightV2 = 'appFontWeightV2',
-      dynamicColor = 'dynamicColor',
+      appFontWeightValue = 'appFontWeightValue',
       customColor = 'customColor',
       displayMode = 'displayMode',
       smallCardWidth = 'smallCardWidth',
@@ -239,6 +242,7 @@ abstract final class SettingBoxKey {
       tabBarSort = 'tabBarSort',
       dynamicBadgeMode = 'dynamicBadgeMode',
       msgBadgeMode = 'msgBadgeMode',
+      mineExpandContent = 'mineExpandContent',
       msgUnReadTypeV2 = 'msgUnReadTypeV2',
       navBarSort = 'navBarSort',
       tempPlayerConf = 'tempPlayerConf',
@@ -253,7 +257,8 @@ abstract final class LocalCacheKey {
       blackMids = 'blackMids',
       danmakuFilterRules = 'danmakuFilterRules',
       mixinKey = 'mixinKey',
-      timeStamp = 'timeStamp';
+      timeStamp = 'timeStamp',
+      buvid = 'buvid';
 }
 
 abstract final class VideoBoxKey {

@@ -34,7 +34,6 @@ class SpaceCard {
   List<SpaceTag>? spaceTag;
   SpacePrInfo? prInfo;
   FollowingsFollowedUpper? followingsFollowedUpper;
-  String? medalName;
 
   SpaceCard({
     this.mid,

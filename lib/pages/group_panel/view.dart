@@ -103,7 +103,6 @@ class _GroupPanelState extends State<GroupPanel> {
                       : null,
                   trailing: Transform.scale(
                     scale: 0.9,
-                    alignment: .centerRight,
                     child: Checkbox(
                       value: tags.contains(item.tagid),
                       onChanged: (_) => onTap(),

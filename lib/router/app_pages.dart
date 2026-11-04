@@ -5,7 +5,7 @@ import 'package:PiliPlus/pages/blacklist/view.dart';
 import 'package:PiliPlus/pages/bubble/view.dart';
 import 'package:PiliPlus/pages/danmaku_block/view.dart';
 import 'package:PiliPlus/pages/dlna/view.dart';
-import 'package:PiliPlus/pages/download/download/view.dart';
+import 'package:PiliPlus/pages/download/view.dart';
 import 'package:PiliPlus/pages/dynamics/view.dart';
 import 'package:PiliPlus/pages/dynamics_create_vote/view.dart';
 import 'package:PiliPlus/pages/dynamics_detail/view.dart';
@@ -69,10 +69,22 @@ import 'package:PiliPlus/pages/webview/view.dart';
 import 'package:PiliPlus/pages/whisper/view.dart';
 import 'package:PiliPlus/pages/whisper_detail/view.dart';
 import 'package:get/get.dart';
+import 'package:PiliPlus/pages/pure_live_follow/playback_page.dart';
+import 'package:PiliPlus/models/common/live_favorite.dart';
+import 'package:PiliPlus/common/widgets/app_material_localizations.dart';
 
 class Routes {
   static final List<GetPage<dynamic>> getPages = [
     GetPage(name: '/', page: () => const MainApp()),
+    GetPage(
+      name: '/pure_live/live_play',
+      page: () => AppMaterialLocalizations(
+        child: PureLivePlaybackPage(
+          favorite: Get.arguments as LiveFavorite,
+        ),
+      ),
+      preventDuplicates: false,
+    ),
     // 首页(推荐)
     GetPage(name: '/home', page: () => const HomePage()),
     // 热门

@@ -12,12 +12,12 @@ class LiveIndexData {
   });
 
   LiveIndexData.fromJson(Map<String, dynamic> json) {
-    if (json['card_list'] case final List list when list.isNotEmpty) {
+    if ((json['card_list'] as List<dynamic>?)?.isNotEmpty == true) {
       // banner_v2
       // my_idol_v1
       // area_entrance_v3
       // small_card_v1
-      for (final json in list) {
+      for (final json in json['card_list']) {
         switch (json['card_type']) {
           case 'my_idol_v1':
             followItem = LiveCardList.fromJson(json);
@@ -31,7 +31,6 @@ class LiveIndexData {
         }
       }
     }
-    areaItem ??= LiveCardList.kAreaEntrance;
     hasMore = json['has_more'] as int?;
   }
 }

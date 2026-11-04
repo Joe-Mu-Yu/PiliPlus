@@ -19,16 +19,42 @@ class SubItem extends StatelessWidget {
     required this.cancelSub,
   });
 
-  void onLongPress() => imageSaveDialog(title: item.title, cover: item.cover);
-
   @override
   Widget build(BuildContext context) {
     String heroTag = Utils.makeHeroTag(item.id);
-    final label = item.type2Label;
+    final type = switch (item.type) {
+      11 => '收藏夹',
+      21 => '合集',
+      _ => '其它(${item.type})',
+    };
+    void onLongPress() => imageSaveDialog(
+      title: item.title,
+      cover: item.cover,
+    );
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: () => onPushSub(label, heroTag, item),
+        onTap: () {
+          if (item.state == 1) {
+            SmartDialog.showToast('该$type已失效');
+            return;
+          }
+          if (item.type == 11) {
+            Get.toNamed(
+              '/favDetail',
+              parameters: {
+                'mediaId': item.id!.toString(),
+                'heroTag': heroTag,
+              },
+            );
+          } else {
+            SubDetailPage.toSubDetailPage(
+              item.id!,
+              heroTag: heroTag,
+              subInfo: item,
+            );
+          }
+        },
         onLongPress: onLongPress,
         onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
         child: Padding(
@@ -56,7 +82,7 @@ class SubItem extends StatelessWidget {
                         PBadge(
                           right: 6,
                           top: 6,
-                          text: label,
+                          text: type,
                         ),
                       ],
                     );
@@ -127,28 +153,6 @@ class SubItem extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-Future<void>? onPushSub(String label, String heroTag, SubItemModel item) {
-  if (item.state == 1) {
-    SmartDialog.showToast('该$label已失效');
-    return null;
-  }
-  if (item.type == 11) {
-    return Get.toNamed(
-      '/favDetail',
-      parameters: {
-        'mediaId': item.id!.toString(),
-        'heroTag': heroTag,
-      },
-    );
-  } else {
-    return SubDetailPage.toSubDetailPage(
-      item.id!,
-      heroTag: heroTag,
-      subInfo: item,
     );
   }
 }

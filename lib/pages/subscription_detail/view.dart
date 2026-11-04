@@ -18,12 +18,12 @@ class SubDetailPage extends StatefulWidget {
   @override
   State<SubDetailPage> createState() => _SubDetailPageState();
 
-  static Future<void>? toSubDetailPage(
+  static void toSubDetailPage(
     int id, {
     String? heroTag,
     SubItemModel? subInfo,
   }) {
-    return Get.toNamed(
+    Get.toNamed(
       '/subDetail',
       arguments: {
         'id': id,

@@ -69,7 +69,6 @@ class LiveRoomPage extends StatefulWidget {
 class _LiveRoomPageState extends State<LiveRoomPage>
     with WidgetsBindingObserver, RouteAware, RouteAwareMixin {
   late final fullScreenSCWidth = Pref.fullScreenSCWidth;
-  PlayOwner get _playOwner => (tag: heroTag, type: null);
   final String heroTag = Utils.generateRandomString(6);
   late final LiveRoomController _liveRoomController;
   late final PlPlayerController plPlayerController;
@@ -90,17 +89,10 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     );
     plPlayerController = _liveRoomController.plPlayerController
       ..addStatusLister(playerListener);
-    _setPlayCallBack();
+    PlPlayerController.setPlayCallBack(plPlayerController.play);
     if (plPlayerController.removeSafeArea) {
       hideSystemBar();
     }
-  }
-
-  void _setPlayCallBack() {
-    PlPlayerController.setPlayCallBack(
-      plPlayerController.play,
-      playOwner: _playOwner,
-    );
   }
 
   @override
@@ -122,32 +114,16 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     plPlayerController.screenRatio = maxHeight / maxWidth;
   }
 
-  void _onPushPopupRoute() {
-    _liveRoomController.isPlaying = plPlayerController.playerStatus.isPlaying;
-  }
-
-  void _onPopPopupRoute() {
-    if (!mounted) return;
-    if (PlPlayerController.playOwner != _playOwner) {
-      _onPopNext();
-    }
-  }
-
   @override
-  void didPopNext() {
+  Future<void> didPopNext() async {
     addObserverMobile(this);
-    _onPopNext();
-    super.didPopNext();
-  }
-
-  Future<void> _onPopNext() async {
     if (!plPlayerController.isLive) {
       plPlayerController.isLive = true;
       _liveRoomController.isLoaded.refresh();
     }
     plPlayerController.danmakuController =
         _liveRoomController.danmakuController;
-    _setPlayCallBack();
+    PlPlayerController.setPlayCallBack(plPlayerController.play);
     _liveRoomController.startLiveTimer();
     if (plPlayerController.playerStatus.isPlaying &&
         plPlayerController.cid == null) {
@@ -165,6 +141,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     }
     if (!mounted) return;
     plPlayerController.addStatusLister(playerListener);
+    super.didPopNext();
   }
 
   @override
@@ -418,7 +395,6 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     fit: BoxFit.cover,
                     width: maxWidth,
                     height: maxHeight,
-                    gaplessPlayback: true,
                     memCacheWidth: maxWidth.cacheSize(context),
                     imageUrl: ImageUtils.safeThumbnailUrl(appBackground),
                     placeholder: (_, _) => const SizedBox.shrink(),
@@ -429,7 +405,6 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     fit: BoxFit.cover,
                     width: maxWidth,
                     height: maxHeight,
-                    gaplessPlayback: true,
                     cacheWidth: maxWidth.cacheSize(context),
                   );
                 }
@@ -544,7 +519,6 @@ class _LiveRoomPageState extends State<LiveRoomPage>
 
   void _showRank() {
     if (_liveRoomController.ruid case final ruid?) {
-      _onPushPopupRoute();
       final heightFactor = PlatformUtils.isMobile && !isPortrait ? 1.0 : 0.7;
       showModalBottomSheet(
         context: context,
@@ -560,7 +534,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
             roomId: _liveRoomController.roomId,
           ),
         ),
-      ).whenComplete(_onPopPopupRoute);
+      );
     }
   }
 

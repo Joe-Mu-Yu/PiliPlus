@@ -9,12 +9,12 @@ import 'package:PiliPlus/common/widgets/view_sliver_safe_area.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
+import 'package:PiliPlus/pages/download/controller.dart';
 import 'package:PiliPlus/pages/download/detail/widgets/item.dart';
-import 'package:PiliPlus/pages/download/download/controller.dart';
-import 'package:PiliPlus/pages/download/download_action_mixin.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
@@ -37,25 +37,15 @@ class DownloadDetailPage extends StatefulWidget {
 }
 
 class _DownloadDetailPageState extends State<DownloadDetailPage>
-    with
-        BaseMultiSelectMixin<BiliDownloadEntryInfo>,
-        GridMixin,
-        BaseDownloadActionMixin<DownloadDetailPage, BiliDownloadEntryInfo>,
-        CommonDownloadActionMixin<DownloadDetailPage> {
+    with BaseMultiSelectMixin<BiliDownloadEntryInfo>, GridMixin {
   StreamSubscription? _sub;
   final _downloadItems = RxList<BiliDownloadEntryInfo>();
-  final _controller = Get.find<DownloadController>();
-
+  final _controller = Get.find<DownloadPageController>();
+  final _downloadService = Get.find<DownloadService>();
   @override
   RxList<BiliDownloadEntryInfo> get list => _downloadItems;
   @override
   RxList<BiliDownloadEntryInfo> get state => _downloadItems;
-
-  @override
-  final downloadService = Get.find<DownloadService>();
-
-  @override
-  BaseMultiSelectMixin<BiliDownloadEntryInfo> get multiSelectCtr => this;
 
   @override
   void initState() {
@@ -80,14 +70,11 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
   }
 
   void _loadList() {
-    List<BiliDownloadEntryInfo>? list;
-    for (final season in _controller.seasons) {
-      for (final page in season.pages) {
-        if (page.pageId == widget.pageId) {
-          list = page.entries..sort(downloadEntrySort);
-        }
-      }
-    }
+    final list =
+        _controller.pages
+            .firstWhereOrNull((e) => e.pageId == widget.pageId)
+            ?.entries
+          ?..sort((a, b) => a.sortKey.compareTo(b.sortKey));
     if (list != null) {
       _downloadItems.value = list;
     } else {
@@ -97,6 +84,7 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.of(context);
     return Obx(() {
       final enableMultiSelect = this.enableMultiSelect.value;
       return popScope(
@@ -109,7 +97,34 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
         child: SimpleScaffold(
           appBar: MultiSelectAppBarWidget(
             ctr: this,
-            actions: [updateBtn()],
+            actions: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () async {
+                  final futures = allChecked
+                      .map(
+                        (e) => _downloadService.downloadDanmaku(
+                          entry: e,
+                          isUpdate: true,
+                        ),
+                      )
+                      .toList();
+                  handleSelect();
+                  final res = await Future.wait(futures);
+                  if (res.every((e) => e)) {
+                    SmartDialog.showToast('更新成功');
+                  } else {
+                    SmartDialog.showToast('更新失败');
+                  }
+                },
+                child: Text(
+                  '更新',
+                  style: TextStyle(color: colorScheme.onSurface),
+                ),
+              ),
+            ],
             child: AppBar(
               title: Text(widget.title),
               actions: [
@@ -140,19 +155,19 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
                         return DetailItem(
                           entry: entry,
                           progress: widget.progress,
-                          downloadService: downloadService,
+                          downloadService: _downloadService,
                           showTitle: false,
                           onDelete: () async {
                             if (_downloadItems.length == 1) {
                               await _closeSub();
-                              await downloadService.deletePage(
+                              await _downloadService.deletePage(
                                 pageDirPath: entry.pageDirPath,
                               );
                               if (mounted) {
                                 Get.back();
                               }
                             } else {
-                              downloadService.deleteDownload(
+                              _downloadService.deleteDownload(
                                 entry: entry,
                                 removeList: true,
                               );
@@ -190,13 +205,13 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
             allChecked.map((e) => e.cid.toString()),
           ),
           for (final entry in allChecked)
-            downloadService.deleteDownload(
+            _downloadService.deleteDownload(
               entry: entry,
               removeList: true,
               refresh: false,
             ),
         ]);
-        downloadService.flagNotifier.refresh();
+        _downloadService.flagNotifier.refresh();
         if (isDeleteAll) {
           SmartDialog.dismiss();
           if (mounted) {

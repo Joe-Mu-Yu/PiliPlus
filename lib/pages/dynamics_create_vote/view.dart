@@ -423,23 +423,29 @@ class _CreateVotePageState extends State<CreateVotePage> {
     },
   );
 
-  Future<void> _onPickImg(int index) async {
-    try {
-      final pickedFile = await imagePicker.pickImage(
-        imageQuality: 100,
-        source: ImageSource.gallery,
-        requestFullMetadata: false,
-      );
-      if (pickedFile != null) {
-        final path = pickedFile.path;
-        _controller.onUpload(index, path).whenComplete(() {
-          if (PlatformUtils.isMobile) {
-            File(path).tryDel();
+  void _onPickImg(int index) {
+    EasyThrottle.throttle(
+      'imagePicker',
+      const Duration(milliseconds: 500),
+      () async {
+        try {
+          final pickedFile = await imagePicker.pickImage(
+            imageQuality: 100,
+            source: ImageSource.gallery,
+            requestFullMetadata: false,
+          );
+          if (pickedFile != null) {
+            final path = pickedFile.path;
+            _controller.onUpload(index, path).whenComplete(() {
+              if (PlatformUtils.isMobile) {
+                File(path).tryDel();
+              }
+            });
           }
-        });
-      }
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
-    }
+        } catch (e) {
+          SmartDialog.showToast(e.toString());
+        }
+      },
+    );
   }
 }

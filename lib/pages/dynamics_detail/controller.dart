@@ -1,24 +1,14 @@
-import 'dart:async';
-
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show ReloadMixin;
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
-import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/dyn/common_dyn_controller.dart';
-import 'package:PiliPlus/pages/common/reply_controller.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
-class DynamicDetailController extends CommonDynController
-    with
-        ReloadMixin,
-        GetSingleTickerProviderStateMixin,
-        ReplyLocateMixin,
-        MainReplyLocateMixin,
-        DynReplyLocateMixin {
+class DynamicDetailController extends CommonDynController with ReloadMixin {
   DynamicDetailController({super.count});
 
   @override
@@ -26,8 +16,6 @@ class DynamicDetailController extends CommonDynController
   @override
   late int replyType;
   late DynamicItemModel dynItem;
-  @override
-  MentionItem? get mentionItem => dynItem.modules.moduleAuthor?.mentionItem;
 
   @override
   dynamic get sourceId => replyType == 1 ? IdUtils.av2bv(oid) : oid;
@@ -35,7 +23,7 @@ class DynamicDetailController extends CommonDynController
   @override
   void onInit() {
     super.onInit();
-    dynItem = args['item'];
+    dynItem = Get.arguments['item'];
     final commentType = dynItem.basic?.commentType;
     final commentIdStr = dynItem.basic?.commentIdStr;
     if (commentType != null &&
@@ -81,7 +69,7 @@ class DynamicDetailController extends CommonDynController
       action: action,
     );
     if (res.isSuccess) {
-      Timer(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 500), () {
         if (!isClosed) {
           onReload();
         }

@@ -3,34 +3,34 @@ import 'package:PiliPlus/models_new/live/live_feed_index/watched_show.dart';
 import 'package:PiliPlus/utils/parse_string.dart';
 
 class CardLiveItem {
-  final int? roomid;
-  final int? uid;
-  final String? uname;
-  final String? face;
-  final String? cover;
-  final String? _systemCover;
+  int? roomid;
+  int? uid;
+  String? uname;
+  String? face;
+  String? cover;
+  String? _systemCover;
   String? get systemCover => _systemCover ?? cover;
-  final String? title;
-  final String? areaName;
-  final int? areaV2Id;
-  final int? areaV2ParentId;
-  final WatchedShow? watchedShow;
-  final List<Feedback>? feedback;
+  String? title;
+  String? areaName;
+  int? areaV2Id;
+  int? areaV2ParentId;
+  WatchedShow? watchedShow;
+  List<Feedback>? feedback;
 
-  const CardLiveItem({
+  CardLiveItem({
     this.roomid,
     this.uid,
     this.uname,
     this.face,
     this.cover,
-    this._systemCover,
+    String? systemCover,
     this.title,
     this.areaName,
     this.areaV2Id,
     this.areaV2ParentId,
     this.watchedShow,
     this.feedback,
-  });
+  }) : _systemCover = nonNullOrEmptyString(systemCover);
 
   factory CardLiveItem.fromJson(Map<String, dynamic> json) => CardLiveItem(
     roomid: json['roomid'] ?? json['id'],
@@ -38,7 +38,7 @@ class CardLiveItem {
     uname: json['uname'] as String?,
     face: json['face'] as String?,
     cover: json['cover'] as String?,
-    systemCover: nonNullOrEmptyString(json['system_cover']),
+    systemCover: json['system_cover'],
     title: json['title'] as String?,
     areaName: json['area_name'] as String?,
     areaV2Id: json['area_v2_id'] as int?,

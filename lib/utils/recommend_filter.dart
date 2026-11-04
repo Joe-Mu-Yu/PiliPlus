@@ -13,8 +13,7 @@ abstract final class RecommendFilter {
   );
   static bool enableFilter = rcmdRegExp.pattern.isNotEmpty;
 
-  // (web/app)rcmd
-  static bool filterWithExempt(BaseVideoItemModel videoItem) {
+  static bool filter(BaseVideoItemModel videoItem) {
     //由于相关视频中没有已关注标签，只能视为非关注视频
     if (videoItem.isFollowed && exemptFilterForFollowed) {
       return false;
@@ -22,7 +21,6 @@ abstract final class RecommendFilter {
     return filterAll(videoItem);
   }
 
-  /// hot/rank/[filterAll]
   static bool filterLikeRatio(int? like, int? view) {
     if (view != null) {
       return (view > -1 && view < minPlayForRcmd) ||
@@ -33,19 +31,13 @@ abstract final class RecommendFilter {
     return false;
   }
 
-  /// hot/rank/[filterAll]
   static bool filterTitle(String title) {
     return (enableFilter && rcmdRegExp.hasMatch(title));
   }
 
-  /// [filterAll]
-  static bool filterDuration(int duration) {
-    return duration > 0 && duration < minDurationForRcmd;
-  }
-
-  /// related/[filterWithExempt]
   static bool filterAll(BaseVideoItemModel videoItem) {
-    return filterDuration(videoItem.duration) ||
+    return (videoItem.duration > 0 &&
+            videoItem.duration < minDurationForRcmd) ||
         filterLikeRatio(videoItem.stat.like, videoItem.stat.view) ||
         filterTitle(videoItem.title);
   }

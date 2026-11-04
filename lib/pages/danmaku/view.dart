@@ -71,10 +71,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
     if (oldWidget.notFullscreen != widget.notFullscreen &&
         !DanmakuOptions.sameFontScale) {
       _controller?.updateOption(
-        DanmakuOptions.get(
-          notFullscreen: widget.notFullscreen,
-          speed: playerController.playbackSpeed,
-        ),
+        DanmakuOptions.get(notFullscreen: widget.notFullscreen),
       );
     }
   }
@@ -117,7 +114,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
       final blockColorful = DanmakuOptions.blockColorful;
       final danmakuWeight = DanmakuOptions.danmakuWeight;
       for (DanmakuElem e in currentDanmakuList) {
-        if (e.weight < danmakuWeight) continue;
+        if (e.weight < danmakuWeight) return;
         if (e.mode == 7) {
           try {
             _controller!.addDanmaku(

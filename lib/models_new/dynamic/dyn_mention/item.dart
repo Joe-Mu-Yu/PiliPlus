@@ -7,10 +7,10 @@ class MentionItem with MultiSelectData {
   final String? uid;
 
   MentionItem({
-    required this.face,
+    this.face,
     this.fans,
-    required this.name,
-    required this.uid,
+    this.name,
+    this.uid,
   });
 
   factory MentionItem.fromJson(Map<String, dynamic> json) => MentionItem(

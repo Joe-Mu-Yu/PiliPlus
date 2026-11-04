@@ -1,6 +1,5 @@
 import 'dart:async' show Timer, StreamSubscription;
 import 'dart:convert' show jsonDecode;
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
@@ -29,7 +28,6 @@ import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/tcp/live.dart';
 import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/danmaku_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
@@ -125,11 +123,10 @@ class LiveRoomController extends GetxController {
   late final RxInt pageIndex = 0.obs;
   PageController? pageController;
 
+  int? currentQn = PlatformUtils.isMobile ? null : Pref.liveQuality;
+  final currentQnDesc = ''.obs;
   final RxBool isPortrait = false.obs;
-  late List<LiveQuality> acceptQnList = [];
-  final Rxn<LiveQuality> currentQn = Rxn<LiveQuality>(
-    PlatformUtils.isMobile ? null : .fromCode(Pref.liveQuality),
-  );
+  late List<({int code, String desc})> acceptQnList = [];
 
   late final bool isLogin;
   late final int mid;
@@ -231,14 +228,12 @@ class LiveRoomController extends GetxController {
   }
 
   Future<void> queryLiveUrl({bool autoFullScreenFlag = false}) async {
-    currentQn.value ??= .fromCode(
-      await ConnectivityUtils.isWiFi
-          ? Pref.liveQuality
-          : Pref.liveQualityCellular,
-    );
+    currentQn ??= await ConnectivityUtils.isWiFi
+        ? Pref.liveQuality
+        : Pref.liveQualityCellular;
     final res = await LiveHttp.liveRoomInfo(
       roomId: roomId,
-      qn: currentQn.value!.code,
+      qn: currentQn,
       onlyAudio: plPlayerController.onlyPlayAudio.value,
     );
     if (res case Success(:final response)) {
@@ -267,7 +262,7 @@ class LiveRoomController extends GetxController {
           codecIndex: codecIndex,
           liveUrlIndex: liveUrlIndex,
         ),
-        if (!isLoaded.value && Accounts.heartbeat.isLogin) _fetchBlockRules(),
+        if (isLogin && !isLoaded.value) _fetchBlockRules(),
       ]);
       isLoaded.value = true;
     } else {
@@ -325,9 +320,16 @@ class LiveRoomController extends GetxController {
         .getOrFirst(formatIndex)
         .codec
         .getOrFirst(codecIndex);
-    acceptQnList = item.acceptQn;
     // 以服务端返回的码率为准
-    currentQn.value = item.currentQn;
+    currentQn = item.currentQn;
+    acceptQnList = item.acceptQn.map((e) {
+      return (
+        code: e,
+        desc: LiveQuality.fromCode(e)?.desc ?? e.toString(),
+      );
+    }).toList();
+    currentQnDesc.value =
+        LiveQuality.fromCode(currentQn)?.desc ?? currentQn.toString();
     videoUrl = VideoUtils.getLiveCdnUrl(item, index: liveUrlIndex);
     return playerInit()?.whenComplete(_startSizeSub);
   }
@@ -525,11 +527,13 @@ class LiveRoomController extends GetxController {
   }
 
   // 修改画质
-  Future<void>? changeQn(LiveQuality qn) {
-    if (currentQn.value == qn) {
+  Future<void>? changeQn(int qn) {
+    if (currentQn == qn) {
       return null;
     }
-    currentQn.value = qn;
+    currentQn = qn;
+    currentQnDesc.value =
+        LiveQuality.fromCode(currentQn)?.desc ?? currentQn.toString();
     return queryLiveUrl();
   }
 
@@ -578,7 +582,7 @@ class LiveRoomController extends GetxController {
           final content = first[15];
           final user = content['user'];
           // final midHash = first[7];
-          final uid = user['uid'] as int;
+          final uid = user['uid'];
           final msg = info[1];
           if (isBlocked(msg, uid)) {
             return;
@@ -615,9 +619,9 @@ class LiveRoomController extends GetxController {
               uemote: uemote,
               extra: liveExtra,
               reply: reply,
-              medalInfo: GlobalData().showMedal
-                  ? UinfoMedal.lightMedal(user['medal'])
-                  : null,
+              medalInfo: !GlobalData().showMedal || user['medal'] == null
+                  ? null
+                  : UinfoMedal.fromJson(user['medal']),
             ),
             DanmakuContentItem(
               msg,
@@ -632,10 +636,8 @@ class LiveRoomController extends GetxController {
           );
           break;
         case 'SUPER_CHAT_MESSAGE' when showSuperChat:
-          final item = SuperChatItem.fromJson(obj['data'], roomId);
+          final item = SuperChatItem.fromJson(obj['data']);
           superChatMsg.insert(0, item);
-          addDm(item);
-          if (Platform.isAndroid && AndroidHelper.isPipMode) return;
           if (plPlayerController.showDanmaku &&
               (isFullScreen || plPlayerController.isDesktopPip)) {
             fsSC.value = item.copyWith(
@@ -645,6 +647,7 @@ class LiveRoomController extends GetxController {
               ),
             );
           }
+          addDm(item);
           break;
         // case 'SUPER_CHAT_MESSAGE_DELETE' when showSuperChat:
         //   if (obj['roomid'] == roomId) {
@@ -779,6 +782,7 @@ class LiveRoomController extends GetxController {
     }
     autoWrapReportDialog(
       Get.context!,
+      ban: false,
       ReportOptions.liveDanmakuReport,
       withContent: ReportOptions.liveDanmakuReportCheck,
       contentRequired: ReportOptions.liveDanmakuReportCheck,

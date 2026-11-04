@@ -9,9 +9,10 @@ import 'package:PiliPlus/pages/member_shop/controller.dart';
 import 'package:PiliPlus/pages/member_shop/widgets/item.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/waterfall.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:waterfall_flow/waterfall_flow.dart'
+    hide SliverWaterfallFlowDelegateWithMaxCrossAxisExtent;
 
 class MemberShop extends StatefulWidget {
   const MemberShop({
@@ -66,16 +67,16 @@ class _MemberShopState extends State<MemberShop>
   @override
   bool get wantKeepAlive => true;
 
-  late final gridDelegate = SliverSimpleGridDelegateWithMaxCrossAxisExtent_(
+  late final gridDelegate = SliverWaterfallFlowDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: Grid.smallCardWidth,
+    mainAxisSpacing: Style.safeSpace,
+    crossAxisSpacing: Style.safeSpace,
   );
 
   Widget _buildBody(LoadingState<List<SpaceShopItem>?> loadingState) {
     switch (loadingState) {
       case Loading():
-        return SliverMasonryGrid(
-          mainAxisSpacing: Style.safeSpace,
-          crossAxisSpacing: Style.safeSpace,
+        return SliverWaterfallFlow(
           gridDelegate: gridDelegate,
           delegate: const SliverSingleChildDelegate(
             count: 10,
@@ -86,12 +87,12 @@ class _MemberShopState extends State<MemberShop>
         if (response == null || response.isEmpty) {
           return HttpError(onReload: _controller.onReload);
         }
-        Widget sliver = SliverMasonryGrid(
-          mainAxisSpacing: Style.safeSpace,
-          crossAxisSpacing: Style.safeSpace,
+        Widget sliver = SliverWaterfallFlow(
           gridDelegate: gridDelegate,
           delegate: SliverChildBuilderDelegate(
-            (context, index) => MemberShopItem(item: response[index]),
+            (_, index) {
+              return MemberShopItem(item: response[index]);
+            },
             childCount: response.length,
           ),
         );

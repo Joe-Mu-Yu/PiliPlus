@@ -56,7 +56,10 @@ class _SearchLivePanelState
   @override
   Widget buildList(List<SearchLiveItemModel> list) {
     return SliverPadding(
-      padding: const .only(left: Style.safeSpace, right: Style.safeSpace),
+      padding: const EdgeInsets.only(
+        left: Style.safeSpace,
+        right: Style.safeSpace,
+      ),
       sliver: SliverGrid.builder(
         gridDelegate: gridDelegate,
         itemBuilder: (context, index) {
@@ -71,14 +74,11 @@ class _SearchLivePanelState
   }
 
   @override
-  Widget get buildLoading => SliverPadding(
-    padding: const .only(left: Style.safeSpace, right: Style.safeSpace),
-    sliver: SliverGrid(
-      gridDelegate: gridDelegate,
-      delegate: const SliverSingleChildDelegate(
-        count: 10,
-        child: VideoCardVSkeleton(),
-      ),
+  Widget get buildLoading => SliverGrid(
+    gridDelegate: gridDelegate,
+    delegate: const SliverSingleChildDelegate(
+      count: 10,
+      child: VideoCardVSkeleton(),
     ),
   );
 }

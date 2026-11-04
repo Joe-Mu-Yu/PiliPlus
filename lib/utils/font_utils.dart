@@ -23,7 +23,6 @@ abstract final class FontUtils {
   static final _fonts = <String>{};
   static bool _initialized = false;
 
-  static const kFontName = 'customFont.otf';
   static const _kFontExts = ['ttf', 'ttc', 'otf'];
 
   static AppFont _appFont = _initAppFont();
@@ -54,7 +53,7 @@ abstract final class FontUtils {
   static String? get fontFamily => _appFont.fontFamily;
   static bool get isCustom => _appFont.isCustom;
 
-  static final fontFile = File(path.join(appSupportDirPath, kFontName));
+  static final fontFile = File(path.join(appSupportDirPath, 'customFont.otf'));
 
   static Future<void>? init() {
     if (isCustom) {
@@ -97,15 +96,14 @@ abstract final class FontUtils {
       if (files.isNotEmpty) {
         final Map<String, Uint8List> fonts = {};
         final now = DateTime.now().millisecondsSinceEpoch.toString();
-
-        Future<void> loadFont(file) async {
-          final name = '$now/${path.basenameWithoutExtension(file.name)}';
-          final bytes = await file.readAsBytes();
-          await _loadFont(bytes, fontFamily: name);
-          fonts[name] = bytes;
-        }
-
-        await Future.wait(files.map(loadFont));
+        await Future.wait(
+          files.map((file) async {
+            final name = '$now/${path.basenameWithoutExtension(file.name)}';
+            final bytes = await file.readAsBytes();
+            await _loadFont(bytes, fontFamily: name);
+            fonts[name] = bytes;
+          }),
+        );
         return fonts;
       }
     } catch (_) {

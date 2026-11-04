@@ -7,23 +7,26 @@ import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/player_bar.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/mine_tab_type.dart';
+import 'package:PiliPlus/models/common/mine_expand_content.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
+import 'package:PiliPlus/models_new/fav/fav_folder/data.dart';
+import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
+import 'package:PiliPlus/models_new/history/data.dart';
+import 'package:PiliPlus/models_new/history/list.dart';
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/login/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
-import 'package:PiliPlus/pages/mine/widgets/fav_item.dart';
-import 'package:PiliPlus/pages/mine/widgets/history_item.dart';
-import 'package:PiliPlus/pages/mine/widgets/later_item.dart';
-import 'package:PiliPlus/pages/mine/widgets/sub_item.dart';
+import 'package:PiliPlus/pages/mine/widgets/item.dart';
+import 'package:PiliPlus/pages/mine/widgets/recent_history_item.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -42,7 +45,6 @@ class _MediaPageState extends CommonPageState<MinePage>
     with AutomaticKeepAliveClientMixin {
   final MineController controller = Get.putOrFind(MineController.new);
   late final MainController _mainController = Get.find<MainController>();
-  late ThemeData theme;
 
   @override
   bool get wantKeepAlive => true;
@@ -68,47 +70,67 @@ class _MediaPageState extends CommonPageState<MinePage>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    theme = Theme.of(context);
-  }
-
-  @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
-    return Column(
-      children: [
-        Padding(
-          padding: const .symmetric(vertical: 10),
-          child: _buildHeaderActions,
-        ),
-        Expanded(
-          child: Material(
-            type: .transparency,
-            child: refreshIndicator(
-              onRefresh: controller.onRefresh,
-              child: onBuild(
-                ListView(
-                  padding: const .only(bottom: 150),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    _buildUserInfo(theme, secondary),
-                    _buildActions(secondary),
-                    for (final tab in controller.mineTabs)
-                      switch (tab) {
-                        .favorite => Obx(_buildFav),
-                        .history => Obx(_buildHistory),
-                        .later => Obx(_buildLater),
-                        .sub => Obx(_buildSub),
-                      },
-                  ],
+    return ColoredBox(
+      color: theme.colorScheme.surface,
+      child: Column(
+        children: [
+          Padding(
+            padding: const .symmetric(vertical: 10),
+            child: _buildHeaderActions,
+          ),
+          Expanded(
+            child: Material(
+              type: .transparency,
+              child: refreshIndicator(
+                onRefresh: controller.onRefresh,
+                child: onBuild(
+                  ListView(
+                    padding: const .only(bottom: 100),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      Padding(
+                        padding: const .symmetric(vertical: 12),
+                        child: _buildUserInfo(theme, secondary),
+                      ),
+                      Obx(
+                        () => Padding(
+                          padding: const .symmetric(vertical: 4),
+                          child: _buildActions(secondary),
+                        ),
+                      ),
+                      Obx(
+                        () => controller.loadingState.value is Loading
+                            ? const SizedBox.shrink()
+                            : _buildExpandContent(theme, secondary),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionCard(
+    ThemeData theme, {
+    required Widget child,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) {
+    return Card(
+      margin: const .symmetric(horizontal: 8, vertical: 4),
+      color: theme.colorScheme.surfaceContainer,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      semanticContainer: false,
+      child: Padding(padding: padding, child: child),
     );
   }
 
@@ -151,87 +173,91 @@ class _MediaPageState extends CommonPageState<MinePage>
     const padding = EdgeInsets.all(8);
     const style = ButtonStyle(tapTargetSize: .shrinkWrap);
     return PlayerBar(
-      left: widget.showBackBtn
-          ? const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: BackButton(),
-            )
-          : const SizedBox.shrink(),
-      right: Row(
-        spacing: 5,
-        mainAxisSize: .min,
-        children: [
-          if (!_mainController.hasHome) ...[
-            IconButton(
-              iconSize: iconSize,
-              padding: padding,
-              style: style,
-              tooltip: '搜索',
-              onPressed: () => Get.toNamed('/search'),
-              icon: const Icon(Icons.search),
-            ),
-            msgBadge(_mainController),
-          ],
-          if (GStorage.reply != null)
-            IconButton(
-              iconSize: iconSize,
-              padding: padding,
-              style: style,
-              tooltip: '评论记录',
-              onPressed: () => Get.toNamed('/myReply'),
-              icon: const Icon(Icons.message_outlined),
-            ),
-          Obx(
-            () {
-              final anonymity = MineController.anonymity.value;
-              return IconButton(
+      children: [
+        if (widget.showBackBtn)
+          const Padding(
+            padding: EdgeInsets.only(left: 8),
+            child: BackButton(),
+          )
+        else
+          const SizedBox.shrink(),
+        Row(
+          spacing: 5,
+          mainAxisSize: .min,
+          children: [
+            if (!_mainController.hasHome) ...[
+              IconButton(
                 iconSize: iconSize,
                 padding: padding,
                 style: style,
-                tooltip: "${anonymity ? '退出' : '进入'}无痕模式",
-                onPressed: MineController.onChangeAnonymity,
-                icon: anonymity
-                    ? const Icon(MdiIcons.incognito)
-                    : const Icon(MdiIcons.incognitoOff),
-              );
-            },
-          ),
-          IconButton(
-            iconSize: iconSize,
-            padding: padding,
-            style: style,
-            tooltip: '切换账号',
-            onPressed: () => LoginPageController.switchAccountDialog(context),
-            icon: const Icon(Icons.switch_account_outlined),
-          ),
-          Obx(
-            () => IconButton(
+                tooltip: '搜索',
+                onPressed: () => Get.toNamed('/search'),
+                icon: const Icon(Icons.search),
+              ),
+              msgBadge(_mainController),
+            ],
+            if (GStorage.reply != null)
+              IconButton(
+                iconSize: iconSize,
+                padding: padding,
+                style: style,
+                tooltip: '评论记录',
+                onPressed: () => Get.toNamed('/myReply'),
+                icon: const Icon(Icons.message_outlined),
+              ),
+            Obx(
+              () {
+                final anonymity = MineController.anonymity.value;
+                return IconButton(
+                  iconSize: iconSize,
+                  padding: padding,
+                  style: style,
+                  tooltip: "${anonymity ? '退出' : '进入'}无痕模式",
+                  onPressed: MineController.onChangeAnonymity,
+                  icon: anonymity
+                      ? const Icon(MdiIcons.incognito)
+                      : const Icon(MdiIcons.incognitoOff),
+                );
+              },
+            ),
+            IconButton(
               iconSize: iconSize,
               padding: padding,
               style: style,
-              tooltip: '切换至${controller.nextThemeType.label}主题',
-              onPressed: controller.onChangeTheme,
-              icon: controller.themeType.value.icon,
+              tooltip: '切换账号',
+              onPressed: () => LoginPageController.switchAccountDialog(context),
+              icon: const Icon(Icons.switch_account_outlined),
             ),
-          ),
-          IconButton(
-            iconSize: iconSize,
-            padding: padding,
-            style: style,
-            tooltip: '设置',
-            onPressed: () => Get.toNamed('/setting', preventDuplicates: false),
-            icon: const Icon(Icons.settings_outlined),
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+            Obx(
+              () => IconButton(
+                iconSize: iconSize,
+                padding: padding,
+                style: style,
+                tooltip: '切换至${controller.nextThemeType.label}主题',
+                onPressed: controller.onChangeTheme,
+                icon: controller.themeType.value.icon,
+              ),
+            ),
+            IconButton(
+              iconSize: iconSize,
+              padding: padding,
+              style: style,
+              tooltip: '设置',
+              onPressed: () =>
+                  Get.toNamed('/setting', preventDuplicates: false),
+              icon: const Icon(Icons.settings_outlined),
+            ),
+            const SizedBox(width: 16),
+          ],
+        ),
+      ],
     );
   }
 
   Widget _buildUserInfo(ThemeData theme, Color secondary) {
-    final style = TextStyle(
-      fontSize: theme.textTheme.titleMedium!.fontSize,
-      fontWeight: FontWeight.bold,
+    const style = TextStyle(
+      fontSize: 17,
+      fontWeight: FontWeight.w500,
     );
     final labelStyle = theme.textTheme.labelMedium!.copyWith(
       color: theme.colorScheme.outline,
@@ -379,31 +405,35 @@ class _MediaPageState extends CommonPageState<MinePage>
             ),
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: .spaceEvenly,
-            children: [
-              _btn(
-                count: userStat.dynamicCount,
-                countStyle: style,
-                name: '动态',
-                labelStyle: labelStyle,
-                onTap: () => controller.push('memberDynamics'),
-              ),
-              _btn(
-                count: userStat.following,
-                countStyle: style,
-                name: '关注',
-                labelStyle: labelStyle,
-                onTap: () => controller.push('follow'),
-              ),
-              _btn(
-                count: userStat.follower,
-                countStyle: style,
-                name: '粉丝',
-                labelStyle: labelStyle,
-                onTap: () => controller.push('fan'),
-              ),
-            ],
+          _sectionCard(
+            theme,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              mainAxisAlignment: .spaceEvenly,
+              children: [
+                _btn(
+                  count: userStat.dynamicCount,
+                  countStyle: style,
+                  name: '动态',
+                  labelStyle: labelStyle,
+                  onTap: () => controller.push('memberDynamics'),
+                ),
+                _btn(
+                  count: userStat.following,
+                  countStyle: style,
+                  name: '关注',
+                  labelStyle: labelStyle,
+                  onTap: () => controller.push('follow'),
+                ),
+                _btn(
+                  count: userStat.follower,
+                  countStyle: style,
+                  name: '粉丝',
+                  labelStyle: labelStyle,
+                  onTap: () => controller.push('fan'),
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -417,158 +447,59 @@ class _MediaPageState extends CommonPageState<MinePage>
     required TextStyle? labelStyle,
     required VoidCallback onTap,
   }) {
-    return Flexible(
+    return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: Style.mdRadius,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 80),
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: Column(
-              spacing: 4,
-              mainAxisSize: .min,
-              mainAxisAlignment: .center,
-              children: [
-                Text(
-                  count?.toString() ?? '-',
-                  style: countStyle,
-                ),
-                Text(
-                  name,
-                  style: labelStyle,
-                ),
-              ],
-            ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            spacing: 4,
+            mainAxisSize: .min,
+            mainAxisAlignment: .center,
+            children: [
+              Text(
+                count?.toString() ?? '-',
+                style: countStyle,
+              ),
+              Text(
+                name,
+                style: labelStyle,
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  void _autoRefresh(MineRefreshMixin tabCtr) => Timer(
+  void _autoRefresh() => Future.delayed(
     const Duration(milliseconds: 150),
-    () => tabCtr.onRefresh(isManual: false),
+    () => controller.onRefresh(isManual: false),
   );
 
-  Widget _buildFav() {
-    return _buildTab(
-      .favorite,
-      controller.favCtr!,
-      itemBuilder: (element) => FavFolderItem(
-        item: element,
-        onPop: () => _autoRefresh(controller.favCtr!),
-      ),
-      onPushDetail: () => Get.toNamed(
-        '/fav',
-      )?.whenComplete(() => _autoRefresh(controller.favCtr!)),
-    );
-  }
-
-  Widget _buildHistory() {
-    return _buildTab(
-      .history,
-      controller.historyCtr!,
-      itemBuilder: (element) => MineHistoryItem(
-        item: element,
-        onPop: () => _autoRefresh(controller.historyCtr!),
-      ),
-      onPushDetail: () => Get.toNamed(
-        '/history',
-      )?.whenComplete(() => _autoRefresh(controller.historyCtr!)),
-    );
-  }
-
-  Widget _buildLater() {
-    return _buildTab(
-      .later,
-      controller.laterCtr!,
-      itemBuilder: (element) => MineLaterItem(
-        item: element,
-        onPop: () => _autoRefresh(controller.laterCtr!),
-      ),
-      onPushDetail: () => Get.toNamed(
-        '/later',
-      )?.whenComplete(() => _autoRefresh(controller.laterCtr!)),
-    );
-  }
-
-  Widget _buildSub() {
-    return _buildTab(
-      .sub,
-      controller.subCtr!,
-      itemBuilder: (element) => MineSubItem(
-        item: element,
-        onPop: () => _autoRefresh(controller.subCtr!),
-      ),
-      onPushDetail: () => Get.toNamed(
-        '/subscription',
-      )?.whenComplete(() => _autoRefresh(controller.subCtr!)),
-    );
-  }
-
-  Widget _buildTab<R, T>(
-    MineTabType tab,
-    MineRefreshMixin<R, T> tabCtr, {
-    required Widget Function(T element) itemBuilder,
-    required VoidCallback onPushDetail,
-  }) {
-    final Widget child;
-    switch (tabCtr.loadingState.value) {
-      case Loading():
-        return const SizedBox.shrink();
-      case Success(:final response):
-        if (response == null || response.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        child = SizedBox(
-          height: 180,
-          child: ListView.separated(
-            itemCount: response.length,
-            controller: tabCtr.scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const .only(left: 20, top: 10, right: 20),
-            itemBuilder: (context, index) {
-              if (index == response.length - 1) {
-                tabCtr.onLoadMore();
-              }
-              return SizedBox(width: 180, child: itemBuilder(response[index]));
-            },
-            scrollDirection: .horizontal,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-          ),
-        );
-      case Error(:final errMsg):
-        if (errMsg == null) return const SizedBox.shrink();
-        child = SizedBox(
-          height: 160,
-          child: Center(child: Text(errMsg, textAlign: .center)),
-        );
-    }
-    final secondary = theme.colorScheme.secondary;
+  Widget _buildExpandContent(ThemeData theme, Color secondary) {
+    final isHistory =
+        controller.expandContent.value == MineExpandContent.history;
+    final title = isHistory ? '最近播放' : '我的收藏';
+    final route = isHistory ? '/history' : '/fav';
     return Column(
       children: [
-        Divider(
-          height: 20,
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
-        ),
         ListTile(
+          onTap: () => Get.toNamed(route)?.whenComplete(_autoRefresh),
           dense: true,
-          onTap: onPushDetail,
           title: Padding(
             padding: const EdgeInsets.only(left: 10),
             child: Text.rich(
               TextSpan(
                 children: [
                   TextSpan(
-                    text: '${tab.label}  ',
-                    style: const TextStyle(fontSize: 16, fontWeight: .bold),
-                  ),
-                  if (tabCtr.count != null)
-                    TextSpan(
-                      text: '${tabCtr.count}  ',
-                      style: TextStyle(color: secondary),
+                    text: '$title  ',
+                    style: TextStyle(
+                      fontSize: theme.textTheme.titleMedium!.fontSize,
+                      fontWeight: .bold,
                     ),
+                  ),
                   WidgetSpan(
                     child: Icon(
                       Icons.arrow_forward_ios,
@@ -582,12 +513,76 @@ class _MediaPageState extends CommonPageState<MinePage>
           ),
           trailing: IconButton(
             tooltip: '刷新',
-            onPressed: tabCtr.onRefresh,
+            onPressed: controller.onRefresh,
             icon: const Icon(Icons.refresh, size: 20),
           ),
         ),
-        child,
+        _buildExpandContentBody(controller.loadingState.value, isHistory),
       ],
+    );
+  }
+
+  Widget _buildExpandContentBody(LoadingState loadingState, bool isHistory) {
+    return switch (loadingState) {
+      Loading() => const SizedBox.shrink(),
+      Success(:final response) => Builder(
+        builder: (context) {
+          if (isHistory) {
+            return _buildRecentHistoryBody(response as HistoryData);
+          }
+          return _buildFavoriteBody(response as FavFolderData);
+        },
+      ),
+      Error(:final errMsg) => SizedBox(
+        height: 160,
+        child: Center(
+          child: Text(
+            errMsg ?? '',
+            textAlign: .center,
+          ),
+        ),
+      ),
+    };
+  }
+
+  Widget _buildRecentHistoryBody(HistoryData data) {
+    final List<HistoryItemModel>? historyList = data.list;
+    if (historyList == null || historyList.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 184,
+      child: ListView.separated(
+        controller: controller.scrollController,
+        padding: const .only(left: 20, top: 10, right: 20),
+        itemCount: historyList.length,
+        itemBuilder: (context, index) =>
+            RecentHistoryItem(item: historyList[index]),
+        scrollDirection: .horizontal,
+        separatorBuilder: (_, _) => const SizedBox(width: 14),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteBody(FavFolderData data) {
+    final List<FavFolderInfo>? favoriteList = data.list;
+    if (favoriteList == null || favoriteList.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return SizedBox(
+      height: 200,
+      child: ListView.separated(
+        controller: controller.scrollController,
+        padding: const .only(left: 20, top: 10, right: 20),
+        itemCount: favoriteList.length,
+        itemBuilder: (context, index) => FavFolderItem(
+          heroTag: Utils.makeHeroTag(favoriteList[index].id),
+          item: favoriteList[index],
+          onPop: _autoRefresh,
+        ),
+        scrollDirection: .horizontal,
+        separatorBuilder: (_, _) => const SizedBox(width: 14),
+      ),
     );
   }
 }

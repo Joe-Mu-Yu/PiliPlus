@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -13,31 +15,28 @@ import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class SearchHttp {
   // 获取搜索建议
-  @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<SearchSuggestModel>> searchSuggest({
     required String term,
   }) async {
     final res = await Request().get(
       Api.searchSuggest,
-      queryParameters: await WbiSign.makSign({
+      queryParameters: {
         'term': term,
-        'highlight': 0,
-        'spmid': 333.1365,
-        'web_location': 333.1365,
-      }),
+        'main_ver': 'v1',
+        'highlight': term,
+      },
     );
-    final resData = res.data;
-    if (resData is Map && resData['code'] == 0) {
-      try {
-        return Success(SearchSuggestModel.fromJson(resData['data']['result']));
-      } catch (_) {
-        if (kDebugMode) rethrow;
+    if (res.data is String) {
+      Map<String, dynamic> resultMap = json.decode(res.data);
+      if (resultMap['code'] == 0) {
+        if (resultMap['result'] is Map) {
+          return Success(SearchSuggestModel.fromJson(resultMap['result']));
+        }
       }
     }
     return const Error(null);

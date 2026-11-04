@@ -5,7 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 class OrderedMultiSelectDialog<T> extends StatefulWidget {
   final Iterable<T> initValues;
-  final Widget title;
+  final String title;
   final Map<T, String> values;
 
   const OrderedMultiSelectDialog({
@@ -35,7 +35,7 @@ class _OrderedMultiSelectDialogState<T>
     final theme = Theme.of(context);
     return AlertDialog(
       clipBehavior: Clip.hardEdge,
-      title: widget.title,
+      title: Text(widget.title),
       contentPadding: const EdgeInsets.only(top: 12),
       content: Material(
         type: .transparency,

@@ -1,12 +1,27 @@
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
+import 'package:PiliPlus/pages/setting/pages/device_sharing.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/api_type.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 List<SettingsModel> get privacySettings => [
   NormalModel(
-    onTap: (context, setState) => Get.toNamed('/blackListPage'),
+    onTap: (context, setState) => Get.to(() => const DeviceSharingPage()),
+    title: '广播与位置共享',
+    subtitle: '接收个人公告；自愿共享此设备的位置',
+    leading: const Icon(Icons.location_on_outlined),
+  ),
+  NormalModel(
+    onTap: (context, setState) {
+      if (!Accounts.main.isLogin) {
+        SmartDialog.showToast('登录后查看');
+        return;
+      }
+      Get.toNamed('/blackListPage');
+    },
     title: '黑名单管理',
     subtitle: '已拉黑用户',
     leading: const Icon(Icons.block),

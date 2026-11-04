@@ -39,7 +39,7 @@ class _SearchResultPageState extends State<SearchResultPage>
     _tabController = TabController(
       vsync: this,
       initialIndex: Get.arguments?['initIndex'] ?? 0,
-      length: SearchType.actives.length,
+      length: SearchType.values.length,
     );
 
     if (_isFromSearch) {
@@ -78,7 +78,7 @@ class _SearchResultPageState extends State<SearchResultPage>
         title: GestureDetector(
           onTap: () {
             if (_isFromSearch) {
-              Get.back(result: true);
+              Get.back();
             } else {
               Get.offNamed(
                 '/search',
@@ -106,7 +106,7 @@ class _SearchResultPageState extends State<SearchResultPage>
               splashFactory: NoSplash.splashFactory,
               padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
               controller: _tabController,
-              tabs: SearchType.actives
+              tabs: SearchType.values
                   .map(
                     (item) => Obx(
                       () {
@@ -153,7 +153,7 @@ class _SearchResultPageState extends State<SearchResultPage>
             Expanded(
               child: tabBarView(
                 controller: _tabController,
-                children: SearchType.actives
+                children: SearchType.values
                     .map(
                       (item) => switch (item) {
                         .all => SearchAllPanel(

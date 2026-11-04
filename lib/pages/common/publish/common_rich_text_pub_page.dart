@@ -220,35 +220,33 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     }
   }
 
-  void onPickImageThrottle([VoidCallback? callback]) {
+  void onPickImage([VoidCallback? callback]) {
     EasyThrottle.throttle(
       'imagePicker',
       const Duration(milliseconds: 500),
-      () => _onPickImage(callback),
-    );
-  }
-
-  Future<void> _onPickImage([VoidCallback? callback]) async {
-    try {
-      final pickedFiles = await imagePicker.pickMultiImage(
-        limit: limit,
-        imageQuality: 100,
-        requestFullMetadata: false,
-      );
-      if (pickedFiles.isNotEmpty) {
-        for (int i = 0; i < pickedFiles.length; i++) {
-          if (imageList.length == limit) {
-            SmartDialog.showToast('最多选择$limit张图片');
-            break;
-          } else {
-            imageList.add(FilePicModel(path: pickedFiles[i].path));
+      () async {
+        try {
+          final pickedFiles = await imagePicker.pickMultiImage(
+            limit: limit,
+            imageQuality: 100,
+            requestFullMetadata: false,
+          );
+          if (pickedFiles.isNotEmpty) {
+            for (int i = 0; i < pickedFiles.length; i++) {
+              if (imageList.length == limit) {
+                SmartDialog.showToast('最多选择$limit张图片');
+                break;
+              } else {
+                imageList.add(FilePicModel(path: pickedFiles[i].path));
+              }
+            }
+            callback?.call();
           }
+        } catch (e) {
+          SmartDialog.showToast(e.toString());
         }
-        callback?.call();
-      }
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
-    }
+      },
+    );
   }
 
   void onChooseEmote(dynamic emote, double? width, double? height) {
@@ -327,13 +325,11 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
   }
 
   late double _mentionOffset = 0;
-  MentionItem? get topMentionItem => null;
   Future<void>? onMention([bool fromClick = false]) async {
     final res = await DynMentionPanel.onDynMention(
       context,
       offset: _mentionOffset,
       onCachePos: (offset) => _mentionOffset = offset,
-      top: topMentionItem,
     );
     if (res != null) {
       if (res is MentionItem) {

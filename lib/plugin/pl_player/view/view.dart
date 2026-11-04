@@ -14,7 +14,6 @@ import 'package:PiliPlus/common/widgets/gesture/mouse_interactive_viewer.dart';
 import 'package:PiliPlus/common/widgets/gesture/player_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
-import 'package:PiliPlus/common/widgets/player_bar.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
@@ -41,25 +40,25 @@ import 'package:PiliPlus/plugin/pl_player/models/data_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/double_tap_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/gesture_type.dart';
+import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/backward_seek.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/bottom_control.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/common_btn.dart';
+import 'package:PiliPlus/plugin/pl_player/widgets/compact_player_controls.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/mpv_convert_webp.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
-import 'package:PiliPlus/utils/ios/pip_helper.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -72,8 +71,7 @@ import 'package:easy_debounce/easy_throttle.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/rendering.dart'
-    show RenderProxyBox, SemanticsConfiguration;
+import 'package:flutter/rendering.dart' show RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -83,6 +81,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
+import 'package:window_manager/window_manager.dart';
 
 part 'widgets.dart';
 
@@ -274,9 +273,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           _getCurrVolume();
           FlutterVolumeController.addListener(
             _onVolumeChanged,
-            // The plugin defaults to ambient and overwrites AVAudioSession.
-            // Keep media playback audible regardless of listener/mpv init order.
-            category: AudioSessionCategory.playback,
             emitOnStart: false,
           );
         } catch (_) {}
@@ -333,8 +329,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Keep playing in the PiP window.
-    if (Platform.isIOS && IOSPipHelper.isActive) return;
     if (!plPlayerController.continuePlayInBackground.value) {
       late final player = plPlayerController.videoPlayerController;
       if (const <AppLifecycleState>[.paused, .detached].contains(state)) {
@@ -397,10 +391,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   Widget buildBottomControl(
     VideoDetailController videoDetailController,
     bool isLandscape,
+    Widget progress,
   ) {
     final videoDetail = introController.videoDetail.value;
     final isSeason = videoDetail.ugcSeason != null;
-    final isPart = videoDetail.hasParts;
+    final isPart = videoDetail.pages != null && videoDetail.pages!.length > 1;
     final isPgc = !videoDetailController.isUgc;
     final isPlayAll = videoDetailController.isPlayAll;
     final anySeason = isSeason || isPart || isPgc || isPlayAll;
@@ -408,8 +403,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     final double widgetWidth = isLandscape && isFullScreen ? 42 : 35;
 
     Widget progressWidget(
-      BottomControlType bottomControl,
-    ) => switch (bottomControl) {
+      BottomControlType bottomControl, {
+      void Function(VoidCallback action)? runOutsideOptionsDialog,
+    }) => switch (bottomControl) {
       /// 播放暂停
       BottomControlType.playOrPause => PlayOrPauseButton(
         plPlayerController: plPlayerController,
@@ -451,12 +447,18 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
       /// 时间进度
       BottomControlType.time => Obx(
-        () => _VideoTime(
-          position: DurationUtils.formatDuration(
-            plPlayerController.position.value,
-          ),
-          duration: DurationUtils.formatDuration(
-            plPlayerController.duration.value,
+        () => PlayerControlLabel(
+          child: Text(
+            '${DurationUtils.formatDuration(plPlayerController.position.value)} / ${DurationUtils.formatDuration(plPlayerController.duration.value)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textDirection: TextDirection.ltr,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ),
@@ -516,9 +518,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                type.label,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+              child: PlayerControlLabel(
+                child: Text(
+                  type.label,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
               ),
             ),
           );
@@ -541,7 +545,15 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   color: Colors.white,
                 ),
               ),
-              onTap: widget.showViewPoints,
+              onTap: () {
+                final showViewPoints = widget.showViewPoints;
+                if (showViewPoints == null) return;
+                if (runOutsideOptionsDialog case final runOutsideDialog?) {
+                  runOutsideDialog(showViewPoints);
+                } else {
+                  showViewPoints();
+                }
+              },
               onLongPress: () {
                 Feedback.forLongPress(context);
                 videoDetailController.showVP.toggle();
@@ -566,47 +578,55 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           color: Colors.white,
         ),
         onTap: () {
-          if (videoDetailController.isFileSource) {
-            // TODO
-            return;
-          }
-          // part -> playAll -> season(pgc)
-          if (isPlayAll && !isPart) {
-            widget.showEpisodes?.call();
-            return;
-          }
-          int? index;
-          int currentCid = plPlayerController.cid!;
-          String bvid = plPlayerController.bvid;
-          List<ugc.BaseEpisodeItem> episodes = [];
-          if (isSeason) {
-            final sections = videoDetail.ugcSeason!.sections!;
-            for (int i = 0; i < sections.length; i++) {
-              final episodesList = sections[i].episodes!;
-              for (final item in episodesList) {
-                if (item.cid == currentCid) {
-                  index = i;
-                  episodes = episodesList;
-                  break;
+          void showEpisodes() {
+            if (videoDetailController.isFileSource) {
+              // TODO
+              return;
+            }
+            // part -> playAll -> season(pgc)
+            if (isPlayAll && !isPart) {
+              widget.showEpisodes?.call();
+              return;
+            }
+            int? index;
+            int currentCid = plPlayerController.cid!;
+            String bvid = plPlayerController.bvid;
+            List<ugc.BaseEpisodeItem> episodes = [];
+            if (isSeason) {
+              final sections = videoDetail.ugcSeason!.sections!;
+              for (int i = 0; i < sections.length; i++) {
+                final episodesList = sections[i].episodes!;
+                for (final item in episodesList) {
+                  if (item.cid == currentCid) {
+                    index = i;
+                    episodes = episodesList;
+                    break;
+                  }
                 }
               }
+            } else if (isPart) {
+              episodes = videoDetail.pages!;
+            } else if (isPgc) {
+              episodes =
+                  (introController as PgcIntroController).pgcItem.episodes!;
             }
-          } else if (isPart) {
-            episodes = videoDetail.pages!;
-          } else if (isPgc) {
-            episodes =
-                (introController as PgcIntroController).pgcItem.episodes!;
+            widget.showEpisodes?.call(
+              index,
+              isSeason ? videoDetail.ugcSeason! : null,
+              isSeason ? null : episodes,
+              bvid,
+              IdUtils.bv2av(bvid),
+              isSeason && isPart
+                  ? videoDetailController.seasonCid ?? currentCid
+                  : currentCid,
+            );
           }
-          widget.showEpisodes?.call(
-            index,
-            isSeason ? videoDetail.ugcSeason! : null,
-            isSeason ? null : episodes,
-            bvid,
-            IdUtils.bv2av(bvid),
-            isSeason && isPart
-                ? videoDetailController.seasonCid ?? currentCid
-                : currentCid,
-          );
+
+          if (runOutsideOptionsDialog case final runOutsideDialog?) {
+            runOutsideDialog(showEpisodes);
+          } else {
+            showEpisodes();
+          }
         },
       ),
 
@@ -640,9 +660,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                fit.desc,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+              child: PlayerControlLabel(
+                child: Text(
+                  fit.desc,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
               ),
             ),
           );
@@ -780,10 +802,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              "${plPlayerController.playbackSpeed}X",
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              semanticsLabel: "${plPlayerController.playbackSpeed}倍速",
+            child: PlayerControlLabel(
+              child: Text(
+                "${plPlayerController.playbackSpeed}X",
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                semanticsLabel: "${plPlayerController.playbackSpeed}倍速",
+              ),
             ),
           ),
         ),
@@ -842,7 +866,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                       }
                     },
                     child: Text(
-                      item.newDesc ?? item.quality.toString(),
+                      item.newDesc ?? '',
                       style: enabled
                           ? const TextStyle(color: Colors.white, fontSize: 13)
                           : const TextStyle(
@@ -856,9 +880,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                currentVideoQa.shortDesc,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
+              child: PlayerControlLabel(
+                child: Text(
+                  currentVideoQa.shortDesc,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
               ),
             ),
           );
@@ -890,29 +916,69 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       if (!isNotFileSource || anySeason) ...[.pre, .next],
     ];
 
-    final flag =
-        isFullScreen || plPlayerController.isDesktopPip || maxWidth >= 500;
     final List<BottomControlType> userSpecifyItemRight = [
       if (isNotFileSource && plPlayerController.showDmChart) .dmChart,
       if (plPlayerController.isAnim) .superResolution,
       if (isNotFileSource && plPlayerController.showViewPoints) .viewPoints,
       if (isNotFileSource && anySeason) .episode,
-      if (flag) .fit,
+      .fit,
       if (isNotFileSource) .aiTranslate,
       .subtitle,
       .speed,
-      if (isNotFileSource && flag) .qa,
+      if (isNotFileSource) .qa,
       if (!plPlayerController.isDesktopPip) .fullscreen,
     ];
-    return PlayerBar(
-      left: Row(
-        mainAxisSize: .min,
-        children: userSpecifyItemLeft.map(progressWidget).toList(),
-      ),
-      right: Row(
-        mainAxisSize: .min,
-        children: userSpecifyItemRight.map(progressWidget).toList(),
-      ),
+    String label(BottomControlType type) => switch (type) {
+      .playOrPause => '播放',
+      .pre => '上一集',
+      .next => '下一集',
+      .time => '播放时间',
+      .episode => '选集',
+      .fit => '画面比例',
+      .subtitle => '字幕',
+      .speed => '倍速',
+      .fullscreen => '全屏',
+      .viewPoints => '章节',
+      .superResolution => '超分辨率',
+      .dmChart => '高能进度',
+      .qa => '画质',
+      .aiTranslate => 'AI 翻译',
+    };
+    final options = [
+      ...userSpecifyItemLeft,
+      ...userSpecifyItemRight,
+    ].where((type) => type != .playOrPause && type != .fullscreen);
+    bool available(BottomControlType type) => switch (type) {
+      .subtitle => videoDetailController.subtitles.isNotEmpty,
+      .aiTranslate => videoDetailController.languages.value?.isNotEmpty == true,
+      .dmChart =>
+        videoDetailController.dmTrend.value?.dataOrNull?.isNotEmpty == true,
+      .viewPoints => videoDetailController.viewPointList.isNotEmpty,
+      .qa =>
+        videoDetailController.currentVideoQa.value != null &&
+            videoDetailController.data.dash != null,
+      _ => true,
+    };
+    return CompactPlayerControls(
+      playButton: progressWidget(.playOrPause),
+      progress: progress,
+      time: progressWidget(.time),
+      speed: progressWidget(.speed),
+      fullscreenButton: plPlayerController.isDesktopPip
+          ? null
+          : progressWidget(.fullscreen),
+      options: (runOutsideOptionsDialog) => options
+          .where(available)
+          .map(
+            (type) => (
+              label: label(type),
+              control: progressWidget(
+                type,
+                runOutsideOptionsDialog: runOutsideOptionsDialog,
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -1107,16 +1173,18 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       }
     } else if (_gestureType == .right) {
       // 右边区域
+      final double level = maxHeight * 0.5;
       EasyThrottle.throttle(
         'setVolume',
         const Duration(milliseconds: 20),
-        () => plPlayerController.setVolume(
-          clampDouble(
-            plPlayerController.volume.value - delta.dy / (maxHeight * 0.5),
+        () {
+          final double volume = clampDouble(
+            plPlayerController.volume.value - delta.dy / level,
             0.0,
             plPlayerController.maxVolume,
-          ),
-        ),
+          );
+          plPlayerController.setVolume(volume);
+        },
       );
     }
   }
@@ -1307,17 +1375,18 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         return;
       }
 
+      final double level = maxHeight * 0.5;
       EasyThrottle.throttle(
         'setVolume',
         const Duration(milliseconds: 20),
-        () => plPlayerController.setVolume(
-          clampDouble(
-            plPlayerController.volume.value -
-                event.localPanDelta.dy / (maxHeight * 0.5),
+        () {
+          final double volume = clampDouble(
+            plPlayerController.volume.value - event.localPanDelta.dy / level,
             0.0,
             plPlayerController.maxVolume,
-          ),
-        ),
+          );
+          plPlayerController.setVolume(volume);
+        },
       );
     }
   }
@@ -1605,8 +1674,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     child: plPlayerController.isDesktopPip
                         ? GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onPanStart: (_) => WindowController.instance.window
-                                ?.startDragging(),
+                            onPanStart: (_) => windowManager.startDragging(),
                             child: widget.headerControl,
                           )
                         : widget.headerControl,
@@ -1623,9 +1691,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                           isFullScreen: isFullScreen,
                           controller: plPlayerController,
                           videoDetailController: videoDetailController,
-                          buildBottomControl: () => buildBottomControl(
+                          buildBottomControl: (progress) => buildBottomControl(
                             videoDetailController,
                             maxWidth > maxHeight,
+                            progress,
                           ),
                         ),
                   ),
@@ -1868,7 +1937,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                           ),
                           onLongPress:
                               (Platform.isAndroid || kDebugMode) && !isLive
-                              ? _screenshotWebp
+                              ? screenshotWebp
                               : null,
                           onTap: plPlayerController.takeScreenshot,
                         ),
@@ -2066,14 +2135,14 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     );
   }
 
-  Future<void> _screenshotWebp() async {
+  Future<void> screenshotWebp() async {
     final videoInfo = videoDetailController.data;
     final ids = videoInfo.dash!.video!.availableVideoQualities;
     final video = videoDetailController.findVideoByQa(ids.min);
 
+    VideoQuality qa = video.quality;
     String? url = video.baseUrl;
     if (url == null) return;
-    VideoQuality qa = video.quality;
 
     final ctr = plPlayerController;
     final theme = Theme.of(context);

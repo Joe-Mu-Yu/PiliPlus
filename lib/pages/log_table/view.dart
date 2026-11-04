@@ -28,7 +28,7 @@ class _LogPageState<T> extends State<LogPage<T>> {
             padding: EdgeInsets.only(
               left: 10 + padding.left,
               right: 10 + padding.right,
-              bottom: 100 + padding.bottom,
+              bottom: padding.bottom + 100,
             ),
             sliver: Obx(() => _buildBody(_controller.loadingState.value)),
           ),
@@ -44,17 +44,27 @@ class _LogPageState<T> extends State<LogPage<T>> {
         response != null && response.isNotEmpty
             ? Builder(
                 builder: (context) {
-                  final colorScheme = ColorScheme.of(context);
-                  final outline = colorScheme.outline.withValues(alpha: 0.1);
-                  final divider = Divider(height: 1, color: outline);
-                  final sliverDivider = SliverToBoxAdapter(child: divider);
-                  final dividerV = VerticalDivider(width: 1, color: outline);
+                  final them = Theme.of(context);
+                  final outline = them.colorScheme.outline.withValues(
+                    alpha: 0.1,
+                  );
+                  final divider = Divider(
+                    height: 1,
+                    color: outline,
+                  );
+                  final sliverDivider = SliverToBoxAdapter(
+                    child: divider,
+                  );
+                  final dividerV = VerticalDivider(
+                    width: 1,
+                    color: outline,
+                  );
                   return SliverMainAxisGroup(
                     slivers: [
                       sliverDivider,
                       SliverToBoxAdapter(
                         child: ColoredBox(
-                          color: colorScheme.onInverseSurface,
+                          color: them.colorScheme.onInverseSurface,
                           child: _item(
                             _controller.header,
                             dividerV,
@@ -65,8 +75,9 @@ class _LogPageState<T> extends State<LogPage<T>> {
                       sliverDivider,
                       SliverList.separated(
                         itemCount: response.length,
-                        itemBuilder: (context, index) =>
-                            _item(response[index], dividerV),
+                        itemBuilder: (context, index) {
+                          return _item(response[index], dividerV);
+                        },
                         separatorBuilder: (context, index) => divider,
                       ),
                       sliverDivider,

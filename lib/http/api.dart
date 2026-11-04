@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/http/constants.dart';
 
 abstract final class Api {
@@ -24,8 +25,6 @@ abstract final class Api {
   static const String pgcUrl = '/pgc/player/web/v2/playurl';
 
   static const String pugvUrl = '/pugv/player/web/playurl';
-
-  static const String ogvUrl = '/ogv/player/playview';
 
   static const String tvPlayUrl = '/x/tv/playurl';
 
@@ -263,7 +262,8 @@ abstract final class Api {
   static const String searchDefault = '/x/web-interface/wbi/search/default';
 
   // 搜索关键词
-  static const String searchSuggest = '/x/web-interface/suggest';
+  static const String searchSuggest =
+      'https://s.search.bilibili.com/main/suggest';
 
   // 分类搜索
   static const String searchByType = '/x/web-interface/wbi/search/type';
@@ -408,11 +408,11 @@ abstract final class Api {
   static const String favPgc = '/x/space/bangumi/follow/list';
 
   // 黑名单
-  static const String blackList = '/x/relation/blacks';
+  static const String blackLst = '/x/relation/blacks';
 
   // github 获取最新版
   static const String latestApp =
-      'https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases';
+      'https://api.github.com/repos/${Constants.githubRepository}/releases/latest';
 
   // 多少人在看
   // https://api.bilibili.com/x/player/online/total?aid=913663681&cid=1203559746&bvid=BV1MM4y1s7NZ&ts=56427838
@@ -1018,7 +1018,4 @@ abstract final class Api {
 
   static const String liveFeedback =
       '${HttpString.liveBaseUrl}/xlive/app-interface/v2/index/feedback';
-
-  static const String liveMasterInfo =
-      '${HttpString.liveBaseUrl}/live_user/v1/Master/info';
 }

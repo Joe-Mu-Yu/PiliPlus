@@ -301,7 +301,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
                 color: theme.colorScheme.secondaryContainer,
                 child: InkWell(
                   borderRadius: Style.mdRadius,
-                  onTap: () => onPickImageThrottle(() {
+                  onTap: () => onPickImage(() {
                     if (imageList.isNotEmpty && !enablePublish.value) {
                       enablePublish.value = true;
                     }

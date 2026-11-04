@@ -4,11 +4,9 @@ class ViewSliverSafeArea extends StatelessWidget {
   const ViewSliverSafeArea({
     super.key,
     required this.sliver,
-    this.bottom = 100,
   });
 
   final Widget sliver;
-  final double bottom;
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +15,7 @@ class ViewSliverSafeArea extends StatelessWidget {
       padding: .only(
         left: padding.left,
         right: padding.right,
-        bottom: padding.bottom + bottom,
+        bottom: padding.bottom + 100,
       ),
       sliver: sliver,
     );

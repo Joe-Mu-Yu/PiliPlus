@@ -11,9 +11,10 @@ import 'package:PiliPlus/pages/member_opus/controller.dart';
 import 'package:PiliPlus/pages/member_opus/widgets/space_opus_item.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/waterfall.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:waterfall_flow/waterfall_flow.dart'
+    hide SliverWaterfallFlowDelegateWithMaxCrossAxisExtent;
 
 class MemberOpus extends StatefulWidget {
   const MemberOpus({
@@ -131,15 +132,15 @@ class _MemberOpusState extends State<MemberOpus>
     );
   }
 
-  late final gridDelegate = SliverSimpleGridDelegateWithMaxCrossAxisExtent_(
+  late final gridDelegate = SliverWaterfallFlowDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: Grid.smallCardWidth,
+    mainAxisSpacing: Style.safeSpace,
+    crossAxisSpacing: Style.safeSpace,
   );
 
   Widget _buildBody(LoadingState<List<SpaceOpusItemModel>?> loadingState) {
     return switch (loadingState) {
-      Loading() => SliverMasonryGrid(
-        mainAxisSpacing: Style.safeSpace,
-        crossAxisSpacing: Style.safeSpace,
+      Loading() => SliverWaterfallFlow(
         gridDelegate: gridDelegate,
         delegate: const SliverSingleChildDelegate(
           count: 10,
@@ -148,12 +149,10 @@ class _MemberOpusState extends State<MemberOpus>
       ),
       Success(:final response) =>
         response != null && response.isNotEmpty
-            ? SliverMasonryGrid(
-                mainAxisSpacing: Style.safeSpace,
-                crossAxisSpacing: Style.safeSpace,
+            ? SliverWaterfallFlow(
                 gridDelegate: gridDelegate,
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) {
+                  (_, index) {
                     if (index == response.length - 1) {
                       _controller.onLoadMore();
                     }

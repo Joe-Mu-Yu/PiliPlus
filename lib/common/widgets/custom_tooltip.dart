@@ -7,10 +7,11 @@ import 'package:flutter/gestures.dart'
         HitTestEntry;
 import 'package:flutter/rendering.dart'
     show
+        ContainerRenderObjectMixin,
+        RenderBoxContainerDefaultsMixin,
+        MultiChildLayoutParentData,
         BoxHitTestResult,
-        BoxHitTestEntry,
-        HitTestEntry,
-        RenderObjectWithChildMixin;
+        BoxHitTestEntry;
 import 'package:flutter/widgets.dart';
 
 // ignore: camel_case_types
@@ -20,18 +21,16 @@ class CustomTooltip extends StatefulWidget {
   const CustomTooltip({
     super.key,
     this.jumpUrl,
-    required this.color,
-    required this.shadow,
     required this.child,
+    required this.indicator,
     required this.triggerMode,
     required this.overlayWidget,
   });
 
   final Widget child;
-  final Color color;
-  final Color shadow;
   final String? jumpUrl;
   final ValueGetter<Widget> overlayWidget;
+  final ValueGetter<Triangle> indicator;
   final TriggerMode_ triggerMode;
 
   @override
@@ -80,8 +79,6 @@ class _CustomTooltipState extends State<CustomTooltip> {
       layoutInfo.childSize.topCenter(const Offset(0, -3)),
     );
     final _CustomTooltipOverlay overlayChild = _CustomTooltipOverlay(
-      color: widget.color,
-      shadow: widget.shadow,
       jumpUrl: widget.jumpUrl,
       target: target,
       childSize: layoutInfo.childSize,
@@ -90,6 +87,7 @@ class _CustomTooltipState extends State<CustomTooltip> {
         .mouse => null,
       },
       overlayWidget: widget.overlayWidget,
+      indicator: widget.indicator,
     );
     return SelectionContainer.maybeOf(context) == null
         ? overlayChild
@@ -137,44 +135,41 @@ class _CustomTooltipState extends State<CustomTooltip> {
 class _CustomTooltipOverlay extends StatelessWidget {
   const _CustomTooltipOverlay({
     this.jumpUrl,
-    required this.color,
-    required this.shadow,
     required this.target,
     required this.childSize,
     required this.onDismiss,
     required this.overlayWidget,
+    required this.indicator,
   });
 
-  final Color color;
-  final Color shadow;
   final String? jumpUrl;
   final Offset target;
   final Size childSize;
   final VoidCallback? onDismiss;
   final ValueGetter<Widget> overlayWidget;
+  final ValueGetter<Triangle> indicator;
 
   @override
   Widget build(BuildContext context) {
     return _ToolTip(
-      color: color,
-      shadow: shadow,
       jumpUrl: jumpUrl,
       target: target,
       childSize: childSize,
       preferBelow: false,
       onDismiss: onDismiss,
-      child: overlayWidget(),
+      children: [
+        overlayWidget(),
+        indicator(),
+      ],
     );
   }
 }
 
-class _ToolTip extends SingleChildRenderObjectWidget {
+class _ToolTip extends MultiChildRenderObjectWidget {
   const _ToolTip({
-    required Widget super.child,
+    super.children,
     this.jumpUrl,
     this.onDismiss,
-    required this.color,
-    required this.shadow,
     required this.target,
     required this.childSize,
     required this.preferBelow,
@@ -182,8 +177,6 @@ class _ToolTip extends SingleChildRenderObjectWidget {
 
   final String? jumpUrl;
   final VoidCallback? onDismiss;
-  final Color color;
-  final Color shadow;
   final Offset target;
   final Size childSize;
   final bool preferBelow;
@@ -191,33 +184,32 @@ class _ToolTip extends SingleChildRenderObjectWidget {
   @override
   RenderObject createRenderObject(BuildContext context) {
     return _RenderToolTip(
-      color: color,
-      shadow: shadow,
       jumpUrl: jumpUrl,
       onDismiss: onDismiss,
       target: target,
       childSize: childSize,
+      preferBelow: preferBelow,
     );
   }
 
   @override
   void updateRenderObject(BuildContext context, _RenderToolTip renderObject) {
     renderObject
-      ..color = color
-      ..shadow = shadow
-      ..target = target;
+      ..target = target
+      ..preferBelow = preferBelow;
   }
 }
 
 class _RenderToolTip extends RenderBox
-    with RenderObjectWithChildMixin<RenderBox> {
+    with
+        ContainerRenderObjectMixin<RenderBox, MultiChildLayoutParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, MultiChildLayoutParentData> {
   _RenderToolTip({
     String? jumpUrl,
     this._onDismiss,
-    required this._color,
-    required this._shadow,
     required this._target,
     required this._childSize,
+    required this._preferBelow,
   }) : _hitTestSelf = _onDismiss != null {
     if (jumpUrl != null && jumpUrl.isNotEmpty) {
       _tapGestureRecognizer = TapGestureRecognizer()
@@ -250,7 +242,7 @@ class _RenderToolTip extends RenderBox
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) {
     if (_hitTestSelf) {
-      _isChildHit = child!.size.contains(position - _offset);
+      _isChildHit = defaultHitTestChildren(result, position: position);
       result.add(BoxHitTestEntry(this, position));
       return true;
     }
@@ -268,22 +260,6 @@ class _RenderToolTip extends RenderBox
 
   final Size _childSize;
 
-  Color _color;
-  Color get color => _color;
-  set color(Color value) {
-    if (_color == value) return;
-    _color = value;
-    markNeedsPaint();
-  }
-
-  Color _shadow;
-  Color get shadow => _shadow;
-  set shadow(Color value) {
-    if (_shadow == value) return;
-    _shadow = value;
-    markNeedsPaint();
-  }
-
   Offset _target;
   Offset get target => _target;
   set target(Offset value) {
@@ -292,20 +268,40 @@ class _RenderToolTip extends RenderBox
     markNeedsPaint();
   }
 
-  bool _invert = false;
-  Offset _offset = .zero;
-  static const indicatorSize = Size(14, 8);
+  bool _preferBelow;
+  bool get preferBelow => _preferBelow;
+  set preferBelow(bool value) {
+    if (_preferBelow == value) return;
+    _preferBelow = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! MultiChildLayoutParentData) {
+      child.parentData = MultiChildLayoutParentData();
+    }
+  }
 
   @override
   void performLayout() {
     size = constraints.constrain(constraints.biggest);
 
-    final overlaySize =
-        (child!..layout(constraints.loosen(), parentUsesSize: true)).size;
+    final c = BoxConstraints.loose(size);
+    RenderTriangle indicator = (lastChild! as RenderTriangle)
+      ..layout(c, parentUsesSize: true);
+    RenderBox overlay = firstChild!..layout(c, parentUsesSize: true);
+
+    final indicatorSize = indicator.size;
+    final overlaySize = overlay.size;
+
+    final indicatorParentData =
+        indicator.parentData as MultiChildLayoutParentData;
+    final overlayParentData = overlay.parentData as MultiChildLayoutParentData;
 
     const margin = 10.0;
     if (target.dy < indicatorSize.height + overlaySize.height + margin) {
-      _invert = true;
+      indicator._invert = true;
       final target_ = target.translate(0, _childSize.height + 6);
       final offset = positionDependentBox(
         size: size,
@@ -314,73 +310,127 @@ class _RenderToolTip extends RenderBox
         preferBelow: true,
         margin: margin,
       );
-      _offset = Offset(offset.dx, offset.dy + indicatorSize.height - 1);
+      overlayParentData.offset = Offset(
+        offset.dx,
+        offset.dy + indicatorSize.height - 1,
+      );
+      indicatorParentData.offset = Offset(
+        target.dx - indicatorSize.width / 2,
+        offset.dy,
+      );
     } else {
-      _invert = false;
+      indicator._invert = false;
       final offset = positionDependentBox(
         size: size,
         childSize: overlaySize,
         target: target,
-        preferBelow: false,
+        preferBelow: preferBelow,
         margin: margin,
       );
-      _offset = Offset(offset.dx, offset.dy - indicatorSize.height + 1);
+      overlayParentData.offset = Offset(
+        offset.dx,
+        offset.dy - indicatorSize.height + 1,
+      );
+      indicatorParentData.offset = Offset(
+        target.dx - indicatorSize.width / 2,
+        offset.dy + overlaySize.height - indicatorSize.height,
+      );
     }
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
-    final canvas = context.canvas;
-    offset += _offset;
+    defaultPaint(context, offset);
+  }
+}
 
-    final overlaySize = child!.size;
-    final rrect = RRect.fromRectAndRadius(
-      offset & overlaySize,
-      const .circular(8),
+class Triangle extends LeafRenderObjectWidget {
+  const Triangle({
+    super.key,
+    required this.color,
+    required this.size,
+  });
+
+  final Color color;
+  final Size size;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return RenderTriangle(
+      color: color,
+      preferredSize: size,
     );
-    final paint = Paint()..color = color;
-    canvas
-      ..drawShadow(Path()..addRRect(rrect), shadow, 2, true)
-      ..drawRRect(rrect, paint);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderTriangle renderObject,
+  ) {
+    renderObject
+      ..color = color
+      ..preferredSize = size;
+  }
+}
+
+class RenderTriangle extends RenderBox {
+  RenderTriangle({
+    required this._color,
+    required this._preferredSize,
+  });
+
+  bool _invert = false;
+
+  Color _color;
+  Color get color => _color;
+  set color(Color value) {
+    if (_color == value) return;
+    _color = value;
+    markNeedsPaint();
+  }
+
+  Size _preferredSize;
+  set preferredSize(Size value) {
+    if (_preferredSize == value) return;
+    _preferredSize = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    size = constraints.constrain(_preferredSize);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final size = this.size;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
 
     final Path path;
     if (_invert) {
-      final offset_ = Offset(
-        target.dx - indicatorSize.width / 2,
-        offset.dy - indicatorSize.height,
-      );
       path = Path()
-        ..moveTo(offset_.dx, offset_.dy + indicatorSize.height)
-        ..lineTo(offset_.dx + indicatorSize.width / 2, offset_.dy)
-        ..lineTo(
-          offset_.dx + indicatorSize.width,
-          offset_.dy + indicatorSize.height,
-        );
-      canvas
-        ..drawPath(path, paint)
-        ..drawPath(
-          path,
-          paint
-            ..style = .stroke
-            ..color = const Color(0x1F9E9E9E),
-        );
+        ..moveTo(offset.dx, offset.dy + size.height)
+        ..lineTo(offset.dx + size.width / 2, offset.dy)
+        ..lineTo(offset.dx + size.width, offset.dy + size.height);
     } else {
-      final offset_ = Offset(
-        target.dx - indicatorSize.width / 2,
-        offset.dy + overlaySize.height - 1,
-      );
       path = Path()
-        ..moveTo(offset_.dx, offset_.dy)
-        ..lineTo(
-          offset_.dx + indicatorSize.width / 2,
-          offset_.dy + indicatorSize.height,
-        )
-        ..lineTo(offset_.dx + indicatorSize.width, offset_.dy);
-      canvas
-        ..drawShadow(path, shadow, 2, true)
-        ..drawPath(path, paint);
+        ..moveTo(offset.dx, offset.dy)
+        ..lineTo(offset.dx + size.width / 2, offset.dy + size.height)
+        ..lineTo(offset.dx + size.width, offset.dy);
     }
 
-    context.paintChild(child!, offset);
+    context.canvas
+      ..drawPath(path, paint)
+      ..drawPath(
+        path,
+        paint
+          ..color = borderColor
+          ..style = .stroke
+          ..strokeWidth = 1.2,
+      );
   }
 }
+
+const borderColor = Color(0x1F9E9E9E);

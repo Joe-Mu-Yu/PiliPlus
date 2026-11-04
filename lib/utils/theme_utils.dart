@@ -7,6 +7,19 @@ import 'package:flutter/foundation.dart' show PlatformDispatcher;
 import 'package:material_ui/material_ui.dart';
 
 abstract final class ThemeUtils {
+  static const _cardShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(16)),
+  );
+  static const _dialogShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(24)),
+  );
+  static const _sheetShape = RoundedSuperellipseBorder(
+    borderRadius: Style.bottomSheetRadius,
+  );
+  static const _controlShape = RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.all(Radius.circular(12)),
+  );
+
   static late ThemeData lightTheme;
 
   static late ThemeData darkTheme;
@@ -29,9 +42,9 @@ abstract final class ThemeUtils {
 
   static ThemeData getThemeData({
     required ColorScheme colorScheme,
-    required bool isDynamic,
     bool isDark = false,
   }) {
+    colorScheme = _withMiuixNeutralSurfaces(colorScheme, isDark: isDark);
     final fontWeight = Pref.appFontWeight;
     final fontFamily = FontUtils.fontFamily;
 
@@ -60,6 +73,8 @@ abstract final class ThemeUtils {
     final theme = ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      canvasColor: colorScheme.surfaceContainerLowest,
+      scaffoldBackgroundColor: colorScheme.surfaceContainerLowest,
       fontFamily: fontFamily,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
@@ -67,7 +82,7 @@ abstract final class ThemeUtils {
         titleSpacing: 0,
         centerTitle: false,
         scrolledUnderElevation: 0,
-        backgroundColor: colorScheme.surface,
+        backgroundColor: colorScheme.surfaceContainerLowest,
         titleTextStyle: TextStyle(
           fontSize: 16,
           fontWeight: fontWeight,
@@ -93,8 +108,10 @@ abstract final class ThemeUtils {
         surfaceTintColor: isDark ? colorScheme.surfaceContainerHighest : null,
       ),
       cardTheme: CardThemeData(
+        color: colorScheme.surfaceContainer,
         elevation: 1,
         margin: EdgeInsets.zero,
+        shape: _cardShape,
         shadowColor: Colors.transparent,
         surfaceTintColor: isDark ? colorScheme.onSurfaceVariant : null,
       ),
@@ -114,13 +131,12 @@ abstract final class ThemeUtils {
           color: colorScheme.onSurface,
         ),
         backgroundColor: colorScheme.surface,
+        shape: _dialogShape,
         constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: Style.bottomSheetRadius,
-        ),
+        shape: _sheetShape,
       ),
       // ignore: deprecated_member_use
       sliderTheme: const SliderThemeData(year2023: false),
@@ -156,8 +172,18 @@ abstract final class ThemeUtils {
       listTileTheme: const ListTileThemeData(controlAffinity: .leading),
       filledButtonTheme: const FilledButtonThemeData(
         style: ButtonStyle(
+          shape: WidgetStatePropertyAll(_controlShape),
           shadowColor: WidgetStatePropertyAll(Colors.transparent),
         ),
+      ),
+      elevatedButtonTheme: const ElevatedButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
+      ),
+      outlinedButtonTheme: const OutlinedButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
+      ),
+      textButtonTheme: const TextButtonThemeData(
+        style: ButtonStyle(shape: WidgetStatePropertyAll(_controlShape)),
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
@@ -169,6 +195,54 @@ abstract final class ThemeUtils {
       return darkenTheme(theme);
     }
     return theme;
+  }
+
+  /// Deadliner's Miuix layer keeps the user's accent palette, but uses the
+  /// HyperOS neutral surfaces and text colours for the app canvas and elevated
+  /// containers. This prevents a yellow, green, or other preset from tinting
+  /// supporting text such as video authors and statistics.
+  /// Applying this before the component themes keeps pages, dialogs and bars
+  /// visually coherent without replacing the user's selected seed colour.
+  static ColorScheme _withMiuixNeutralSurfaces(
+    ColorScheme scheme, {
+    required bool isDark,
+  }) {
+    if (isDark) {
+      return scheme.copyWith(
+        background: Colors.black,
+        onBackground: const Color(0xFFF2F2F2),
+        surface: Colors.black,
+        onSurface: const Color(0xFFF2F2F2),
+        surfaceVariant: const Color(0xFF333333),
+        onSurfaceVariant: const Color(0xFFA6A6A6),
+        surfaceContainerLowest: Colors.black,
+        surfaceContainerLow: const Color(0xFF242424),
+        surfaceContainer: const Color(0xFF242424),
+        surfaceContainerHigh: const Color(0xFF242424),
+        surfaceContainerHighest: const Color(0xFF2D2D2D),
+        surfaceBright: const Color(0xFF242424),
+        surfaceDim: const Color(0xFF242424),
+        outline: const Color(0xFFA6A6A6),
+        outlineVariant: const Color(0xFF393939),
+      );
+    }
+    return scheme.copyWith(
+      background: Colors.white,
+      onBackground: const Color(0xFF191919),
+      surface: const Color(0xFFF3F3F3),
+      onSurface: const Color(0xFF191919),
+      surfaceVariant: const Color(0xFFECECEC),
+      onSurfaceVariant: const Color(0xFF6F6F6F),
+      surfaceContainerLowest: Colors.white,
+      surfaceContainerLow: const Color(0xFFF3F3F3),
+      surfaceContainer: Colors.white,
+      surfaceContainerHigh: const Color(0xFFE8E8E8),
+      surfaceContainerHighest: const Color(0xFFE8E8E8),
+      surfaceBright: Colors.white,
+      surfaceDim: const Color(0xFFE8E8E8),
+      outline: const Color(0xFF6F6F6F),
+      outlineVariant: const Color(0xFFE0E0E0),
+    );
   }
 
   static ThemeData darkenTheme(ThemeData theme) {

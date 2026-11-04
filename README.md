@@ -7,9 +7,7 @@
 <div align="center">
     <h1>PiliPlus</h1>
 <div align="center">
-
-中文 | [English](README.en.md)
-
+    
 ![GitHub repo size](https://img.shields.io/github/repo-size/bggRGjQaUbCoE/PiliPlus) 
 ![GitHub Repo stars](https://img.shields.io/github/stars/bggRGjQaUbCoE/PiliPlus) 
 ![GitHub all releases](https://img.shields.io/github/downloads/bggRGjQaUbCoE/PiliPlus/total) 
@@ -215,7 +213,7 @@
 
 ## 下载
 
-可以从 [Releases](https://github.com/bggRGjQaUbCoE/PiliPlus/releases) 下载，或克隆仓库拉取代码后在本地编译。
+可以通过右侧release进行下载或拉取代码到本地进行编译
 
 <br/>
 
@@ -253,3 +251,7 @@
    <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=bggRGjQaUbCoE/PiliPlus&type=Date" />
  </picture>
 </a>
+
+## 本地开发环境
+
+本仓库使用带项目补丁的 Flutter 3.47.2。构建、分析和测试请使用 `./scripts/flutterw`，环境固定和恢复方法见 [Flutter 环境说明](docs/flutter-environment.md)。

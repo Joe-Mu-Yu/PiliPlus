@@ -1,13 +1,13 @@
-class MatchSeason {
+class Season {
   String? title;
   String? logo;
 
-  MatchSeason({
+  Season({
     this.title,
     this.logo,
   });
 
-  factory MatchSeason.fromJson(Map<String, dynamic> json) => MatchSeason(
+  factory Season.fromJson(Map<String, dynamic> json) => Season(
     title: json['title'] as String?,
     logo: json['logo'] as String?,
   );

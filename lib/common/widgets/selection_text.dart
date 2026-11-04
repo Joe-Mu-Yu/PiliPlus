@@ -1,5 +1,5 @@
-import 'package:PiliPlus/utils/extension/selectable_region_ext.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:PiliPlus/common/widgets/native_selection_toolbar.dart';
 
 class SelectionText extends StatelessWidget {
   const SelectionText(
@@ -7,7 +7,7 @@ class SelectionText extends StatelessWidget {
     super.key,
     this.style,
     this.textAlign,
-    this.contextMenuBuilder = openUrlMenuBuilder,
+    this.contextMenuBuilder = _defaultContextMenuBuilder,
   }) : textSpan = null;
 
   const SelectionText.rich(
@@ -15,7 +15,7 @@ class SelectionText extends StatelessWidget {
     super.key,
     this.style,
     this.textAlign,
-    this.contextMenuBuilder = openUrlMenuBuilder,
+    this.contextMenuBuilder = _defaultContextMenuBuilder,
   }) : data = null;
 
   final String? data;
@@ -23,6 +23,17 @@ class SelectionText extends StatelessWidget {
   final TextStyle? style;
   final TextAlign? textAlign;
   final SelectableRegionContextMenuBuilder? contextMenuBuilder;
+
+  static Widget _defaultContextMenuBuilder(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    return NativeSelectionToolbar(
+      buttonItems: selectableRegionState.contextMenuButtonItems,
+      anchors: selectableRegionState.contextMenuAnchors,
+      onDismiss: selectableRegionState.hideToolbar,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,13 +49,4 @@ class SelectionText extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget openUrlMenuBuilder(_, SelectableRegionState state) {
-  final buttonItems = state.contextMenuButtonItems;
-  state.addLaunchMenuIfNeeded(buttonItems, index: 3);
-  return AdaptiveTextSelectionToolbar.buttonItems(
-    buttonItems: buttonItems,
-    anchors: state.contextMenuAnchors,
-  );
 }

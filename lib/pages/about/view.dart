@@ -10,14 +10,17 @@ import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/services/logger.dart';
 import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/android/bindings.g.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
+import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -59,7 +62,7 @@ class _AboutPageState extends State<AboutPage> {
   void getCacheSize() {
     CacheManager.loadApplicationCache().then((res) {
       if (mounted) {
-        cacheSize.value = res.formatSize;
+        cacheSize.value = CacheManager.formatSize(res);
       }
     });
   }
@@ -115,7 +118,7 @@ class _AboutPageState extends State<AboutPage> {
           ),
           ListTile(
             title: Text(
-              Constants.appName,
+              'Hyper${Constants.appName}',
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium!.copyWith(height: 2),
             ),
@@ -123,7 +126,7 @@ class _AboutPageState extends State<AboutPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  '使用Flutter开发的B站第三方客户端',
+                  '基于PiliPlus开发的澎湃OS风格的第三方B站',
                   style: TextStyle(color: outline),
                   semanticsLabel: '与你一起，发现不一样的世界',
                 ),
@@ -177,7 +180,7 @@ Commit Hash: ${BuildConfig.commitHash}''',
           ),
           if (Platform.isAndroid)
             ListTile(
-              onTap: AndroidHelper.openLinkVerifySettings,
+              onTap: PiliAndroidHelper.openLinkVerifySettings,
               leading: const Icon(MdiIcons.linkBoxOutline),
               title: const Text('打开受支持的链接'),
               trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
@@ -234,13 +237,23 @@ Commit Hash: ${BuildConfig.commitHash}''',
           ListTile(
             title: const Text('导入/导出登录信息'),
             leading: const Icon(Icons.import_export_outlined),
-            onTap: () => showImportExportDialog<Map<String, dynamic>>(
+            onTap: () => showImportExportDialog<Map>(
               context,
               title: '登录信息',
               localFileName: () => 'account',
               onExport: () =>
                   Utils.jsonEncoder.convert(Accounts.account.toMap()),
-              onImport: Accounts.importJsonAccount,
+              onImport: (json) async {
+                final res = json.map(
+                  (key, value) => MapEntry(key, LoginAccount.fromJson(value)),
+                );
+                await Accounts.account.putAll(res);
+                await Accounts.refresh();
+                MineController.anonymity.value = !Accounts.heartbeat.isLogin;
+                if (Accounts.main.isLogin) {
+                  await LoginUtils.onLoginMain();
+                }
+              },
             ),
           ),
           ListTile(
@@ -254,12 +267,6 @@ Commit Hash: ${BuildConfig.commitHash}''',
               onExport: GStorage.exportAllSettings,
               onImport: GStorage.importAllJsonSettings,
             ),
-          ),
-          ListTile(
-            title: const Text('导入/导出所有数据'),
-            dense: false,
-            leading: const Icon(Icons.archive_outlined),
-            onTap: () => showDataImportExportDialog(context),
           ),
           ListTile(
             title: const Text('重置所有设置'),

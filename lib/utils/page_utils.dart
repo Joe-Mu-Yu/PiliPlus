@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:PiliPlus/common/widgets/fractionally_sized_box.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/gallery_viewer.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/hero_dialog_route.dart';
+import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
+import 'package:PiliPlus/common/widgets/video_card/video_card_transition.dart';
 import 'package:PiliPlus/grpc/im.dart';
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -16,8 +18,11 @@ import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/contact/view.dart';
+import 'package:PiliPlus/pages/article/view.dart';
+import 'package:PiliPlus/pages/dynamics_detail/view.dart';
 import 'package:PiliPlus/pages/fav_panel/view.dart';
 import 'package:PiliPlus/pages/share/view.dart';
+import 'package:PiliPlus/pages/video/view.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -28,7 +33,6 @@ import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/url_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -53,13 +57,16 @@ abstract final class PageUtils {
   }) {
     return Get.key.currentState!.push<void>(
       HeroDialogRoute(
-        pageBuilder: (context, animation, secondaryAnimation) => GalleryViewer(
-          sources: imgList,
-          initIndex: initialPage,
-          quality: quality ?? GlobalData().imgQuality,
-          onPageChanged: onPageChanged,
-          tag: tag,
-        ),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            NativeNavigationForeground(
+              child: GalleryViewer(
+                sources: imgList,
+                initIndex: initialPage,
+                quality: quality ?? GlobalData().imgQuality,
+                onPageChanged: onPageChanged,
+                tag: tag,
+              ),
+            ),
       ),
     );
   }
@@ -115,8 +122,7 @@ abstract final class PageUtils {
     Object? rid,
     bool off = false,
     Object? type,
-    int? rootRpId,
-    int? secondRpId,
+    String? heroTag,
   }) async {
     assert(id != null || rid != null);
     SmartDialog.showLoading();
@@ -128,25 +134,21 @@ abstract final class PageUtils {
     SmartDialog.dismiss();
     if (res case Success(:final response)) {
       if (response.basic?.commentType == 12) {
-        toDupNamed(
+        _pushDynPage(
           '/articlePage',
+          heroTag: heroTag,
           parameters: {
             'id': id!,
             'type': 'opus',
           },
-          arguments: {
-            rootRpIdKey: ?rootRpId,
-            secondRpIdKey: ?secondRpId,
-          },
           off: off,
         );
       } else {
-        toDupNamed(
+        _pushDynPage(
           '/dynamicDetail',
+          heroTag: heroTag,
           arguments: {
             'item': response,
-            rootRpIdKey: ?rootRpId,
-            secondRpIdKey: ?secondRpId,
           },
           off: off,
         );
@@ -235,26 +237,28 @@ abstract final class PageUtils {
     DynamicItemModel item, {
     bool isPush = false,
     bool viewComment = false,
+    String? heroTag,
   }) async {
     feedBack();
 
     void push() {
       if (item.basic?.commentType == 12) {
-        toDupNamed(
+        _pushDynPage(
           '/articlePage',
+          heroTag: heroTag,
           parameters: {
             'id': item.idStr,
             'type': 'opus',
-            if (viewComment) 'viewComment': '',
           },
         );
       } else {
         if (item.linkFolded) {
-          pushDynFromId(id: item.idStr);
+          pushDynFromId(id: item.idStr, heroTag: heroTag);
           return;
         }
-        toDupNamed(
+        _pushDynPage(
           '/dynamicDetail',
+          heroTag: heroTag,
           arguments: {
             'item': item,
             if (viewComment) 'viewComment': true,
@@ -310,6 +314,7 @@ abstract final class PageUtils {
               cover: cover,
               dimension: res!.dimension,
               title: archive.title,
+              heroTag: heroTag,
             );
           }
         } catch (err) {
@@ -319,12 +324,12 @@ abstract final class PageUtils {
 
       /// 专栏文章查看
       case 'DYNAMIC_TYPE_ARTICLE':
-        toDupNamed(
+        _pushDynPage(
           '/articlePage',
+          heroTag: heroTag,
           parameters: {
             'id': item.idStr,
             'type': 'opus',
-            if (viewComment) 'viewComment': '',
           },
         );
         break;
@@ -372,6 +377,7 @@ abstract final class PageUtils {
             cover: cover,
             dimension: res!.dimension,
             title: ugcSeason.title,
+            heroTag: heroTag,
           );
         }
         break;
@@ -381,7 +387,7 @@ abstract final class PageUtils {
         // if (kDebugMode) debugPrint('DYNAMIC_TYPE_PGC_UNION 番剧');
         final pgc = item.modules.moduleDynamic!.major!.pgc!;
         if (pgc.epid != null) {
-          viewPgc(epId: pgc.epid);
+          viewPgc(epId: pgc.epid, heroTag: heroTag);
         }
         break;
 
@@ -545,8 +551,7 @@ abstract final class PageUtils {
     bool off = false,
     bool isVertical = false,
     Dimension? dimension,
-    int? rootRpId,
-    int? secondRpId,
+    String? heroTag,
   }) {
     final arguments = {
       'aid': aid ?? IdUtils.bv2av(bvid!),
@@ -560,12 +565,21 @@ abstract final class PageUtils {
       'progress': ?progress,
       'videoType': videoType,
       'isVertical': dimension?.isVertical ?? isVertical,
-      'heroTag': Utils.makeHeroTag(cid),
-      rootRpIdKey: ?rootRpId,
-      secondRpIdKey: ?secondRpId,
+      'heroTag': heroTag ?? Utils.makeHeroTag(cid),
       ...?extraArguments,
     };
-    return PageUtils.toDupNamed('/videoV', arguments: arguments, off: off);
+    if (!hasPendingVideoCardTransition(arguments['heroTag']!)) {
+      return PageUtils.toDupNamed('/videoV', arguments: arguments, off: off);
+    }
+    final navigator = Get.key.currentState;
+    if (navigator == null) return null;
+    final route = VideoPageTransitionRoute<void>(
+      settings: RouteSettings(name: '/videoV', arguments: arguments),
+      builder: (_) => const VideoDetailPageV(),
+    );
+    return off
+        ? navigator.pushReplacement<void, void>(route)
+        : navigator.push<void>(route);
   }
 
   static final _pgcRegex = RegExp(r'(ep|ss)(\d+)');
@@ -575,6 +589,7 @@ abstract final class PageUtils {
     int? progress, // milliseconds
     int? aid,
     bool off = false,
+    String? heroTag,
   }) {
     RegExpMatch? match = _pgcRegex.firstMatch(uri);
     if (match != null) {
@@ -586,6 +601,7 @@ abstract final class PageUtils {
           epId: isSeason ? null : id,
           progress: progress,
           off: off,
+          heroTag: heroTag,
         );
       } else {
         viewPugv(
@@ -594,6 +610,7 @@ abstract final class PageUtils {
           aid: aid,
           progress: progress,
           off: off,
+          heroTag: heroTag,
         );
       }
       return true;
@@ -622,6 +639,7 @@ abstract final class PageUtils {
     dynamic epId,
     int? progress, // milliseconds
     bool off = false,
+    String? heroTag,
   }) async {
     try {
       SmartDialog.showLoading(msg: '资源获取中');
@@ -643,6 +661,7 @@ abstract final class PageUtils {
             cover: episode.cover,
             title: episode.title,
             progress: progress,
+            heroTag: heroTag,
             extraArguments: {
               'pgcApi': true,
               'pgcItem': response,
@@ -693,6 +712,7 @@ abstract final class PageUtils {
             pgcType: response.type,
             cover: episode.cover,
             progress: progress,
+            heroTag: heroTag,
             extraArguments: {
               'pgcItem': response,
             },
@@ -724,6 +744,7 @@ abstract final class PageUtils {
     int? aid,
     int? progress, // milliseconds
     bool off = false,
+    String? heroTag,
   }) async {
     try {
       SmartDialog.showLoading(msg: '资源获取中');
@@ -749,6 +770,7 @@ abstract final class PageUtils {
             epId: episode.id,
             cover: episode.cover,
             progress: progress,
+            heroTag: heroTag,
             extraArguments: {
               'pgcItem': response,
             },
@@ -764,6 +786,39 @@ abstract final class PageUtils {
       SmartDialog.dismiss();
       SmartDialog.showToast(e.toString());
     }
+  }
+
+  static Future<void>? _pushDynPage(
+    String page, {
+    String? heroTag,
+    Map<String, dynamic>? arguments,
+    Map<String, String>? parameters,
+    bool off = false,
+  }) {
+    if (heroTag == null || !hasPendingVideoCardTransition(heroTag)) {
+      return toDupNamed<void>(
+        page,
+        arguments: arguments,
+        parameters: parameters,
+        off: off,
+      );
+    }
+    final navigator = Get.key.currentState;
+    if (navigator == null) return null;
+    // Match named-route parameter setup (ArticleController reads Get.parameters).
+    Get.parameters = parameters ?? {};
+    final route = VideoPageTransitionRoute<void>(
+      settings: RouteSettings(
+        name: page,
+        arguments: {...?arguments, 'heroTag': heroTag},
+      ),
+      builder: (_) => page == '/articlePage'
+          ? const ArticlePage()
+          : const DynamicDetailPage(),
+    );
+    return off
+        ? navigator.pushReplacement<void, void>(route)
+        : navigator.push<void>(route);
   }
 
   @pragma('vm:prefer-inline')

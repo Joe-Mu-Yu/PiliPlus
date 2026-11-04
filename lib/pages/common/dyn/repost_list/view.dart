@@ -52,7 +52,6 @@ class DynRepostPage extends StatelessWidget {
     }
 
     final child = CustomScrollView(
-      primary: true,
       key: const PageStorageKey(DynType.repost),
       physics: isPortrait
           ? platformAlwaysClampingPhysics

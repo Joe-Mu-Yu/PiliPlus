@@ -1,151 +1,123 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/selection_text.dart';
 import 'package:PiliPlus/http/user.dart';
-import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:get/get_core/src/get_main.dart';
-import 'package:get/get_navigation/src/extension_navigation.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 const _iconSize = 20.0;
-
-void showPgcCover({
-  required String? title,
-  required String? cover,
-  dynamic aid,
-  String? bvid,
-}) => imageSaveDialog(
-  title: title,
-  cover: cover,
-  aid: aid,
-  bvid: bvid,
-  orientation: .portrait,
-  aspectRatio: Style.aspectRatio3x4,
-);
 
 void imageSaveDialog({
   required String? title,
   required String? cover,
   dynamic aid,
   String? bvid,
-  Orientation orientation = .landscape,
-  double aspectRatio = Style.aspectRatio16x9,
 }) {
-  Get.key.currentState!.push(
-    PublishRoute(
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        final colorScheme = ColorScheme.of(context);
-        final double width, height;
-        switch (orientation) {
-          case .portrait:
-            height = MediaQuery.sizeOf(context).shortestSide * 0.8;
-            width = height * aspectRatio;
-          case .landscape:
-            width = MediaQuery.sizeOf(context).shortestSide - 16;
-            height = width / aspectRatio;
-        }
-
-        return Center(
-          child: Container(
-            width: width,
-            margin: const .symmetric(horizontal: Style.safeSpace),
+  SmartDialog.show(
+    animationType: .centerScale_otherSlide,
+    builder: (context) {
+      final colorScheme = ColorScheme.of(context);
+      final imgWidth = MediaQuery.sizeOf(context).shortestSide - 16;
+      final height = imgWidth / Style.aspectRatio16x9;
+      return NativeNavigationForeground(
+        child: Padding(
+          padding: const .symmetric(horizontal: Style.safeSpace),
+          child: DecoratedBox(
             decoration: _ImageDecoration(
               imageHeight: height,
               color: colorScheme.surface,
               borderRadius: const .all(Style.imgRadius),
             ),
-            child: Column(
-              mainAxisSize: .min,
-              children: [
-                IgnorePointer(
-                  child: NetworkImgLayer(
-                    src: cover,
-                    quality: 100,
-                    width: width,
-                    height: height,
-                    borderRadius: const .vertical(top: Style.imgRadius),
+            child: SizedBox(
+              width: imgWidth,
+              child: Column(
+                mainAxisSize: .min,
+                children: [
+                  IgnorePointer(
+                    child: NetworkImgLayer(
+                      src: cover,
+                      quality: 100,
+                      width: imgWidth,
+                      height: height,
+                      borderRadius: const .vertical(top: Style.imgRadius),
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const .fromLTRB(12, 10, 8, 10),
-                  child: Row(
-                    children: [
-                      if (title != null)
-                        Expanded(
-                          child: SelectionText(
-                            title,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: colorScheme.onSurface,
+                  Padding(
+                    padding: const .fromLTRB(12, 10, 8, 10),
+                    child: Row(
+                      children: [
+                        if (title != null)
+                          Expanded(
+                            child: SelectionText(
+                              title,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSurface,
+                              ),
                             ),
-                          ),
-                        )
-                      else
-                        const Spacer(),
-                      if (aid != null || bvid != null)
-                        iconButton(
-                          iconSize: _iconSize,
-                          tooltip: '稍后再看',
-                          onPressed: () => {
-                            Get.back(),
-                            UserHttp.toViewLater(aid: aid, bvid: bvid),
-                          },
-                          icon: const Icon(Icons.watch_later_outlined),
-                        ),
-                      if (cover != null && cover.isNotEmpty) ...[
-                        if (PlatformUtils.isMobile)
-                          iconButton(
-                            iconSize: _iconSize,
-                            tooltip: '分享',
-                            onPressed: () {
-                              Get.back();
-                              ImageUtils.onShareImg(cover);
-                            },
-                            icon: const Icon(Icons.share),
                           )
                         else
+                          const Spacer(),
+                        if (aid != null || bvid != null)
                           iconButton(
-                            iconSize: 18,
-                            tooltip: '复制链接',
-                            onPressed: () {
-                              Get.back();
-                              Utils.copyText(cover);
+                            iconSize: _iconSize,
+                            tooltip: '稍后再看',
+                            onPressed: () => {
+                              SmartDialog.dismiss(),
+                              UserHttp.toViewLater(aid: aid, bvid: bvid),
                             },
-                            icon: const Icon(Icons.copy),
+                            icon: const Icon(Icons.watch_later_outlined),
                           ),
-                        iconButton(
-                          iconSize: _iconSize,
-                          tooltip: '保存封面图',
-                          onPressed: () async {
-                            bool saveStatus = await ImageUtils.downloadImg([
-                              cover,
-                            ]);
-                            if (saveStatus) {
-                              Get.back();
-                            }
-                          },
-                          icon: const Icon(Icons.download),
-                        ),
+                        if (cover != null && cover.isNotEmpty) ...[
+                          if (PlatformUtils.isMobile)
+                            iconButton(
+                              iconSize: _iconSize,
+                              tooltip: '分享',
+                              onPressed: () {
+                                SmartDialog.dismiss();
+                                ImageUtils.onShareImg(cover);
+                              },
+                              icon: const Icon(Icons.share),
+                            )
+                          else
+                            iconButton(
+                              iconSize: 18,
+                              tooltip: '复制链接',
+                              onPressed: () {
+                                SmartDialog.dismiss();
+                                Utils.copyText(cover);
+                              },
+                              icon: const Icon(Icons.copy),
+                            ),
+                          iconButton(
+                            iconSize: _iconSize,
+                            tooltip: '保存封面图',
+                            onPressed: () async {
+                              bool saveStatus = await ImageUtils.downloadImg([
+                                cover,
+                              ]);
+                              if (saveStatus) {
+                                SmartDialog.dismiss();
+                              }
+                            },
+                            icon: const Icon(Icons.download),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        );
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) =>
-          ScaleTransition(
-            scale: animation,
-            child: child,
-          ),
-    ),
+        ),
+      );
+    },
   );
 }
 
@@ -175,12 +147,11 @@ class _ImageDecoration extends Decoration {
     }
     return other is _ImageDecoration &&
         other.color == color &&
-        other.borderRadius == borderRadius &&
-        imageHeight == other.imageHeight;
+        other.borderRadius == borderRadius;
   }
 
   @override
-  int get hashCode => Object.hash(color, borderRadius, imageHeight);
+  int get hashCode => Object.hash(color, borderRadius);
 
   @override
   bool hitTest(Size size, Offset position, {TextDirection? textDirection}) {

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:PiliPlus/common/style.dart';
@@ -18,6 +17,7 @@ import 'package:PiliPlus/common/widgets/scroll_physics.dart'
 import 'package:PiliPlus/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:PiliPlus/common/widgets/sliver/sliver_to_box_adapter.dart';
 import 'package:PiliPlus/common/widgets/tap_region_surface.dart';
+import 'package:PiliPlus/common/widgets/video_card/video_card_transition.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -36,13 +36,19 @@ import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
-import 'package:PiliPlus/utils/reply_scheme_helper.dart';
+import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+
+const Set<TargetPlatform> _kDesktopPlatforms = <TargetPlatform>{
+  TargetPlatform.macOS,
+  TargetPlatform.windows,
+  TargetPlatform.linux,
+};
 
 class DynamicDetailPage extends StatefulWidget {
   const DynamicDetailPage({super.key});
@@ -51,8 +57,8 @@ class DynamicDetailPage extends StatefulWidget {
   State<DynamicDetailPage> createState() => _DynamicDetailPageState();
 }
 
-class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
-    with DynReplyLocateStateMixin {
+class _DynamicDetailPageState
+    extends CommonDynPageMultiState<DynamicDetailPage> {
   @override
   late final DynamicDetailController controller;
   late final DynRepostController _repostController;
@@ -76,10 +82,10 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
   @override
   void initState() {
     super.initState();
-    final Map args = Get.arguments;
+    final args = Get.arguments;
     final item = args['item'] as DynamicItemModel;
     final id = item.idStr.toString();
-    if (args['viewComment'] == true || args.containsKey(rootRpIdKey)) {
+    if (args['viewComment'] ?? false) {
       WidgetsBinding.instance.addPostFrameCallback(_jumpToComment);
     }
     final stat = item.modules.moduleStat;
@@ -98,6 +104,9 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
   }
 
   ScrollableState? _scrollable;
+  late final Object? _transitionTag = Get.arguments is Map
+      ? Get.arguments['heroTag']
+      : null;
 
   @override
   void dispose() {
@@ -107,10 +116,11 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
 
   @override
   Widget build(BuildContext context) {
-    return SelectionTapRegionSurface(
+    final page = SelectionTapRegionSurface(
       /// apply `lib/scripts/scrollable.patch`
       isScrolling: () => _scrollable?.shouldIgnorePointer ?? false,
       child: SimpleScaffold(
+        backgroundColor: theme.colorScheme.surfaceContainerLowest,
         appBar: _buildAppBar(),
         body: Padding(
           padding: EdgeInsets.only(left: padding.left, right: padding.right),
@@ -122,6 +132,14 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
         ),
       ),
     );
+    final tag = _transitionTag;
+    return tag == null
+        ? page
+        : VideoPageHeroTarget(
+            tag: tag,
+            surfaceColor: theme.colorScheme.surfaceContainerLowest,
+            child: page,
+          );
   }
 
   void _onEdit() {
@@ -242,7 +260,7 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
         repostDynId: item.orig?.idStr,
       ),
       onSuccess: () {
-        Timer(
+        Future.delayed(
           const Duration(milliseconds: 500),
           () async {
             if (!mounted) return;
@@ -341,7 +359,6 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
 
   Widget _buildTabBody([bool isPortrait = true]) {
     Widget reply = CustomScrollView(
-      primary: true,
       key: const PageStorageKey(DynType.reply),
       physics: ReloadScrollPhysics(
         controller: controller,
@@ -446,7 +463,6 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
         Expanded(
           flex: flex,
           child: CustomScrollView(
-            primary: true,
             slivers: [
               SliverPadding(
                 padding: .only(
@@ -474,6 +490,13 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
         ),
       ],
     );
+    if (PlatformUtils.isDesktop) {
+      return PrimaryScrollController(
+        controller: PrimaryScrollController.of(context),
+        automaticallyInheritForPlatforms: _kDesktopPlatforms,
+        child: child,
+      );
+    }
     return child;
   }
 
@@ -527,8 +550,7 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
       );
     }
 
-    final dynItem = controller.dynItem;
-    final moduleStat = dynItem.modules.moduleStat;
+    final moduleStat = controller.dynItem.modules.moduleStat;
     return Padding(
       padding: .only(left: padding.left, right: padding.right),
       child: Column(
@@ -567,7 +589,7 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
                           isScrollControlled: true,
                           useSafeArea: true,
                           builder: (context) => RepostPanel(
-                            item: dynItem,
+                            item: controller.dynItem,
                             onSuccess: () {
                               if (forward != null) {
                                 int count = forward.count ?? 0;
@@ -577,12 +599,6 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
                                 }
                               }
                             },
-                            replyInfo: (
-                              oid: controller.oid,
-                              replyType: controller.replyType,
-                            ),
-                            mentionItem:
-                                dynItem.modules.moduleAuthor?.mentionItem,
                           ),
                         ),
                       );
@@ -616,7 +632,7 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
                         text: '点赞',
                         stat: moduleStat?.like,
                         onPressed: (iconColor) => RequestUtils.onLikeDynamic(
-                          dynItem,
+                          controller.dynItem,
                           iconColor == primary,
                           () {
                             if (context.mounted) {
@@ -663,7 +679,7 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
       ),
     );
     return SliverFloatingHeaderWidget(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       child: child,
     );
   }

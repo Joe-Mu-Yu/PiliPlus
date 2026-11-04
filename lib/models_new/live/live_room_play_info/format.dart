@@ -1,4 +1,3 @@
-import 'package:PiliPlus/models/common/video/live_quality.dart';
 import 'package:PiliPlus/models_new/live/live_room_play_info/codec.dart';
 
 class Format {
@@ -10,13 +9,10 @@ class Format {
     required this.codec,
   });
 
-  factory Format.fromJson(
-    Map<String, dynamic> json,
-    List<LiveQuality>? liveQn,
-  ) => Format(
+  factory Format.fromJson(Map<String, dynamic> json) => Format(
     formatName: json['format_name'],
     codec: (json['codec'] as List<dynamic>)
-        .map((e) => CodecItem.fromJson(e as Map<String, dynamic>, liveQn))
+        .map((e) => CodecItem.fromJson(e as Map<String, dynamic>))
         .toList(),
   );
 }

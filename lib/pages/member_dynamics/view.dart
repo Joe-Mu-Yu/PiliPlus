@@ -8,9 +8,10 @@ import 'package:PiliPlus/pages/member_dynamics/controller.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/utils/waterfall.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:waterfall_flow/waterfall_flow.dart'
+    hide SliverWaterfallFlowDelegateWithMaxCrossAxisExtent;
 
 class MemberDynamicsPage extends StatefulWidget {
   const MemberDynamicsPage({super.key, this.mid});
@@ -82,11 +83,10 @@ class _MemberDynamicsPageState extends State<MemberDynamicsPage>
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? GlobalData().dynamicsWaterfallFlow
-                  ? SliverMasonryGrid(
-                      crossAxisSpacing: 4,
+                  ? SliverWaterfallFlow(
                       gridDelegate: dynGridDelegate,
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => _itemBuilder(response, index),
+                        (_, index) => _itemBuilder(response, index),
                         childCount: response.length,
                       ),
                     )

@@ -10,6 +10,7 @@ import 'package:PiliPlus/pages/dynamics_create/view.dart';
 import 'package:PiliPlus/pages/dynamics_tab/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide DraggableScrollableSheet;
 
@@ -116,6 +117,7 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
   Widget build(BuildContext context) {
     super.build(context);
     final colorScheme = ColorScheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget? drawer;
     Widget? endDrawer;
@@ -165,46 +167,54 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
         actions = const EndDrawerButton();
     }
 
-    return Scaffold(
-      primary: false,
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.transparent,
-      appBar: PreferredSize(
-        preferredSize: const .fromHeight(50),
-        child: Row(
-          children: [
-            ?leading,
-            Expanded(
-              child: TabBar(
-                dividerHeight: 0,
-                isScrollable: true,
-                tabAlignment: .start,
-                dividerColor: Colors.transparent,
-                labelColor: colorScheme.primary,
-                indicatorColor: colorScheme.primary,
-                controller: _dynamicsController.tabController,
-                unselectedLabelColor: colorScheme.onSurface,
-                labelStyle:
-                    TabBarTheme.of(context).labelStyle
-                        ?.copyWith(fontSize: 13) ??
-                    const TextStyle(fontSize: 13),
-                tabs: DynamicsTabType.values
-                    .map((e) => Tab(text: e.label))
-                    .toList(),
-                onTap: (index) {
-                  if (!_dynamicsController.tabController.indexIsChanging) {
-                    _dynamicsController.animateToTop();
-                  }
-                },
-              ),
-            ),
-            actions,
-          ],
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
       ),
-      drawer: drawer,
-      endDrawer: endDrawer,
-      body: onBuild(child),
+      child: Scaffold(
+        primary: false,
+        resizeToAvoidBottomInset: false,
+        backgroundColor: colorScheme.surface,
+        appBar: PreferredSize(
+          preferredSize: const .fromHeight(50),
+          child: Row(
+            children: [
+              ?leading,
+              Expanded(
+                child: TabBar(
+                  dividerHeight: 0,
+                  isScrollable: true,
+                  tabAlignment: .start,
+                  dividerColor: Colors.transparent,
+                  labelColor: colorScheme.primary,
+                  indicatorColor: colorScheme.primary,
+                  controller: _dynamicsController.tabController,
+                  unselectedLabelColor: colorScheme.onSurfaceVariant,
+                  labelStyle:
+                      TabBarTheme.of(context).labelStyle?.copyWith(
+                        fontSize: 13,
+                      ) ??
+                      const TextStyle(fontSize: 13),
+                  tabs: DynamicsTabType.values
+                      .map((e) => Tab(text: e.label))
+                      .toList(),
+                  onTap: (index) {
+                    if (!_dynamicsController.tabController.indexIsChanging) {
+                      _dynamicsController.animateToTop();
+                    }
+                  },
+                ),
+              ),
+              actions,
+            ],
+          ),
+        ),
+        drawer: drawer,
+        endDrawer: endDrawer,
+        body: onBuild(child),
+      ),
     );
   }
 }

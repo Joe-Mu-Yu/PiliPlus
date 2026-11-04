@@ -182,21 +182,26 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
                   ],
                   // 合集
                   if (!isLoading &&
+                      videoDetail.ugcSeason != null &&
                       (isPortrait ||
                           !videoDetailCtr
                               .plPlayerController
-                              .horizontalSeasonPanel)) ...[
-                    if (videoDetail.hasSeason)
-                      Obx(
-                        () => SeasonPanel(
-                          key: ValueKey(introController.videoDetail.value),
-                          heroTag: widget.heroTag,
-                          showEpisodes: widget.showEpisodes,
-                          ugcIntroController: introController,
-                        ),
+                              .horizontalSeasonPanel))
+                    Obx(
+                      () => SeasonPanel(
+                        key: ValueKey(introController.videoDetail.value),
+                        heroTag: widget.heroTag,
+                        showEpisodes: widget.showEpisodes,
+                        ugcIntroController: introController,
                       ),
-                  ],
-                  if (videoDetail.hasParts)
+                    ),
+                  if (!isLoading &&
+                      videoDetail.pages != null &&
+                      videoDetail.pages!.length > 1 &&
+                      (isPortrait ||
+                          !videoDetailCtr
+                              .plPlayerController
+                              .horizontalSeasonPanel))
                     Obx(
                       () => PagesPanel(
                         key: ValueKey(introController.videoDetail.value),

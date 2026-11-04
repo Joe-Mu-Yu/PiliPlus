@@ -19,7 +19,6 @@ import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:get/get.dart';
@@ -59,11 +58,16 @@ class MainController extends GetxController
 
   final enableMYBar = Pref.enableMYBar;
   final floatingNavBar = Pref.floatingNavBar;
+  final miuixBackdropSampling = Pref.miuixBackdropSampling;
   final useSideBar = Pref.useSideBar;
   final mainTabBarView = Pref.mainTabBarView;
   late final optTabletNav = Pref.optTabletNav;
 
   late bool directExitOnBack = Pref.directExitOnBack;
+  late bool showTrayIcon = Pref.showTrayIcon;
+  late bool minimizeOnExit = Pref.minimizeOnExit;
+  late bool pauseOnMinimize = Pref.pauseOnMinimize;
+  late bool isPlaying = false;
 
   static const _period = 5 * 60 * 1000;
   late int _lastSelectTime = 0;
@@ -71,10 +75,6 @@ class MainController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    if (Pref.autoUpdate) {
-      Update.checkUpdate();
-    }
-
     setNavBarConfig();
 
     controller = mainTabBarView
@@ -209,6 +209,15 @@ class MainController extends GetxController
     dynCount.value = count;
   }
 
+  void setDynamicBadgeMode(DynamicBadgeMode value) {
+    if (dynamicBadgeMode == value) return;
+    dynamicBadgeMode = value;
+    // The Flutter and native navigation bars both observe this count. Refresh
+    // it when only the display mode changed so a number can become a dot (or
+    // disappear) without waiting for the next network poll.
+    dynCount.refresh();
+  }
+
   void checkUnreadDynamic() {
     if (!hasDyn ||
         !accountService.isLogin.value ||
@@ -226,14 +235,7 @@ class MainController extends GetxController
   void setNavBarConfig() {
     List<int>? navBarSort =
         (GStorage.setting.get(SettingBoxKey.navBarSort) as List?)?.fromCast();
-    late final List<NavigationBarType> navigationBars;
-    if (navBarSort == null || navBarSort.isEmpty) {
-      navigationBars = NavigationBarType.values;
-    } else {
-      navigationBars = navBarSort
-          .map(NavigationBarType.values.elementAt)
-          .toList();
-    }
+    final navigationBars = NavigationBarType.fromSavedIndexes(navBarSort);
     this.navigationBars = navigationBars;
     final defPage = Pref.defaultHomePage;
     selectedIndex.value = math.max(0, navigationBars.indexOf(defPage));
@@ -310,10 +312,12 @@ class MainController extends GetxController
         EasyThrottle.throttle(
           'topOrRefresh',
           const Duration(milliseconds: 500),
-          () => switch (currentNav) {
-            .home => homeController.onRefresh(),
-            .dynamics => dynamicController.onRefresh(),
-            .mine => null,
+          () {
+            if (currentNav == NavigationBarType.home) {
+              homeController.onRefresh();
+            } else if (currentNav == NavigationBarType.dynamics) {
+              dynamicController.onRefresh();
+            }
           },
         );
       } else {

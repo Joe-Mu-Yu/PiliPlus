@@ -15,14 +15,12 @@
  * along with PiliPlus.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import 'dart:async';
 import 'dart:io' show File, Platform;
 
 import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
+import 'package:PiliPlus/common/widgets/native_feedback.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
-import 'package:PiliPlus/common/widgets/gesture/image_double_tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
-import 'package:PiliPlus/common/widgets/gesture/image_tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/image.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/loading_indicator.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/viewer.dart';
@@ -41,7 +39,8 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
-import 'package:flutter/gestures.dart' show LongPressGestureRecognizer;
+import 'package:easy_debounce/easy_throttle.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide Image;
@@ -90,8 +89,8 @@ class _GalleryViewerState extends State<GalleryViewer>
 
   late final PageController _pageController;
 
-  late final ImageTapGestureRecognizer _tapGestureRecognizer;
-  late final ImageDoubleTapGestureRecognizer _doubleTapGestureRecognizer;
+  late final TapGestureRecognizer _tapGestureRecognizer;
+  late final DoubleTapGestureRecognizer _doubleTapGestureRecognizer;
   late final ImageHorizontalDragGestureRecognizer
   _horizontalDragGestureRecognizer;
   ImageHorizontalDragGestureRecognizer horizontalDragGestureRecognizer() {
@@ -146,13 +145,13 @@ class _GalleryViewerState extends State<GalleryViewer>
     _pageController = PageController(initialPage: widget.initIndex);
 
     final gestureSettings = MediaQuery.maybeGestureSettingsOf(Get.context!);
-    _tapGestureRecognizer = ImageTapGestureRecognizer()
+    _tapGestureRecognizer = TapGestureRecognizer()
       // ..onTap = _onTap
       ..gestureSettings = gestureSettings;
     if (PlatformUtils.isDesktop) {
       _tapGestureRecognizer.onSecondaryTapUp = _showDesktopMenu;
     }
-    _doubleTapGestureRecognizer = ImageDoubleTapGestureRecognizer()
+    _doubleTapGestureRecognizer = DoubleTapGestureRecognizer()
       ..onDoubleTap = () {}
       ..gestureSettings = gestureSettings;
     _horizontalDragGestureRecognizer = ImageHorizontalDragGestureRecognizer();
@@ -160,7 +159,7 @@ class _GalleryViewerState extends State<GalleryViewer>
       ..onLongPress = _onLongPress
       ..gestureSettings = gestureSettings;
 
-    Timer(const Duration(milliseconds: 300), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         _tapGestureRecognizer.onTap = _onTap;
       }
@@ -306,7 +305,7 @@ class _GalleryViewerState extends State<GalleryViewer>
         }
       }
     }
-    Timer(const Duration(milliseconds: 200), _currIndex.close);
+    Future.delayed(const Duration(milliseconds: 200), _currIndex.close);
     super.dispose();
     if (_hideSystemBar) {
       showSystemBar();
@@ -527,21 +526,43 @@ class _GalleryViewerState extends State<GalleryViewer>
     return Hero(tag: '${item.url}${widget.tag}', child: child);
   }
 
-  static const Duration _kTapDiff = Duration(milliseconds: 300);
-
   void _onTap() {
-    if (_tapGestureRecognizer.timeStamp -
-            _doubleTapGestureRecognizer.timeStamp <
-        _kTapDiff) {
-      return;
-    }
-    Get.back();
+    EasyThrottle.throttle(
+      'VIEWER_TAP',
+      const Duration(milliseconds: 555),
+      Get.back,
+    );
   }
 
-  void _onLongPress() {
+  Future<void> _onLongPress() async {
     final item = widget.sources[_currIndex.value];
     if (item.sourceType == .fileImage) return;
     HapticFeedback.mediumImpact();
+    if (await showNativeActionMenu(context, [
+          (label: '分享', onSelected: () => ImageUtils.onShareImg(item.url)),
+          (label: '复制链接', onSelected: () => Utils.copyText(item.url)),
+          (label: '保存图片', onSelected: () => ImageUtils.downloadImg([item.url])),
+          if (widget.sources.length > 1)
+            (
+              label: '保存全部图片',
+              onSelected: () => ImageUtils.downloadImg(
+                widget.sources.map((item) => item.url).toList(),
+              ),
+            ),
+          if (item.sourceType == SourceType.livePhoto)
+            (
+              label: '保存视频',
+              onSelected: () => ImageUtils.downloadLivePhoto(
+                url: item.url,
+                liveUrl: item.liveUrl!,
+                width: item.width!,
+                height: item.height!,
+              ),
+            ),
+        ]) ||
+        !mounted) {
+      return;
+    }
     showDialog(
       context: context,
       builder: (context) => SimpleDialog(
@@ -578,7 +599,8 @@ class _GalleryViewerState extends State<GalleryViewer>
               },
               child: const Text('网页打开', style: TextStyle(fontSize: 14)),
             ),
-          if (widget.sources.length > 1)
+          if (widget.sources.length > 1 &&
+              (PlatformUtils.isMobile || ImageUtils.imageSavePath != null))
             DialogOption(
               onPressed: () {
                 Get.back();
@@ -631,7 +653,7 @@ class _GalleryViewerState extends State<GalleryViewer>
           onTap: () => PageUtils.launchURL(item.url),
           child: const Text('网页打开', style: TextStyle(fontSize: 14)),
         ),
-        if (widget.sources.length > 1)
+        if (widget.sources.length > 1 && ImageUtils.imageSavePath != null)
           PopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadImg(

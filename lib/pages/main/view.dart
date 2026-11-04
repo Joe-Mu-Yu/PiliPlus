@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:PiliPlus/common/assets.dart';
+import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/floating_navigation_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
@@ -9,20 +11,24 @@ import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
-import 'package:PiliPlus/utils/android/bindings.g.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
+import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/desktop/tray_controller.dart';
-import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:nativeapi/nativeapi.dart' as nativeapi;
+import 'package:tray_manager/tray_manager.dart';
+import 'package:win32/win32.dart' as kernel32;
+import 'package:window_manager/window_manager.dart';
 
 class MainApp extends StatefulWidget {
   const MainApp({super.key});
@@ -32,11 +38,19 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends PopScopeState<MainApp>
-    with RouteAware, RouteAwareMixin, WidgetsBindingObserver {
+    with
+        RouteAware,
+        RouteAwareMixin,
+        WidgetsBindingObserver,
+        WindowListener,
+        TrayListener {
   final _mainController = Get.put(MainController());
+  late final _setting = GStorage.setting;
   late EdgeInsets _padding;
   late ColorScheme _colorScheme;
   Brightness? _brightness;
+  bool _isMainRouteActive = true;
+  bool _nativeNavigationUnavailable = false;
 
   @override
   bool get initCanPop => false;
@@ -44,15 +58,23 @@ class _MainAppState extends PopScopeState<MainApp>
   @override
   void initState() {
     super.initState();
+    if (Platform.isAndroid) {
+      PiliAndroidHelper.setMiuixDestinationHandler(_mainController.setIndex);
+    }
     addObserverMobile(this);
     if (Platform.isMacOS) {
       HardwareKeyboard.instance.addHandler(_handleKeyEvent);
     }
     if (PlatformUtils.isDesktop) {
-      WindowController.instance.init();
-      TrayController.instance.init();
+      windowManager
+        ..addListener(this)
+        ..setPreventClose(true);
+      if (_mainController.showTrayIcon) {
+        trayManager.addListener(this);
+        _handleTray();
+      }
     }
-    if (!Platform.isMacOS) {
+    if (PlatformUtils.isMobile || Platform.isLinux || Platform.isWindows) {
       PiliScheme.init();
     }
   }
@@ -68,9 +90,7 @@ class _MainAppState extends PopScopeState<MainApp>
     if (PlatformUtils.isDesktop) {
       if (_brightness != brightness) {
         _brightness = brightness;
-        nativeapi.Application.instance.setBrightness(
-          brightness == .dark ? .dark : .light,
-        );
+        windowManager.setBrightness(brightness);
       }
     }
     if (!_mainController.useSideBar) {
@@ -80,16 +100,24 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void didPopNext() {
+    _isMainRouteActive = true;
     addObserverMobile(this);
     _mainController
       ..checkUnreadDynamic()
       ..checkDefaultSearch(true)
       ..checkUnread(_mainController.useBottomNav);
+    if (Platform.isAndroid && mounted) {
+      setState(() {});
+    }
     super.didPopNext();
   }
 
   @override
   void didPushNext() {
+    _isMainRouteActive = false;
+    if (Platform.isAndroid) {
+      PiliAndroidHelper.hideMiuixNavigation();
+    }
     removeObserverMobile(this);
     super.didPushNext();
   }
@@ -106,12 +134,16 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void dispose() {
+    if (Platform.isAndroid) {
+      PiliAndroidHelper.setMiuixDestinationHandler(null);
+      PiliAndroidHelper.hideMiuixNavigation();
+    }
     if (Platform.isMacOS) {
       HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     }
     if (PlatformUtils.isDesktop) {
-      WindowController.instance.dispose();
-      TrayController.instance.dispose();
+      trayManager.removeListener(this);
+      windowManager.removeListener(this);
     }
     removeObserverMobile(this);
     PiliScheme.listener?.cancel();
@@ -126,10 +158,166 @@ class _MainAppState extends PopScopeState<MainApp>
         _mainController.refreshRecommendations();
   }
 
+  @override
+  void onWindowMaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, false);
+  }
+
+  @override
+  Future<void> onWindowMoved() async {
+    if (PlPlayerController.instance?.isDesktopPip ?? false) {
+      return;
+    }
+    final Offset offset = await windowManager.getPosition();
+    _setting.put(SettingBoxKey.windowPosition, [offset.dx, offset.dy]);
+  }
+
+  @override
+  Future<void> onWindowResized() async {
+    if (PlPlayerController.instance?.isDesktopPip ?? false) {
+      return;
+    }
+    final Rect bounds = await windowManager.getBounds();
+    _setting.putAll({
+      SettingBoxKey.windowSize: [bounds.width, bounds.height],
+      SettingBoxKey.windowPosition: [bounds.left, bounds.top],
+    });
+  }
+
+  @override
+  void onWindowClose() {
+    if (_mainController.showTrayIcon && _mainController.minimizeOnExit) {
+      _hide();
+      _onHideWindow();
+    } else {
+      _onClose();
+    }
+  }
+
+  Future<void> _onClose() async {
+    await GStorage.compact();
+    await GStorage.close();
+    await trayManager.destroy();
+    if (Platform.isWindows) {
+      // flutter_inappwebview
+      // 6.2.0-beta.2+ https://github.com/pichillilorenzo/flutter_inappwebview/issues/2482
+      // 6.1.5 https://github.com/pichillilorenzo/flutter_inappwebview/issues/2512#issuecomment-3031039587
+      final hProcess = kernel32.GetCurrentProcess();
+      kernel32.TerminateProcess(hProcess, 0);
+    } else {
+      exit(0);
+    }
+  }
+
+  @override
+  void onWindowMinimize() {
+    _onHideWindow();
+  }
+
+  @override
+  void onWindowRestore() {
+    _onShowWindow();
+  }
+
+  void _onHideWindow() {
+    if (_mainController.pauseOnMinimize) {
+      if (PlPlayerController.instance case final player?) {
+        if (_mainController.isPlaying = player.playerStatus.isPlaying) {
+          player.pause();
+        }
+      } else {
+        _mainController.isPlaying = false;
+      }
+    }
+  }
+
+  void _onShowWindow() {
+    if (_mainController.pauseOnMinimize && _mainController.isPlaying) {
+      PlPlayerController.instance?.play();
+    }
+  }
+
+  double? _opacity;
+
+  Future<void>? _setOpacity(double opacity) {
+    if (Platform.isWindows && _opacity != opacity) {
+      _opacity = opacity;
+      return windowManager.setOpacity(opacity);
+    }
+    return null;
+  }
+
+  @override
+  Future<void>? onWindowFocus() {
+    return _setOpacity(1.0);
+  }
+
+  /// https://github.com/leanflutter/window_manager/issues/571
+  Future<void> _hide() async {
+    await _setOpacity(0.0);
+    await windowManager.hide();
+  }
+
+  Future<void> _show() {
+    return windowManager.show();
+  }
+
+  @override
+  Future<void> onTrayIconMouseDown() async {
+    if (await windowManager.isVisible()) {
+      _onHideWindow();
+      _hide();
+    } else {
+      _onShowWindow();
+      _show();
+    }
+  }
+
+  @override
+  Future<void> onTrayIconRightMouseDown() async {
+    // ignore: deprecated_member_use
+    trayManager.popUpContextMenu(bringAppToFront: true);
+  }
+
+  @override
+  void onTrayMenuItemClick(MenuItem menuItem) {
+    switch (menuItem.key) {
+      case 'show':
+        _show();
+      case 'exit':
+        _onClose();
+    }
+  }
+
+  Future<void> _handleTray() async {
+    if (Platform.isWindows) {
+      await trayManager.setIcon(Assets.logoIco);
+    } else {
+      await trayManager.setIcon(Assets.logoLarge);
+    }
+    if (!Platform.isLinux) {
+      await trayManager.setToolTip(Constants.appName);
+    }
+
+    Menu trayMenu = Menu(
+      items: [
+        MenuItem(key: 'show', label: '显示窗口'),
+        MenuItem.separator(),
+        MenuItem(key: 'exit', label: '退出 ${Constants.appName}'),
+      ],
+    );
+    await trayManager.setContextMenu(trayMenu);
+  }
+
   @pragma('vm:prefer-inline')
   static void _onBack() {
     if (Platform.isAndroid) {
-      AndroidHelper.back();
+      PiliAndroidHelper.back();
     }
   }
 
@@ -152,6 +340,9 @@ class _MainAppState extends PopScopeState<MainApp>
 
   Widget? get _bottomNav {
     Widget? bottomNav;
+    if (_usesNativeMiuixNavigation) {
+      return null;
+    }
     if (_mainController.navigationBars.length > 1) {
       if (_mainController.floatingNavBar) {
         bottomNav = Obx(
@@ -235,6 +426,80 @@ class _MainAppState extends PopScopeState<MainApp>
 
     return bottomNav;
   }
+
+  bool get _usesNativeMiuixNavigation =>
+      Platform.isAndroid &&
+      !_nativeNavigationUnavailable &&
+      _isMainRouteActive &&
+      _mainController.useBottomNav &&
+      _mainController.floatingNavBar &&
+      _mainController.navigationBars.length > 1;
+
+  bool get _nativeNavigationVisible {
+    if (!_mainController.hideBottomBar) return true;
+    if (_mainController.barOffset case final barOffset?) {
+      return barOffset.value == 0;
+    }
+    return _mainController.showBottomBar?.value ?? true;
+  }
+
+  Widget _nativeMiuixNavigationSync() => Obx(() {
+    final selectedIndex = _mainController.selectedIndex.value;
+    final visible = _nativeNavigationVisible;
+    final dynCount = _mainController.dynCount.value;
+    final dynamicBadgeMode = _mainController.dynamicBadgeMode;
+    final destinations = _mainController.navigationBars
+        .map(
+          (item) => <String, Object?>{
+            'key': item.name,
+            'label': item.label,
+            // Keep the native glass bar in lockstep with Flutter's bottom
+            // navigation badge: an empty label represents the red-dot mode.
+            'badge':
+                item == .dynamics && dynCount > 0 && dynamicBadgeMode != .hidden
+                ? dynamicBadgeMode == .number
+                      ? dynCount.toString()
+                      : ''
+                : null,
+          },
+        )
+        .toList(growable: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      PiliAndroidHelper.updateMiuixNavigation(
+        destinations: destinations,
+        selectedIndex: selectedIndex,
+        visible: visible && _usesNativeMiuixNavigation,
+        dark: _colorScheme.brightness.isDark,
+        primary: _colorScheme.primary.toARGB32(),
+        background: _colorScheme.surfaceContainerLowest.toARGB32(),
+        surface: _colorScheme.surface.toARGB32(),
+        surfaceContainer: _colorScheme.surfaceContainer.toARGB32(),
+        onSurface: _colorScheme.onSurface.toARGB32(),
+        outline: _colorScheme.outline.toARGB32(),
+        // The official Miuix floating bar uses a solid surface by default.
+        // Capture Flutter only when its diagnostic panel is explicitly enabled.
+        backdropSampling: _mainController.miuixBackdropSampling,
+        backdropDebug: _mainController.miuixBackdropSampling,
+        bottomLiftDp: Pref.floatingNavBottomLift,
+        followMyHyperModifierNavigationLift:
+            Pref.followMyHyperModifierNavigationLift,
+      ).catchError((_) async {
+        // Do not expose Flutter's fallback until the native overlay confirms
+        // it has hidden; otherwise a transient bridge failure can leave both
+        // bars visible at once.
+        try {
+          await PiliAndroidHelper.hideMiuixNavigation();
+        } catch (_) {
+          return;
+        }
+        if (mounted && !_nativeNavigationUnavailable) {
+          setState(() => _nativeNavigationUnavailable = true);
+        }
+      });
+    });
+    return const SizedBox.shrink();
+  });
 
   Widget _sideBar() {
     if (_mainController.navigationBars.length > 1) {
@@ -323,6 +588,14 @@ class _MainAppState extends PopScopeState<MainApp>
 
     Widget? sideBar;
     Widget? bottomNav;
+    final useNativeMiuixNavigation = _usesNativeMiuixNavigation;
+    if (Platform.isAndroid && !useNativeMiuixNavigation) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          PiliAndroidHelper.hideMiuixNavigation().catchError((_) {});
+        }
+      });
+    }
     final EdgeInsets padding;
     if (_mainController.useBottomNav) {
       bottomNav = _bottomNav;
@@ -333,7 +606,11 @@ class _MainAppState extends PopScopeState<MainApp>
           child: bottomNav,
         );
       }
-      padding = _padding.copyWith(bottom: 0);
+      padding = .only(
+        top: _padding.top,
+        left: _padding.left,
+        right: _padding.right,
+      );
     } else {
       sideBar = DecoratedBox(
         decoration: BoxDecoration(
@@ -349,10 +626,16 @@ class _MainAppState extends PopScopeState<MainApp>
     }
 
     child = Material(
-      child: MainLayout(
-        sideBar: sideBar,
-        bottomNav: bottomNav,
-        body: Padding(padding: padding, child: child),
+      color: _colorScheme.surface,
+      child: Stack(
+        children: [
+          MainLayout(
+            sideBar: sideBar,
+            bottomNav: bottomNav,
+            body: Padding(padding: padding, child: child),
+          ),
+          if (useNativeMiuixNavigation) _nativeMiuixNavigationSync(),
+        ],
       ),
     );
 
@@ -380,7 +663,8 @@ class _MainAppState extends PopScopeState<MainApp>
             () {
               final dynCount = _mainController.dynCount.value;
               return Badge(
-                isLabelVisible: dynCount > 0,
+                isLabelVisible:
+                    dynCount > 0 && _mainController.dynamicBadgeMode != .hidden,
                 label: _mainController.dynamicBadgeMode == .number
                     ? Text(dynCount.toString())
                     : null,

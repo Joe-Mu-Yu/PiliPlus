@@ -45,7 +45,9 @@ abstract final class LiveHttp {
     String csrf = Accounts.main.csrf;
     final res = await Request().post(
       Api.sendLiveMsg,
-      queryParameters: await WbiSign.makSign({'web_location': 444.8}),
+      queryParameters: await WbiSign.makSign({
+        'web_location': 444.8,
+      }),
       data: FormData.fromMap({
         'bubble': 0,
         'msg': msg,
@@ -80,7 +82,7 @@ abstract final class LiveHttp {
 
   static Future<LoadingState<RoomPlayInfoData>> liveRoomInfo({
     required Object roomId,
-    int? qn,
+    Object? qn,
     bool onlyAudio = false,
   }) async {
     final res = await Request().get(
@@ -115,7 +117,9 @@ abstract final class LiveHttp {
   }) async {
     final res = await Request().get(
       Api.liveRoomInfoH5,
-      queryParameters: {'room_id': roomId},
+      queryParameters: {
+        'room_id': roomId,
+      },
     );
     if (res.data['code'] == 0) {
       return Success(RoomInfoH5Data.fromJson(res.data['data']));
@@ -619,7 +623,7 @@ abstract final class LiveHttp {
 
   @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<SuperChatData>> superChatMsg(
-    int roomId,
+    Object roomId,
   ) async {
     final res = await Request().get(
       Api.superChatMsg,
@@ -629,7 +633,7 @@ abstract final class LiveHttp {
     );
     if (res.data['code'] == 0) {
       try {
-        return Success(SuperChatData.fromJson(res.data['data'], roomId));
+        return Success(SuperChatData.fromJson(res.data['data']));
       } catch (e, s) {
         return Error('$e\n\n$s');
       }
@@ -790,22 +794,6 @@ abstract final class LiveHttp {
     );
     if (res.data['code'] == 0) {
       return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
-
-  static Future<LoadingState<String?>> liveMedalName(Object uid) async {
-    final res = await Request().get(
-      Api.liveMasterInfo,
-      queryParameters: {'uid': uid},
-    );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(res.data['data']['medal_name'] as String);
-      } catch (e) {
-        return Error(e.toString());
-      }
     } else {
       return Error(res.data['message']);
     }

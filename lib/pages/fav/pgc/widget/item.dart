@@ -58,7 +58,7 @@ class FavPgcItem extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AspectRatio(
-                    aspectRatio: Style.aspectRatio3x4,
+                    aspectRatio: 3 / 4,
                     child: LayoutBuilder(
                       builder: (context, boxConstraints) {
                         return Stack(

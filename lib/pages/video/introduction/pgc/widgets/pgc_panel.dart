@@ -1,5 +1,4 @@
-import 'dart:async' show StreamSubscription;
-import 'dart:math';
+import 'dart:async';
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
@@ -48,15 +47,11 @@ class _PgcPanelState extends State<PgcPanel> {
   late final VideoDetailController videoDetailCtr;
   late final StreamSubscription<int> _listener;
 
-  void _updateIndex() {
-    currentIndex = max(0, widget.pages.indexWhere((e) => e.cid == cid));
-  }
-
   @override
   void initState() {
     super.initState();
     cid = widget.cid!;
-    _updateIndex();
+    currentIndex = widget.pages.indexWhere((e) => e.cid == cid);
     listViewScrollCtr = ScrollController(
       initialScrollOffset: currentIndex * 150.0,
     );
@@ -67,7 +62,7 @@ class _PgcPanelState extends State<PgcPanel> {
 
     _listener = videoDetailCtr.cid.listen((int p0) {
       cid = p0;
-      _updateIndex();
+      currentIndex = widget.pages.indexWhere((EpisodeItem e) => e.cid == cid);
       if (!mounted) return;
       setState(() {});
       scrollToIndex();
@@ -140,13 +135,12 @@ class _PgcPanelState extends State<PgcPanel> {
         SizedBox(
           height: 60,
           child: ListView.builder(
-            padding: .zero,
-            itemExtent: 150,
-            scrollDirection: .horizontal,
-            controller: listViewScrollCtr,
-            itemCount: widget.pages.length,
             key: const PageStorageKey(_PgcPanelState),
-            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            controller: listViewScrollCtr,
+            scrollDirection: Axis.horizontal,
+            itemCount: widget.pages.length,
+            itemExtent: 150,
             itemBuilder: (BuildContext context, int index) =>
                 _buildItem(theme, isPugv, index),
           ),
