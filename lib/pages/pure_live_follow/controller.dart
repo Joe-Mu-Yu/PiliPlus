@@ -91,6 +91,15 @@ class PureLiveFollowController extends GetxController {
             );
             continue;
           }
+          if (DouyinLivePlatformAdapter.isLegacyAccountFavorite(favorite)) {
+            await _repository.update(
+              LiveFavorite.fromJson({
+                ...favorite.toJson(),
+                'status': LiveFavoriteStatus.unknown.name,
+              }),
+            );
+            continue;
+          }
           try {
             await _repository.update(await adapter.refreshFavorite(favorite));
           } catch (error, stackTrace) {
@@ -156,6 +165,35 @@ class PureLiveFollowController extends GetxController {
       }
     } catch (error) {
       errorMessage.value = _messageFor(error);
+    }
+  }
+
+  Future<bool> updateLegacyDouyinLink(
+    LiveFavorite original,
+    String roomUrl,
+  ) async {
+    if (!DouyinLivePlatformAdapter.isLegacyAccountFavorite(original)) {
+      return false;
+    }
+    isAdding.value = true;
+    errorMessage.value = null;
+    try {
+      final resolved = await _addService.resolveFromLink(roomUrl);
+      if (resolved.platformId != original.platformId) {
+        throw const LiveRoomResolutionException('请选择同平台的直播间链接');
+      }
+      final updated = LiveFavorite.fromJson({
+        ...resolved.toJson(),
+        'tagIds': original.tagIds,
+      });
+      await _repository.replace(original.identityKey, updated);
+      favorites.assignAll(await _repository.all());
+      return true;
+    } catch (error) {
+      errorMessage.value = _messageFor(error);
+      return false;
+    } finally {
+      isAdding.value = false;
     }
   }
 

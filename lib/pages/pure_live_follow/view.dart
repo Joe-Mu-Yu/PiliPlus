@@ -399,6 +399,15 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (DouyinLivePlatformAdapter.isLegacyAccountFavorite(
+                      favorite,
+                    ))
+                      Text(
+                        '链接需要更新',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.error,
+                        ),
+                      ),
                     const Spacer(),
                     Row(
                       children: [
@@ -410,6 +419,13 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                             style: Theme.of(context).textTheme.labelLarge,
                           ),
                         ),
+                        if (DouyinLivePlatformAdapter.isLegacyAccountFavorite(
+                          favorite,
+                        ))
+                          TextButton(
+                            onPressed: () => _updateLegacyLink(favorite),
+                            child: const Text('更新链接'),
+                          ),
                         if (favorite.platformId == 'douyin' &&
                             favorite.status == LiveFavoriteStatus.live)
                           IconButton(
@@ -550,6 +566,26 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
     );
   }
 
+  Future<void> _updateLegacyLink(LiveFavorite favorite) async {
+    final link = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AddLiveRoomDialog(
+        title: '更新直播间链接',
+        submitLabel: '验证并更新',
+      ),
+    );
+    if (link == null || link.isEmpty || !mounted) return;
+    final updated = await _controller.updateLegacyDouyinLink(favorite, link);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          updated ? '直播间链接已更新' : _controller.errorMessage.value ?? '更新失败',
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmRemove(LiveFavorite favorite) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -609,7 +645,13 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
 }
 
 class _AddLiveRoomDialog extends StatefulWidget {
-  const _AddLiveRoomDialog();
+  const _AddLiveRoomDialog({
+    this.title = '添加直播间',
+    this.submitLabel = '验证并添加',
+  });
+
+  final String title;
+  final String submitLabel;
 
   @override
   State<_AddLiveRoomDialog> createState() => _AddLiveRoomDialogState();
@@ -626,7 +668,7 @@ class _AddLiveRoomDialogState extends State<_AddLiveRoomDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('添加直播间'),
+    title: Text(widget.title),
     content: TextField(
       controller: _input,
       autofocus: true,
@@ -651,7 +693,7 @@ class _AddLiveRoomDialogState extends State<_AddLiveRoomDialog> {
       ),
       FilledButton(
         onPressed: () => Navigator.pop(context, _input.text.trim()),
-        child: const Text('验证并添加'),
+        child: Text(widget.submitLabel),
       ),
     ],
   );

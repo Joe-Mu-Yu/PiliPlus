@@ -6,9 +6,69 @@ import 'package:PiliPlus/pages/pure_live_follow/controller.dart';
 import 'package:PiliPlus/pages/pure_live_follow/view.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
 import 'package:PiliPlus/services/live_favorite_repository.dart';
+import 'package:PiliPlus/services/live_platform_adapter.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart' show TextField;
+import 'package:pure_live/common/models/live_room.dart'
+    show LiveRoom, LiveStatus;
 
 void main() {
+  testWidgets(
+    'repairs a legacy account link only after verifying the new room',
+    (tester) async {
+      final store = _MemoryStore()
+        ..values = [
+          LiveFavorite(
+            platformId: 'douyin',
+            roomId: 'MS4wLjABAAAAlegacy_account',
+            roomUrl: 'https://live.douyin.com/MS4wLjABAAAAlegacy_account',
+            title: 'Saved anchor',
+            tagIds: ['keep'],
+          ).toJson(),
+        ];
+      final repository = LiveFavoriteRepository(store);
+      final controller = PureLiveFollowController(
+        repository: repository,
+        adapters: [
+          DouyinLivePlatformAdapter(
+            getRoomDetailByWebRid: (roomId) async => LiveRoom(
+              roomId: roomId,
+              platform: 'douyin',
+              title: 'Verified room',
+              liveStatus: LiveStatus.live,
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        GetMaterialApp(home: PureLiveFollowPage(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      await controller.refreshFavorites();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('未开播'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('链接需要更新'), findsOneWidget);
+      expect(find.textContaining('部分平台刷新失败'), findsNothing);
+      await tester.tap(find.text('更新链接'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byType(TextField),
+        'https://live.douyin.com/77',
+      );
+      await tester.tap(find.text('验证并更新'));
+      await tester.pumpAndSettle();
+
+      final updated = (await repository.all()).single;
+      expect(updated.roomId, '77');
+      expect(updated.title, 'Verified room');
+      expect(updated.tagIds, ['keep']);
+      expect(controller.errorMessage.value, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('直播平台 exposes Pure Live-style room states and add action', (
     tester,
   ) async {

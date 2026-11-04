@@ -228,6 +228,11 @@ class DouyinLivePlatformAdapter implements LivePlatformAdapter {
 
   static final _douyinRoomIdPattern = RegExp(r'^[1-9][0-9]{0,19}$');
 
+  static bool isLegacyAccountFavorite(LiveFavorite favorite) =>
+      favorite.platformId == 'douyin' &&
+      !_douyinRoomIdPattern.hasMatch(favorite.roomId) &&
+      roomIdFromUrl(favorite.roomUrl) == null;
+
   static String? roomIdFromUrl(String rawLink) {
     final uri = Uri.tryParse(rawLink.trim());
     if (uri == null ||

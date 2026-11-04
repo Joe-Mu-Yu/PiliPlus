@@ -74,6 +74,26 @@ class LiveFavoriteRepository {
         await _store.write(favorites.map((item) => item.toJson()).toList());
       });
 
+  Future<void> replace(String identityKey, LiveFavorite replacement) =>
+      _serialize(() async {
+        final favorites = await all();
+        final index = favorites.indexWhere(
+          (favorite) => favorite.identityKey == identityKey,
+        );
+        if (index < 0) {
+          throw StateError('收藏已移除，请刷新后重试');
+        }
+        if (favorites.any(
+          (favorite) =>
+              favorite.identityKey == replacement.identityKey &&
+              favorite.identityKey != identityKey,
+        )) {
+          throw StateError('该直播间已在关注列表中');
+        }
+        favorites[index] = replacement;
+        await _store.write(favorites.map((item) => item.toJson()).toList());
+      });
+
   Future<void> remove(String identityKey) => _serialize(() async {
     final favorites = await all();
     final remaining = favorites

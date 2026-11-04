@@ -145,6 +145,33 @@ void main() {
   });
 
   test(
+    'does not report a legacy Douyin account ID as a platform outage',
+    () async {
+      await repository.add(
+        LiveFavorite(
+          platformId: 'douyin',
+          roomId: 'MS4wLjABAAAAlegacy_account',
+          roomUrl: 'https://live.douyin.com/MS4wLjABAAAAlegacy_account',
+          title: 'Saved anchor',
+          status: LiveFavoriteStatus.live,
+          tagIds: ['keep'],
+        ),
+      );
+      controller = PureLiveFollowController(
+        repository: repository,
+        adapters: [DouyinLivePlatformAdapter()],
+      );
+
+      await controller.refreshFavorites();
+
+      expect(controller.errorMessage.value, isNull);
+      expect(controller.favorites.single.status, LiveFavoriteStatus.unknown);
+      expect(controller.favorites.single.title, 'Saved anchor');
+      expect(controller.favorites.single.tagIds, ['keep']);
+    },
+  );
+
+  test(
     'coalesces overlapping refreshes without multiplying platform requests',
     () async {
       for (var id = 0; id < 12; id++) {

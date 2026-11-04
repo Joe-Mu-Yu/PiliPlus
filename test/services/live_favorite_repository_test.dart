@@ -68,6 +68,48 @@ void main() {
       });
     });
 
+    test(
+      'replaces a legacy identity without dropping other favorites',
+      () async {
+        await repository.add(_favorite('douyin', 'legacy'));
+        await repository.add(_favorite('douyu', 'another'));
+
+        await repository.replace(
+          'douyin:legacy',
+          LiveFavorite(
+            platformId: 'douyin',
+            roomId: '77',
+            roomUrl: 'https://live.douyin.com/77',
+            tagIds: ['preserved'],
+          ),
+        );
+
+        expect(
+          (await repository.all()).map((room) => room.identityKey),
+          ['douyin:77', 'douyu:another'],
+        );
+        expect((await repository.all()).first.tagIds, ['preserved']);
+      },
+    );
+
+    test(
+      'rejects duplicate replacement without deleting the original',
+      () async {
+        await repository.add(_favorite('douyin', 'legacy'));
+        await repository.add(_favorite('douyin', '77'));
+
+        await expectLater(
+          repository.replace('douyin:legacy', _favorite('douyin', '77')),
+          throwsStateError,
+        );
+
+        expect(
+          (await repository.all()).map((room) => room.identityKey),
+          ['douyin:legacy', 'douyin:77'],
+        );
+      },
+    );
+
     test('filters rooms by platform and persists removal', () async {
       await repository.add(_favorite('twitch', 'one'));
       await repository.add(_favorite('douyu', 'two'));

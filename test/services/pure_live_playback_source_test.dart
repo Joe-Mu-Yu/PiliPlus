@@ -303,7 +303,7 @@ class _RecoveringFakeLiveSite extends _FakeLiveSite
   }) async {
     recoveryRequests++;
     return LivePlayUrlResolution(
-      urls: ['https://backup.example/live.m3u8?sign=fresh'],
+      urls: const ['https://backup.example/live.m3u8?sign=fresh'],
     );
   }
 }
