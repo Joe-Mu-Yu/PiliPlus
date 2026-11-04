@@ -10,7 +10,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def version_metadata(pubspec, config):
+def version_metadata(pubspec, config, release_tag=None):
     match = re.search(r'^version:\s*(\d+\.\d+\.\d+)(?:\+\d+)?\s*$', pubspec, re.M)
     if not match or match[1] != config['upstreamVersion']:
         raise ValueError('upstreamVersion must match pubspec.yaml; reset revision on upstream upgrades')
@@ -21,6 +21,8 @@ def version_metadata(pubspec, config):
     if not (0 <= major <= 199 and 0 <= minor <= 99 and 0 <= patch <= 999):
         raise ValueError('upstream version exceeds Android versionCode encoding limits')
     name = f'{major}.{minor}.{patch}.{revision}'
+    if release_tag is not None and release_tag != f'v{name}':
+        raise ValueError(f'release tag must match configured version v{name}; got {release_tag!r}')
     code = major * 10_000_000 + minor * 100_000 + patch * 100 + revision
     if code <= 0:
         raise ValueError('Android versionCode must be positive')
@@ -48,14 +50,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'pili_release.json')
     parser.add_argument('--github-output', type=Path)
-    parser.add_argument('--next-available-tag', action='store_true')
+    version_options = parser.add_mutually_exclusive_group()
+    version_options.add_argument('--next-available-tag', action='store_true')
+    version_options.add_argument('--release-tag', help='Require this exact configured flavor tag')
     args = parser.parse_args()
     pubspec = (ROOT / 'pubspec.yaml').read_text()
     config = json.loads((ROOT / 'tool/release.json').read_text())
     if args.next_available_tag:
         tags = subprocess.check_output(['git', 'tag', '--list'], cwd=ROOT, text=True).splitlines()
         config = {**config, 'revision': next_available_revision(pubspec, config, tags)}
-    name, code = version_metadata(pubspec, config)
+    name, code = version_metadata(pubspec, config, args.release_tag)
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     data = {'pili.name': name, 'pili.code': code, 'pili.hash': commit, 'pili.time': int(time.time())}
     args.output.write_text(json.dumps(data) + '\n')

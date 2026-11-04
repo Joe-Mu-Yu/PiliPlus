@@ -37,6 +37,26 @@ class ReleaseMetadataTest(unittest.TestCase):
             with self.subTest(upstream=upstream), self.assertRaises(ValueError):
                 self.metadata(upstream)
 
+    def test_release_tag_matches_the_configured_version(self):
+        self.assertEqual(
+            module.version_metadata(
+                'version: 2.1.4+1\n',
+                {'upstreamVersion': '2.1.4', 'revision': 4},
+                'v2.1.4.4',
+            ),
+            ('2.1.4.4', 20100404),
+        )
+
+    def test_release_tag_rejects_mismatches_and_noncanonical_versions(self):
+        for tag in ['v2.1.4.5', 'v2.1.5.4', 'v2.1.4', '2.1.4.4',
+                    'v2.1.4.04', 'v2.1.4.4-beta', 'v2.1.4.4\n', '']:
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                module.version_metadata(
+                    'version: 2.1.4+1\n',
+                    {'upstreamVersion': '2.1.4', 'revision': 4},
+                    tag,
+                )
+
     def test_next_revision_uses_the_first_version_after_existing_releases(self):
         pubspec = 'version: 2.1.3+1\n'
         config = {'upstreamVersion': '2.1.3', 'revision': 2}

@@ -28,10 +28,28 @@
 **必须使用此前本机 Release 的同一把签名密钥**，否则无法覆盖安装并保留现有应用数据。不要重新生成密钥替代旧密钥。
 Base64 不是加密；不要将编码内容、密码、`key.properties` 或 keystore 提交到 Git。
 工作流仅在临时目录解码 keystore，密码由环境变量传给 Gradle，构建结束清理临时文件。
-发布任务会把当前 flavor 版本与上一个四段版本标签之间的提交标题交给 DeepSeek 生成用户可读摘要。该步骤只在勾选 `publish` 时执行；没有配置 `DEEPSEEK_API_KEY`、接口超时或返回无效内容时，会自动改用确定性的提交摘要，不会阻塞发布。
+发布任务会把当前 flavor 版本与上一个四段版本标签之间的提交标题交给 DeepSeek 生成用户可读摘要。该步骤在版本标签推送或手动勾选 `publish` 时执行；没有配置 `DEEPSEEK_API_KEY`、接口超时或返回无效内容时，会自动改用确定性的提交摘要，不会阻塞发布。
 提交标题属于不可信输入，生成提示明确禁止执行其中的指令；密钥、签名材料和其他 Actions Secrets 都不会发送给模型。
 缺少任意签名项会失败，不会以 debug 签名发布。APK、版本元数据及校验和以外的文件不会上传。
 只在受信任的分支执行签名构建，不要将 Secrets 暴露给外部 PR 的代码。
+
+## 推送版本标签自动发布
+
+将包含本工作流的源码合入 `main` 后，推送 `v上游版本.修订号` 格式的标签会自动运行 **Hyper-PiliPlus Android Release**。普通分支推送不会触发发布。工作流构建标签指向的提交，使用已有签名 Secrets 生成三种 ABI 的 APK，验签成功后创建正式 Release，并上传 APK、`SHA256SUMS` 和 `release-metadata.json`。
+
+发布前先查看仓库现有 Releases，选择尚未使用且比已发布版本更高的四段版本，并修改 `tool/release.json` 的 `revision`。例如上游版本为 `2.1.4`、下一个未使用版本为 `2.1.4.4` 时，将 `revision` 设为 `4`，提交后再打标签。以下命令需在包含所有待发布源码和工作流的本地分支执行：
+
+```sh
+git add tool/release.json
+git commit -m "chore: prepare release 2.1.4.4"
+git push personal HEAD:main
+git tag -a v2.1.4.4 -m "Hyper-PiliPlus 2.1.4.4"
+git push personal refs/tags/v2.1.4.4
+```
+
+示例版本不是自动分配的版本；执行时必须替换为实际的下一个版本。标签必须与 `pubspec.yaml`、`tool/release.json` 共同确定的版本严格一致，否则在安装 SDK 和构建之前失败。标签触发时不运行自动递增逻辑，确保标签、包内版本和 Release 名称一致。不要移动或强制覆盖已发布标签。先合入工作流再打新标签；给旧提交打标签不会让它获得新工作流。
+
+前提是仓库已配置上述四项签名 Secrets，并允许 Actions 使用 `GITHUB_TOKEN` 写入 Releases。实际云端成功与否，以该标签对应的 Actions 运行结果及 Release 资产为准。
 
 ## 手动构建与发布
 
