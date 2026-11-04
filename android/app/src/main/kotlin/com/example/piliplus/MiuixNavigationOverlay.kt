@@ -8,48 +8,11 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.View
 import android.widget.FrameLayout
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -66,9 +29,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
 
 private const val MIUIX_NAVIGATION_CHANNEL = "com.aritxonly.hyperpiliplus/miuix_navigation"
 private val MY_HYPER_MODIFIER_SETTINGS_URI =
@@ -355,164 +315,6 @@ internal data class NavigationUiState(
                 onSurface = color("onSurface", AndroidColor.BLACK),
                 outline = color("outline", AndroidColor.rgb(217, 217, 217)),
             )
-        }
-    }
-}
-
-@Composable
-private fun NavigationOverlayContent(
-    state: NavigationUiState,
-    onDestinationSelected: (Int) -> Unit,
-) {
-    val colors = if (state.dark) {
-        darkColorScheme(
-            primary = Color(state.primary),
-            background = Color(state.background),
-            surface = Color(state.surface),
-            surfaceContainer = Color(state.surfaceContainer),
-            onSurface = Color(state.onSurface),
-            outline = Color(state.outline),
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(state.primary),
-            background = Color(state.background),
-            surface = Color(state.surface),
-            surfaceContainer = Color(state.surfaceContainer),
-            onSurface = Color(state.onSurface),
-            outline = Color(state.outline),
-        )
-    }
-    MiuixTheme(colors = colors) {
-        AnimatedVisibility(
-            visible = state.visible,
-            enter = fadeIn(tween(180)) + slideInVertically(tween(260)) { it / 2 },
-            exit = fadeOut(tween(140)) + slideOutVertically(tween(220)) { it / 2 },
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, top = 12.dp, end = 16.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                FloatingMiuixNavigationBar(
-                    state = state,
-                    onDestinationSelected = onDestinationSelected,
-                )
-            }
-        }
-    }
-}
-
-/**
- * The Flutter surface cannot be registered as Miuix's [LayerBackdrop], so this
- * deliberately uses the same readable, translucent soft-glass fallback on all
- * API levels instead of pretending to provide backdrop blur.
- */
-@Composable
-private fun FloatingMiuixNavigationBar(
-    state: NavigationUiState,
-    onDestinationSelected: (Int) -> Unit,
-) {
-    val shape = RoundedCornerShape(percent = 50)
-    val scheme = MiuixTheme.colorScheme
-    val glassColor = scheme.surfaceContainer.copy(alpha = if (state.dark) 0.82f else 0.78f)
-    val hairlineColor = if (state.dark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.72f)
-    val indicatorColor = if (state.dark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.075f)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(54.dp)
-            .shadow(
-                elevation = if (state.dark) 16.dp else 10.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = if (state.dark) 0.45f else 0.17f),
-                spotColor = Color.Black.copy(alpha = if (state.dark) 0.34f else 0.12f),
-            )
-            .clip(shape)
-            .background(glassColor)
-            .border(1.dp, hairlineColor, shape)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            state.destinations.forEachIndexed { index, destination ->
-                val selected = index == state.selectedIndex
-                val itemShape = RoundedCornerShape(percent = 50)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .clip(itemShape)
-                        .background(if (selected) indicatorColor else Color.Transparent)
-                        .clickable(
-                            role = Role.Tab,
-                            onClick = { onDestinationSelected(index) },
-                        )
-                        .padding(horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    NavigationGlyph(destination.key, selected, scheme.onSurfaceContainer)
-                    Spacer(Modifier.height(1.dp))
-                    androidx.compose.foundation.text.BasicText(
-                        text = destination.label,
-                        style = TextStyle(
-                            color = scheme.onSurfaceContainer,
-                            fontSize = 10.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NavigationGlyph(key: String, selected: Boolean, color: Color) {
-    Canvas(Modifier.size(22.dp)) {
-        val stroke = Stroke(width = 1.9.dp.toPx(), cap = StrokeCap.Round)
-        val center = Offset(size.width / 2f, size.height / 2f)
-        when (key) {
-            "home" -> {
-                val roof = listOf(
-                    Offset(size.width * .18f, size.height * .48f),
-                    Offset(size.width * .5f, size.height * .2f),
-                    Offset(size.width * .82f, size.height * .48f),
-                )
-                drawLine(color, roof[0], roof[1], strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawLine(color, roof[1], roof[2], strokeWidth = stroke.width, cap = StrokeCap.Round)
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * .27f, size.height * .45f),
-                    size = androidx.compose.ui.geometry.Size(size.width * .46f, size.height * .35f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()),
-                    style = if (selected) androidx.compose.ui.graphics.drawscope.Fill else stroke,
-                )
-            }
-            "dynamics" -> {
-                drawCircle(color, radius = size.minDimension * .29f, center = center, style = stroke)
-                drawCircle(color, radius = size.minDimension * .09f, center = center, style = if (selected) androidx.compose.ui.graphics.drawscope.Fill else stroke)
-                drawCircle(color.copy(alpha = .72f), radius = size.minDimension * .06f, center = Offset(size.width * .78f, size.height * .3f))
-            }
-            else -> {
-                drawCircle(color, radius = size.minDimension * .18f, center = Offset(center.x, size.height * .35f), style = if (selected) androidx.compose.ui.graphics.drawscope.Fill else stroke)
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(size.width * .24f, size.height * .54f),
-                    size = androidx.compose.ui.geometry.Size(size.width * .52f, size.height * .23f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height * .12f),
-                    style = if (selected) androidx.compose.ui.graphics.drawscope.Fill else stroke,
-                )
-            }
         }
     }
 }

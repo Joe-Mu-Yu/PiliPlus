@@ -29,6 +29,8 @@ internal data class FlutterBackdropSnapshot(
     val bitmap: Bitmap,
     val sourceWidthPx: Int,
     val sourceHeightPx: Int,
+    val sourceLeftInWindowPx: Int,
+    val sourceTopInWindowPx: Int,
 )
 
 internal data class FlutterBackdropDebugState(
@@ -84,6 +86,8 @@ internal class FlutterSurfaceBackdropSampler(
     private var displayedBitmap: Bitmap? = null
     private var displayedSourceWidthPx = 0
     private var displayedSourceHeightPx = 0
+    private var displayedSourceLeftInWindowPx = 0
+    private var displayedSourceTopInWindowPx = 0
     private var debugState = FlutterBackdropDebugState()
     private val captureRunnable = Runnable {
         captureScheduled = false
@@ -216,6 +220,8 @@ internal class FlutterSurfaceBackdropSampler(
         displayedBitmap = null
         displayedSourceWidthPx = 0
         displayedSourceHeightPx = 0
+        displayedSourceLeftInWindowPx = 0
+        displayedSourceTopInWindowPx = 0
         pointerDown = false
         keepCapturingUntil = Long.MIN_VALUE
         postTouchCaptureDeadline = Long.MIN_VALUE
@@ -333,6 +339,8 @@ internal class FlutterSurfaceBackdropSampler(
                     val contentChanged =
                         displayedSourceWidthPx != sourceRect.width() ||
                             displayedSourceHeightPx != sourceRect.height() ||
+                            displayedSourceLeftInWindowPx != sourceLocation[0] + sourceRect.left ||
+                            displayedSourceTopInWindowPx != sourceLocation[1] + sourceRect.top ||
                             displayedBitmap?.sameAs(destination) != true
                     val firstSampleLatency = if (!hasSnapshot && samplingEnabledAt != Long.MIN_VALUE) {
                         snapshotAt - samplingEnabledAt
@@ -358,11 +366,15 @@ internal class FlutterSurfaceBackdropSampler(
                         displayedBitmap = destination
                         displayedSourceWidthPx = sourceRect.width()
                         displayedSourceHeightPx = sourceRect.height()
+                        displayedSourceLeftInWindowPx = sourceLocation[0] + sourceRect.left
+                        displayedSourceTopInWindowPx = sourceLocation[1] + sourceRect.top
                         onSnapshotChanged(
                             FlutterBackdropSnapshot(
                                 bitmap = destination,
                                 sourceWidthPx = sourceRect.width(),
                                 sourceHeightPx = sourceRect.height(),
+                                sourceLeftInWindowPx = displayedSourceLeftInWindowPx,
+                                sourceTopInWindowPx = displayedSourceTopInWindowPx,
                             ),
                         )
                         if (!pointerDown && postTouchCaptureDeadline != Long.MIN_VALUE) {
@@ -497,7 +509,7 @@ internal class FlutterSurfaceBackdropSampler(
     }
 
     private companion object {
-        const val SAMPLE_BLEED_DP = 32f
+        const val SAMPLE_BLEED_DP = 48f
         // A 20% linear sample still has ample detail under the strong blur,
         // while reducing PixelCopy work enough to target the display cadence.
         const val SAMPLE_SCALE = 0.20f

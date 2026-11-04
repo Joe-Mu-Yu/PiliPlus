@@ -34,6 +34,17 @@ class LiveFavoriteRepository {
     );
   });
 
+  Future<void> merge(Iterable<LiveFavorite> incoming) => _serialize(() async {
+    final favorites = await all();
+    final identities = favorites.map((item) => item.identityKey).toSet();
+    for (final favorite in incoming) {
+      if (identities.add(favorite.identityKey)) {
+        favorites.add(favorite);
+      }
+    }
+    await _store.write(favorites.map((item) => item.toJson()).toList());
+  });
+
   Future<void> update(LiveFavorite favorite) => _serialize(() async {
     final favorites = await all();
     final index = favorites.indexWhere(

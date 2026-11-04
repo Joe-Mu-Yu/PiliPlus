@@ -6,8 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -18,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -28,31 +27,32 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Badge
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarDefaults
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ContactsCircle
 import top.yukonga.miuix.kmp.icon.extended.Home
@@ -63,12 +63,10 @@ import top.yukonga.miuix.kmp.icon.extended.ScreenMirroring
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
-import kotlin.math.abs
 
 /**
- * Flutter owns routes and state; the Miuix library provides the floating bar
- * and item visuals. The app keeps its existing swipe-to-select gesture around
- * the official items without drawing a separate selection indicator.
+ * Flutter owns routes and state; Miuix's official liquid-glass example renders
+ * the native navigation bar over a PixelCopy layer of the Flutter surface.
  */
 @Composable
 internal fun DeadlinerNavigationOverlayContent(
@@ -97,26 +95,7 @@ internal fun DeadlinerNavigationOverlayContent(
             outline = Color(state.outline),
         )
     }
-    val materialColors = if (state.dark) {
-        darkColorScheme(
-            primary = Color(state.primary),
-            background = Color(state.background),
-            surface = Color(state.surface),
-            surfaceVariant = Color(state.surfaceContainer),
-            onSurface = Color(state.onSurface),
-            outline = Color(state.outline),
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(state.primary),
-            background = Color(state.background),
-            surface = Color(state.surface),
-            surfaceVariant = Color(state.surfaceContainer),
-            onSurface = Color(state.onSurface),
-            outline = Color(state.outline),
-        )
-    }
-    val items = state.destinations.map { destination ->
+    val destinations = state.destinations.map { destination ->
         val icon = when (destination.key) {
             "home" -> MiuixIcons.Home
             "dynamics" -> MiuixIcons.Messages
@@ -126,25 +105,34 @@ internal fun DeadlinerNavigationOverlayContent(
             "movies" -> MiuixIcons.Play
             else -> MiuixIcons.ContactsCircle
         }
-        destination to icon
+        NavigationItem(label = destination.label, icon = icon)
     }
-    var draggedIndex by remember { mutableIntStateOf(state.selectedIndex) }
+    val backdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
-    val horizontalPaddingPx = with(density) {
-        FloatingNavigationBarDefaults.HorizontalPadding.toPx()
-    }
-    val itemStridePx = with(density) {
-        (FloatingNavigationBarDefaults.IconSize +
-            FloatingNavigationBarDefaults.IconPadding * 2 +
-            FloatingNavigationBarDefaults.ItemSpacing).toPx()
-    }
-    val selectDestination by rememberUpdatedState(onDestinationSelected)
+    var rootPositionInWindow by remember { mutableStateOf(Offset.Zero) }
+    val blurActive = backdropSnapshot != null && isRuntimeShaderSupported()
 
-    LaunchedEffect(state.selectedIndex) {
-        draggedIndex = state.selectedIndex
-    }
-
-    MaterialTheme(colorScheme = materialColors) {
+    MaterialTheme(
+        colorScheme = if (state.dark) {
+            darkColorScheme(
+                primary = Color(state.primary),
+                background = Color(state.background),
+                surface = Color(state.surface),
+                surfaceVariant = Color(state.surfaceContainer),
+                onSurface = Color(state.onSurface),
+                outline = Color(state.outline),
+            )
+        } else {
+            lightColorScheme(
+                primary = Color(state.primary),
+                background = Color(state.background),
+                surface = Color(state.surface),
+                surfaceVariant = Color(state.surfaceContainer),
+                onSurface = Color(state.onSurface),
+                outline = Color(state.outline),
+            )
+        },
+    ) {
         MiuixTheme(colors = miuixColors) {
             AnimatedVisibility(
                 visible = state.visible,
@@ -162,66 +150,66 @@ internal fun DeadlinerNavigationOverlayContent(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    FloatingNavigationBar(
-                        modifier = Modifier
-                            .offset(y = -state.bottomLiftDp.dp)
-                            .pointerInput(items.size, horizontalPaddingPx, itemStridePx) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown(requireUnconsumed = false)
-                                    var dragging = false
-                                    var targetIndex = draggedIndex
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        val change = event.changes.firstOrNull { it.id == down.id }
-                                            ?: break
-                                        if (!change.pressed) break
-                                        val deltaX = change.position.x - down.position.x
-                                        if (!dragging && abs(deltaX) > viewConfiguration.touchSlop) {
-                                            dragging = true
-                                        }
-                                        if (dragging) {
-                                            change.consume()
-                                            targetIndex = (
-                                                (change.position.x - horizontalPaddingPx) /
-                                                    itemStridePx
-                                                ).toInt().coerceIn(items.indices)
-                                            draggedIndex = targetIndex
-                                        }
-                                    }
-                                    if (dragging) selectDestination(targetIndex)
-                                }
-                            }
-                            .onGloballyPositioned { coordinates ->
-                                val position = coordinates.positionInWindow()
-                                onBackdropBoundsChanged(
-                                    FlutterBackdropBounds(
-                                        left = position.x.toInt(),
-                                        top = position.y.toInt(),
-                                        width = coordinates.size.width,
-                                        height = coordinates.size.height,
-                                    ),
-                                )
-                            },
-                    ) {
-                        items.forEachIndexed { index, (destination, icon) ->
-                            val badge = destination.badge?.let { badgeText ->
-                                @Composable {
-                                    if (badgeText.isEmpty()) {
-                                        Badge()
-                                    } else {
-                                        Badge { Text(badgeText) }
-                                    }
-                                }
-                            }
-                            FloatingNavigationBarItem(
-                                selected = draggedIndex == index,
-                                onClick = {
-                                    draggedIndex = index
-                                    selectDestination(index)
+                    if (destinations.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onGloballyPositioned { coordinates ->
+                                    rootPositionInWindow = coordinates.positionInWindow()
                                 },
-                                icon = icon,
-                                label = destination.label,
-                                badge = badge,
+                        ) {
+                            backdropSnapshot?.let { snapshot ->
+                                Image(
+                                    bitmap = snapshot.bitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillBounds,
+                                    modifier = Modifier
+                                        .offset {
+                                            IntOffset(
+                                                x = snapshot.sourceLeftInWindowPx -
+                                                    rootPositionInWindow.x.toInt(),
+                                                y = snapshot.sourceTopInWindowPx -
+                                                    rootPositionInWindow.y.toInt(),
+                                            )
+                                        }
+                                        .size(
+                                            width = with(density) {
+                                                snapshot.sourceWidthPx.toDp()
+                                            },
+                                            height = with(density) {
+                                                snapshot.sourceHeightPx.toDp()
+                                            },
+                                        )
+                                        .alpha(0f)
+                                        .layerBackdrop(backdrop),
+                                )
+                            }
+                            IosLiquidGlassNavigationBar(
+                                items = destinations,
+                                selectedIndex = state.selectedIndex.coerceIn(
+                                    0,
+                                    destinations.lastIndex,
+                                ),
+                                onItemClick = onDestinationSelected,
+                                backdrop = backdrop,
+                                isBlurActive = blurActive,
+                                dark = state.dark,
+                                onBarBoundsChanged = onBackdropBoundsChanged,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = FLUTTER_BACKDROP_BLEED_DP.dp)
+                                    .offset(y = -state.bottomLiftDp.dp),
+                                badge = { index ->
+                                    state.destinations.getOrNull(index)?.badge?.let { badgeText ->
+                                        @Composable {
+                                            if (badgeText.isEmpty()) {
+                                                Badge()
+                                            } else {
+                                                Badge { Text(badgeText) }
+                                            }
+                                        }
+                                    }
+                                },
                             )
                         }
                     }
@@ -230,6 +218,8 @@ internal fun DeadlinerNavigationOverlayContent(
         }
     }
 }
+
+private const val FLUTTER_BACKDROP_BLEED_DP = 48
 /**
  * Shows the PixelCopy diagnostic sample and sampler metrics. The standard
  * navigation bar itself uses Miuix's solid surface and does not consume it.
@@ -307,9 +297,9 @@ private fun BackdropDebugPanel(
                 DebugLine(metricsText, colors.onSurface)
                 DebugLine(
                     if (snapshot == null) {
-                        "Miuix 浮栏：默认主题纯色"
+                        "液态玻璃底栏：等待背板采样"
                     } else {
-                        "Miuix 浮栏：surfaceContainer；采样仅用于调试"
+                        "液态玻璃底栏：已接入 Flutter 背景采样"
                     },
                     colors.onSurface,
                 )

@@ -55,14 +55,25 @@ enum NavigationBarType implements EnumWithLabel {
 
   const NavigationBarType(this.label, this.icon, this.selectIcon, this.page);
 
+  /// Recording is opened from the live page instead of a persistent nav slot.
+  static List<NavigationBarType> get destinations => values
+      .where((type) => type != NavigationBarType.recorderCenter)
+      .toList(growable: false);
+
   static List<NavigationBarType> fromSavedIndexes(List<int>? indexes) {
-    if (indexes == null || indexes.isEmpty) return values;
+    final destinations = NavigationBarType.destinations;
+    if (indexes == null || indexes.isEmpty) return destinations;
     final validIndexes = indexes
-        .where((index) => index >= 0 && index < values.length)
+        .where(
+          (index) =>
+              index >= 0 &&
+              index < values.length &&
+              values[index] != NavigationBarType.recorderCenter,
+        )
         .toSet();
     return [
       ...validIndexes.map((index) => values[index]),
-      for (final type in values)
+      for (final type in destinations)
         if (!validIndexes.contains(type.index)) type,
     ];
   }

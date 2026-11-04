@@ -7,6 +7,7 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
+import 'package:PiliPlus/common/widgets/dialog/pure_live_backup_dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -267,6 +268,12 @@ Commit Hash: ${BuildConfig.commitHash}''',
               onExport: GStorage.exportAllSettings,
               onImport: GStorage.importAllJsonSettings,
             ),
+          ),
+          ListTile(
+            title: const Text('Pure Live 备份迁移'),
+            subtitle: const Text('导入旧版收藏与兼容设置，或导出 Hyper-PiliPlus 迁移备份'),
+            leading: const Icon(Icons.backup_outlined),
+            onTap: () => showPureLiveBackupDialog(context),
           ),
           ListTile(
             title: const Text('重置所有设置'),

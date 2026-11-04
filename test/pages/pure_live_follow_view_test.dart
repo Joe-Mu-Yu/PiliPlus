@@ -25,6 +25,11 @@ void main() {
     expect(find.text('直播中'), findsOneWidget);
     expect(find.text('录播'), findsOneWidget);
     expect(find.text('未开播'), findsOneWidget);
+    expect(find.text('录制'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('recorder-center-action')),
+      findsOneWidget,
+    );
     expect(find.byTooltip('添加直播间'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

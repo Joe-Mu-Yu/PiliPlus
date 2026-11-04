@@ -117,8 +117,8 @@ flutter {
 
 dependencies {
     implementation("androidx.compose.material3:material3:1.5.0-alpha22")
-    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4-rc01")
-    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4-rc01")
-    implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4-rc01")
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4")
+    implementation("top.yukonga.miuix.kmp:miuix-icons-android:0.9.4")
     implementation("io.github.kyant0:shapes:1.2.0")
 }
