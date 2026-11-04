@@ -54,6 +54,28 @@ jobs:
           persist-credentials: false
           # Release notes compare the new flavor tag with the preceding one.
           fetch-depth: 0
+      - name: Validate release signing secrets
+        env:
+          SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          required = ('SIGN_KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD')
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit(
+                  '::error title=Missing release signing secrets::Missing required signing secrets: '
+                  + ', '.join(missing)
+                  + '. Configure the existing release credentials in this repository under '
+                  'Settings > Secrets and variables > Actions. Organization secrets must allow '
+                  'this repository. Environment secrets require an explicitly configured job '
+                  'environment. Reusable workflow callers must pass all four secrets or use '
+                  'secrets: inherit. See docs/android-release.md; do not generate a replacement key.'
+              )
+          PY
       - name: Resolve flavor version
         id: version
         env:
@@ -127,22 +149,22 @@ jobs:
       - name: Decode signing keystore
         env:
           SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           python3 - <<'PY'
-          import base64, os
+          import base64, binascii, os
           from pathlib import Path
-          for name in ('SIGN_KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'):
-              if not os.environ.get(name):
-                  raise SystemExit('Missing required secret: ' + name)
-          path = Path(os.environ['RUNNER_TEMP']) / 'hyper-release.jks'
-          data = base64.b64decode(''.join(os.environ['SIGN_KEYSTORE_BASE64'].split()), validate=True)
+          try:
+              data = base64.b64decode(''.join(os.environ['SIGN_KEYSTORE_BASE64'].split()), validate=True)
+          except (binascii.Error, ValueError):
+              raise SystemExit(
+                  '::error title=Invalid signing keystore::SIGN_KEYSTORE_BASE64 must contain '
+                  'valid Base64 for the existing release keystore. Do not paste its value into logs.'
+              )
           if not data:
-              raise SystemExit('Empty signing keystore')
-          with path.open('xb') as output:
-              path.chmod(0o600)
+              raise SystemExit('::error title=Invalid signing keystore::Empty signing keystore')
+          path = Path(os.environ['RUNNER_TEMP']) / 'hyper-release.jks'
+          descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+          with os.fdopen(descriptor, 'wb') as output:
               output.write(data)
           PY
       - name: Build signed APKs

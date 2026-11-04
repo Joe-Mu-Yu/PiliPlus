@@ -31,6 +31,9 @@ Base64 不是加密；不要将编码内容、密码、`key.properties` 或 keys
 发布任务会把当前 flavor 版本与上一个四段版本标签之间的提交标题交给 DeepSeek 生成用户可读摘要。该步骤在版本标签推送或手动勾选 `publish` 时执行；没有配置 `DEEPSEEK_API_KEY`、接口超时或返回无效内容时，会自动改用确定性的提交摘要，不会阻塞发布。
 提交标题属于不可信输入，生成提示明确禁止执行其中的指令；密钥、签名材料和其他 Actions Secrets 都不会发送给模型。
 缺少任意签名项会失败，不会以 debug 签名发布。APK、版本元数据及校验和以外的文件不会上传。
+签名配置检查在检出源码后、下载 SDK 和依赖之前执行，一次列出所有缺失的 Secret 名称。密钥文件仍在构建前才解码，并为无效 Base64 或空 keystore 提供独立错误提示；不输出 Secret 值。
+若出现 `Missing release signing secrets`，先核对运行所在仓库与上述四个名称。组织级 Secrets 必须授权当前仓库；仅配置在 Environment 中的 Secrets 不会自动提供给未指定该 Environment 的任务。本工作流默认读取仓库可用的 Secrets。复用调用必须显式传递四项，或像 `build.yml` 一样使用 `secrets: inherit`。
+只上传此前已使用的 Release 密钥及配套密码，不要用新密钥、其他应用的密钥或 debug 密钥绕过检查。修改工作流后，从目标分支新建运行；旧任务的 Re-run 不会改用新提交的工作流。
 只在受信任的分支执行签名构建，不要将 Secrets 暴露给外部 PR 的代码。
 
 ## 推送版本标签自动发布
