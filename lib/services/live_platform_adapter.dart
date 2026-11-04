@@ -209,30 +209,44 @@ typedef DouyinRecordingRoomLookup = Future<LiveRoom> Function({
   required String platform,
   required String roomId,
 });
+typedef DouyinWebRidRoomLookup = Future<LiveRoom> Function(String webRid);
 
 /// Adapts Pure Live's strict Douyin room resolver for saved rooms and recording.
 class DouyinLivePlatformAdapter implements LivePlatformAdapter {
   DouyinLivePlatformAdapter({
     DouyinRecordingRoomLookup? getRoomDetailForRecording,
+    DouyinWebRidRoomLookup? getRoomDetailByWebRid,
   }) : _getRoomDetailForRecording =
-           getRoomDetailForRecording ?? _fetchRecordingRoom;
+           getRoomDetailForRecording ?? _fetchRecordingRoom,
+       _getRoomDetailByWebRid = getRoomDetailByWebRid ?? _fetchWebRidRoom;
 
   final DouyinRecordingRoomLookup _getRoomDetailForRecording;
+  final DouyinWebRidRoomLookup _getRoomDetailByWebRid;
 
   @override
   String get platformId => 'douyin';
+
+  static final _douyinRoomIdPattern = RegExp(r'^[1-9][0-9]{0,19}$');
 
   static String? roomIdFromUrl(String rawLink) {
     final uri = Uri.tryParse(rawLink.trim());
     if (uri == null ||
         uri.scheme != 'https' ||
-        uri.host.toLowerCase() != 'live.douyin.com' ||
         uri.userInfo.isNotEmpty ||
         (uri.hasPort && uri.port != 443) ||
         uri.hasFragment) {
       return null;
     }
-    return RegExp(r'^/([1-9][0-9]{0,19})/?$').firstMatch(uri.path)?.group(1);
+
+    final host = uri.host.toLowerCase();
+    final roomPath = switch (host) {
+      'live.douyin.com' => r'^/([1-9][0-9]{0,19})/?$',
+      'www.douyin.com' || 'douyin.com' => r'^/root/live/([1-9][0-9]{0,19})/?$',
+      'webcast.amemv.com' => r'^/douyin/webcast/reflow/([1-9][0-9]{0,19})/?$',
+      _ => null,
+    };
+    if (roomPath == null) return null;
+    return RegExp(roomPath).firstMatch(uri.path)?.group(1);
   }
 
   @override
@@ -245,16 +259,20 @@ class DouyinLivePlatformAdapter implements LivePlatformAdapter {
     if (roomId == null) {
       throw const LiveRoomResolutionException('不是受支持的抖音直播间链接');
     }
-    final room = await _getRoomDetailForRecording(
-      platform: platformId,
-      roomId: roomId,
-    );
+    final uri = Uri.parse(rawLink.trim());
+    final room = uri.host.toLowerCase() != 'webcast.amemv.com'
+        ? await _getRoomDetailByWebRid(roomId)
+        : await _getRoomDetailForRecording(
+            platform: platformId,
+            roomId: roomId,
+          );
     final resolvedId = room.roomId?.trim() ?? '';
     if (room.platform?.trim().toLowerCase() != platformId ||
         !RegExp(r'^[1-9][0-9]{0,19}$').hasMatch(resolvedId)) {
       throw const LiveRoomResolutionException('无法验证该抖音直播间');
     }
-    if (room.effectiveLiveStatus == LiveStatus.unknown ||
+    if (!_douyinRoomIdPattern.hasMatch(resolvedId) ||
+        room.effectiveLiveStatus == LiveStatus.unknown ||
         room.effectiveLiveStatus == LiveStatus.banned) {
       throw const LiveRoomResolutionException('无法确认该抖音直播间状态，请稍后重试');
     }
@@ -282,8 +300,14 @@ class DouyinLivePlatformAdapter implements LivePlatformAdapter {
   }
 
   @override
-  Future<LiveFavorite> refreshFavorite(LiveFavorite favorite) =>
-      resolveFavorite(favorite.roomUrl);
+  Future<LiveFavorite> refreshFavorite(LiveFavorite favorite) {
+    final roomUrl =
+        roomIdFromUrl(favorite.roomUrl) == null &&
+            _douyinRoomIdPattern.hasMatch(favorite.roomId)
+        ? 'https://live.douyin.com/${favorite.roomId}'
+        : favorite.roomUrl;
+    return resolveFavorite(roomUrl);
+  }
 
   static Future<LiveRoom> _fetchRecordingRoom({
     required String platform,
@@ -292,6 +316,9 @@ class DouyinLivePlatformAdapter implements LivePlatformAdapter {
     platform: platform,
     roomId: roomId,
   );
+
+  static Future<LiveRoom> _fetchWebRidRoom(String webRid) =>
+      DouyinSite().getRoomDetailByWebRid(webRid);
 }
 
 int? _asInt(Object? value) =>

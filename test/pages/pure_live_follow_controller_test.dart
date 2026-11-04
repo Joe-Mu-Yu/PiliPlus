@@ -118,6 +118,31 @@ void main() {
       expect(controller.errorMessage.value, contains('failing'));
     },
   );
+
+  test('limits concurrent room refresh requests to four', () async {
+    for (var id = 0; id < 12; id++) {
+      await repository.add(_favorite('tracked', '$id'));
+    }
+    var active = 0;
+    var peak = 0;
+    controller = PureLiveFollowController(
+      repository: repository,
+      adapters: [
+        _ConcurrencyTrackingAdapter(
+          onStart: () {
+            active++;
+            if (active > peak) peak = active;
+          },
+          onFinish: () => active--,
+        ),
+      ],
+    );
+
+    await controller.refreshFavorites();
+
+    expect(peak, lessThanOrEqualTo(4));
+    expect(controller.errorMessage.value, isNull);
+  });
 }
 
 LiveFavorite _favorite(String platform, String id) => LiveFavorite(
@@ -172,6 +197,34 @@ class _FailingRefreshAdapter implements LivePlatformAdapter {
   @override
   Future<LiveFavorite> refreshFavorite(LiveFavorite favorite) =>
       throw StateError('network unavailable');
+}
+
+class _ConcurrencyTrackingAdapter implements LivePlatformAdapter {
+  _ConcurrencyTrackingAdapter({required this.onStart, required this.onFinish});
+
+  final void Function() onStart;
+  final void Function() onFinish;
+
+  @override
+  String get platformId => 'tracked';
+
+  @override
+  bool canResolve(String rawLink) => false;
+
+  @override
+  Future<LiveFavorite> resolveFavorite(String rawLink) =>
+      throw UnimplementedError();
+
+  @override
+  Future<LiveFavorite> refreshFavorite(LiveFavorite favorite) async {
+    onStart();
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      return favorite;
+    } finally {
+      onFinish();
+    }
+  }
 }
 
 class _MemoryStore implements LiveFavoriteStore {

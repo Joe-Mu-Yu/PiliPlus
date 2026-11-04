@@ -140,6 +140,37 @@ void main() {
   });
 
   group('DouyinLivePlatformAdapter', () {
+    test('imports a Douyin root live link as its fixed web RID', () async {
+      const rawLink =
+          'https://www.douyin.com/root/live/549201737274?anchor_id=2008169746277500';
+      String? requestedWebRid;
+      final adapter = DouyinLivePlatformAdapter(
+        getRoomDetailForRecording: ({required platform, required roomId}) {
+          fail('A root live URL must resolve by web RID');
+        },
+        getRoomDetailByWebRid: (webRid) async {
+          requestedWebRid = webRid;
+          return LiveRoom(
+            platform: 'douyin',
+            roomId: webRid,
+            liveStatus: LiveStatus.live,
+            title: 'Root live room',
+          );
+        },
+      );
+
+      expect(adapter.canResolve(rawLink), isTrue);
+      final favorite = await adapter.resolveFavorite(rawLink);
+      expect(requestedWebRid, '549201737274');
+      expect(favorite.roomUrl, 'https://live.douyin.com/549201737274');
+      expect(
+        adapter.canResolve(
+          'https://www.douyin.com.evil.test/root/live/549201737274',
+        ),
+        isFalse,
+      );
+    });
+
     test('parses a canonical Douyin live link and ignores tracking query', () {
       expect(
         DouyinLivePlatformAdapter.roomIdFromUrl(
@@ -159,6 +190,18 @@ void main() {
         ),
         isNull,
       );
+      expect(
+        DouyinLivePlatformAdapter.roomIdFromUrl(
+          'https://webcast.amemv.com/douyin/webcast/reflow/7703888993011714852?sec_user_id=MS4wLjABAAAAiAgcUI6SO0bmf_r0Lgx7LtALSyWoeITAOTInzISow0LXWMY1jmVZt1-Rvy8ZGIuP',
+        ),
+        '7703888993011714852',
+      );
+      expect(
+        DouyinLivePlatformAdapter.roomIdFromUrl(
+          'https://webcast.amemv.com.evil.test/douyin/webcast/reflow/7703888993011714852',
+        ),
+        isNull,
+      );
     });
 
     test(
@@ -166,21 +209,19 @@ void main() {
       () async {
         String? requestedRoomId;
         final adapter = DouyinLivePlatformAdapter(
-          getRoomDetailForRecording:
-              ({required platform, required roomId}) async {
-                expect(platform, 'douyin');
-                requestedRoomId = roomId;
-                return LiveRoom(
-                  roomId: roomId,
-                  platform: 'douyin',
-                  title: 'Authorized live room',
-                  nick: 'Anchor',
-                  cover: 'https://img.test/cover.jpg',
-                  link: 'https://live.douyin.com/$roomId',
-                  liveStatus: LiveStatus.live,
-                  status: true,
-                );
-              },
+          getRoomDetailByWebRid: (webRid) async {
+            requestedRoomId = webRid;
+            return LiveRoom(
+              roomId: webRid,
+              platform: 'douyin',
+              title: 'Authorized live room',
+              nick: 'Anchor',
+              cover: 'https://img.test/cover.jpg',
+              link: 'https://live.douyin.com/$webRid',
+              liveStatus: LiveStatus.live,
+              status: true,
+            );
+          },
         );
 
         final favorite = await adapter.resolveFavorite(
@@ -196,16 +237,44 @@ void main() {
       },
     );
 
+    test(
+      'resolves a Douyin webcast share link and stores its canonical room URL',
+      () async {
+        String? requestedRoomId;
+        final adapter = DouyinLivePlatformAdapter(
+          getRoomDetailForRecording:
+              ({required platform, required roomId}) async {
+                requestedRoomId = roomId;
+                return LiveRoom(
+                  roomId: '106100309724',
+                  platform: platform,
+                  title: 'Shared live room',
+                  nick: 'Anchor',
+                  liveStatus: LiveStatus.live,
+                );
+              },
+        );
+
+        final favorite = await adapter.resolveFavorite(
+          'https://webcast.amemv.com/douyin/webcast/reflow/7703888993011714852?sec_user_id=MS4wLjABAAAAiAgcUI6SO0bmf_r0Lgx7LtALSyWoeITAOTInzISow0LXWMY1jmVZt1-Rvy8ZGIuP',
+        );
+
+        expect(requestedRoomId, '7703888993011714852');
+        expect(favorite.identityKey, 'douyin:106100309724');
+        expect(favorite.roomUrl, 'https://live.douyin.com/106100309724');
+        expect(favorite.title, 'Shared live room');
+      },
+    );
+
     test('keeps a verified offline room out of the live bucket', () async {
       final adapter = DouyinLivePlatformAdapter(
-        getRoomDetailForRecording:
-            ({required platform, required roomId}) async => LiveRoom(
-              roomId: roomId,
-              platform: platform,
-              title: 'Offline room',
-              liveStatus: LiveStatus.offline,
-              status: false,
-            ),
+        getRoomDetailByWebRid: (webRid) async => LiveRoom(
+          roomId: webRid,
+          platform: 'douyin',
+          title: 'Offline room',
+          liveStatus: LiveStatus.offline,
+          status: false,
+        ),
       );
 
       final favorite = await adapter.resolveFavorite(
@@ -215,19 +284,77 @@ void main() {
       expect(favorite.status, LiveFavoriteStatus.offline);
     });
 
+    test('refreshes a canonical 19-digit web room ID as a web RID', () async {
+      const webRid = '7703888993011714852';
+      String? requestedWebRid;
+      final adapter = DouyinLivePlatformAdapter(
+        getRoomDetailForRecording: ({required platform, required roomId}) {
+          fail('A canonical live.douyin.com URL must not use reflow room_id');
+        },
+        getRoomDetailByWebRid: (roomId) async {
+          requestedWebRid = roomId;
+          return LiveRoom(
+            roomId: roomId,
+            platform: 'douyin',
+            title: 'Refreshed room',
+            liveStatus: LiveStatus.offline,
+          );
+        },
+      );
+
+      final refreshed = await adapter.refreshFavorite(
+        LiveFavorite(
+          platformId: 'douyin',
+          roomId: webRid,
+          roomUrl: 'https://live.douyin.com/$webRid',
+        ),
+      );
+
+      expect(requestedWebRid, webRid);
+      expect(refreshed.title, 'Refreshed room');
+      expect(refreshed.status, LiveFavoriteStatus.offline);
+    });
+
+    test(
+      'refreshes a saved room with a legacy URL using its room ID',
+      () async {
+        const webRid = '124915647724';
+        String? requestedWebRid;
+        final adapter = DouyinLivePlatformAdapter(
+          getRoomDetailByWebRid: (roomId) async {
+            requestedWebRid = roomId;
+            return LiveRoom(
+              roomId: roomId,
+              platform: 'douyin',
+              title: 'Refreshed room',
+              liveStatus: LiveStatus.offline,
+            );
+          },
+        );
+
+        final refreshed = await adapter.refreshFavorite(
+          LiveFavorite(
+            platformId: 'douyin',
+            roomId: webRid,
+            roomUrl: 'https://www.douyin.com/user/legacy',
+          ),
+        );
+
+        expect(requestedWebRid, webRid);
+        expect(refreshed.roomUrl, 'https://live.douyin.com/$webRid');
+        expect(refreshed.status, LiveFavoriteStatus.offline);
+      },
+    );
+
     test(
       'does not create a favorite when room status cannot be verified',
       () async {
         final adapter = DouyinLivePlatformAdapter(
-          getRoomDetailForRecording:
-              ({
-                required platform,
-                required roomId,
-              }) async => LiveRoom(
-                roomId: roomId,
-                platform: platform,
-                liveStatus: LiveStatus.unknown,
-              ),
+          getRoomDetailByWebRid: (webRid) async => LiveRoom(
+            roomId: webRid,
+            platform: 'douyin',
+            liveStatus: LiveStatus.unknown,
+          ),
         );
 
         await expectLater(
@@ -246,13 +373,12 @@ void main() {
         final service = LiveFavoriteAddService(
           adapters: [
             DouyinLivePlatformAdapter(
-              getRoomDetailForRecording:
-                  ({required platform, required roomId}) async => LiveRoom(
-                    roomId: roomId,
-                    platform: platform,
-                    title: 'Authorized live room',
-                    liveStatus: LiveStatus.live,
-                  ),
+              getRoomDetailByWebRid: (webRid) async => LiveRoom(
+                roomId: webRid,
+                platform: 'douyin',
+                title: 'Authorized live room',
+                liveStatus: LiveStatus.live,
+              ),
             ),
           ],
           repository: LiveFavoriteRepository(store),
