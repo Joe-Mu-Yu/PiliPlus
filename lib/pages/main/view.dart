@@ -477,9 +477,9 @@ class _MainAppState extends PopScopeState<MainApp>
         surfaceContainer: _colorScheme.surfaceContainer.toARGB32(),
         onSurface: _colorScheme.onSurface.toARGB32(),
         outline: _colorScheme.outline.toARGB32(),
-        // The official Miuix floating bar uses a solid surface by default.
-        // Capture Flutter only when its diagnostic panel is explicitly enabled.
-        backdropSampling: _mainController.miuixBackdropSampling,
+        // Keep the Flutter backdrop live for the native Miuix glass effect.
+        // The user setting controls diagnostics only.
+        backdropSampling: true,
         backdropDebug: _mainController.miuixBackdropSampling,
         bottomLiftDp: Pref.floatingNavBottomLift,
         followMyHyperModifierNavigationLift:

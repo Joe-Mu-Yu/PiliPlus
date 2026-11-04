@@ -45,14 +45,17 @@ class RecorderPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool canGoBack = Navigator.of(context).canPop();
     return DefaultTabController(
       length: tabs.length,
       child: Scaffold(
         appBar: AppBar(
           title: Text(i18n("recorder_title")),
           centerTitle: true,
-          leading: canGoBack ? const BackButton() : null,
+          leading: IconButton(
+            tooltip: '返回',
+            onPressed: Get.back<void>,
+            icon: const Icon(Icons.arrow_back),
+          ),
 
           actions: [
             IconButton(

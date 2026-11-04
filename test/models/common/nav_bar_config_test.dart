@@ -17,7 +17,7 @@ void main() {
   });
 
   test(
-    'saved navigation order keeps legacy tabs and appends new destinations',
+    'saved navigation order excludes recording and appends new destinations',
     () {
       expect(
         NavigationBarType.fromSavedIndexes([2, 0, 1]),
@@ -26,13 +26,16 @@ void main() {
           NavigationBarType.home,
           NavigationBarType.dynamics,
           NavigationBarType.follow,
-          NavigationBarType.recorderCenter,
           NavigationBarType.movies,
         ],
       );
       expect(
         NavigationBarType.fromSavedIndexes([0, 1, 2, 3, 4]),
-        [...NavigationBarType.values],
+        NavigationBarType.destinations,
+      );
+      expect(
+        NavigationBarType.destinations,
+        isNot(contains(NavigationBarType.recorderCenter)),
       );
     },
   );

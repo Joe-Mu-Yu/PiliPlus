@@ -26,7 +26,13 @@ class HttpClient {
   static final HttpClient instance = HttpClient._();
   late Dio dio = _createDio();
   Dio _createDio() {
-    return Dio(BaseOptions(connectTimeout: _connectTimeout, receiveTimeout: _receiveTimeout, sendTimeout: _sendTimeout))
+    return Dio(
+        BaseOptions(
+          connectTimeout: _connectTimeout,
+          receiveTimeout: _receiveTimeout,
+          sendTimeout: _sendTimeout,
+        ),
+      )
       ..transformer = CustomTransformer()
       ..httpClientAdapter = IOHttpClientAdapter(
         createHttpClient: () {
@@ -124,7 +130,9 @@ class HttpClient {
         options: Options(
           responseType: ResponseType.json,
           headers: header,
-          contentType: formUrlEncoded ? Headers.formUrlEncodedContentType : null,
+          contentType: formUrlEncoded
+              ? Headers.formUrlEncodedContentType
+              : null,
         ),
         cancelToken: cancel,
       );
@@ -152,7 +160,10 @@ class HttpClient {
       if (e is DioException && e.type == DioExceptionType.badResponse) {
         return e.response!;
       }
-      throw HttpError(_errorHead);
+      final detail = e is DioException
+          ? '${e.type}${e.error == null ? '' : ': ${e.error}'}'
+          : e.toString();
+      throw HttpError('$_errorHead：$detail');
     }
   }
 
@@ -178,16 +189,23 @@ class HttpClient {
         options: Options(headers: header),
       );
 
-      if (response.statusCode == _downloadSuccessCode1 || response.statusCode == _downloadSuccessCode2) {
+      if (response.statusCode == _downloadSuccessCode1 ||
+          response.statusCode == _downloadSuccessCode2) {
         return await tempFile.rename(savePath);
       } else {
-        throw HttpError(_errorDownloadFailed, statusCode: response.statusCode ?? 0);
+        throw HttpError(
+          _errorDownloadFailed,
+          statusCode: response.statusCode ?? 0,
+        );
       }
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) {
         throw HttpError(_errorDownloadCancel);
       } else if (e.type == DioExceptionType.badResponse) {
-        throw HttpError(e.message ?? "", statusCode: e.response?.statusCode ?? 0);
+        throw HttpError(
+          e.message ?? "",
+          statusCode: e.response?.statusCode ?? 0,
+        );
       } else {
         throw HttpError(_errorDownload);
       }
@@ -196,7 +214,10 @@ class HttpClient {
 
   HttpError _handleError(dynamic e, String defaultMsg) {
     if (e is DioException && e.type == DioExceptionType.badResponse) {
-      return HttpError(e.message ?? defaultMsg, statusCode: e.response?.statusCode ?? 0);
+      return HttpError(
+        e.message ?? defaultMsg,
+        statusCode: e.response?.statusCode ?? 0,
+      );
     } else {
       return HttpError(defaultMsg);
     }
@@ -205,11 +226,16 @@ class HttpClient {
 
 class CustomTransformer extends BackgroundTransformer {
   @override
-  Future<dynamic> transformResponse(RequestOptions options, ResponseBody responseBody) async {
+  Future<dynamic> transformResponse(
+    RequestOptions options,
+    ResponseBody responseBody,
+  ) async {
     final contentType = responseBody.headers['content-type']?.first;
 
     if (contentType != null && contentType.toLowerCase().startsWith('json;')) {
-      responseBody.headers['content-type'] = ['application/json${contentType.substring(4)}'];
+      responseBody.headers['content-type'] = [
+        'application/json${contentType.substring(4)}',
+      ];
     }
 
     return super.transformResponse(options, responseBody);

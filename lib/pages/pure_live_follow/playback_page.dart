@@ -406,7 +406,11 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
               title: const Text('打开录制中心'),
               onTap: () {
                 Navigator.pop(context);
-                Get.to<void>(() => const RecorderCenterPage());
+                Navigator.of(context).push<void>(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const RecorderCenterPage(),
+                  ),
+                );
               },
             ),
             if (exists)

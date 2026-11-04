@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart' as account_follow;
+import 'package:PiliPlus/pages/recorder_center/view.dart';
 import 'package:PiliPlus/pages/pure_live_follow/controller.dart';
 import 'package:PiliPlus/services/hive_live_favorite_store.dart';
 import 'package:PiliPlus/services/live_favorite_repository.dart';
@@ -79,15 +80,8 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: TabBar(
-          key: const ValueKey('favorite-status-tabs'),
-          controller: _statusTabs,
-          tabs: const [
-            Tab(text: '直播中'),
-            Tab(text: '录播'),
-            Tab(text: '未开播'),
-          ],
-        ),
+        title: const Text('直播关注'),
+        titleSpacing: 16,
         actions: [
           IconButton(
             tooltip: 'B站账号关注',
@@ -95,6 +89,23 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
               () => const account_follow.LiveFollowPage(),
             ),
             icon: const Icon(Icons.live_tv_outlined),
+          ),
+          TextButton(
+            key: const ValueKey('recorder-center-action'),
+            style: TextButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              foregroundColor: Theme.of(context)
+                  .colorScheme
+                  .onSecondaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              shape: const StadiumBorder(),
+            ),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const RecorderCenterPage(),
+              ),
+            ),
+            child: const Text('录制'),
           ),
           IconButton(
             tooltip: '添加直播间',
@@ -111,6 +122,37 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
           ..sort();
         return Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: TabBar(
+                  key: const ValueKey('favorite-status-tabs'),
+                  controller: _statusTabs,
+                  dividerColor: Colors.transparent,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicatorPadding: const EdgeInsets.all(4),
+                  indicator: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  labelColor: Theme.of(context)
+                      .colorScheme
+                      .onSecondaryContainer,
+                  unselectedLabelColor: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                  tabs: const [
+                    Tab(text: '直播中'),
+                    Tab(text: '录播'),
+                    Tab(text: '未开播'),
+                  ],
+                ),
+              ),
+            ),
             _buildHorizontalFilters<String?>(
               key: const ValueKey('favorite-platform-tabs'),
               values: [null, ...platforms],
@@ -130,14 +172,43 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                 onSelected: (value) => setState(() => _tagFilter = value),
               ),
             if (_controller.errorMessage.value case final message?)
-              MaterialBanner(
-                content: Text(message),
-                actions: [
-                  TextButton(
-                    onPressed: _controller.refreshFavorites,
-                    child: const Text('重试'),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 19,
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          message,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onErrorContainer,
+                              ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _controller.refreshFavorites,
+                        child: const Text('重试'),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             Expanded(
               child: TabBarView(
@@ -244,7 +315,7 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                       crossAxisCount: count,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
-                      mainAxisExtent: count == 1 ? 132 : 200,
+                      mainAxisExtent: count == 1 ? 124 : 200,
                     ),
                     itemCount: filtered.length,
                     itemBuilder: (context, index) =>
@@ -266,15 +337,45 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
         child: Row(
           children: [
             SizedBox(
-              width: 144,
+              width: 116,
               height: double.infinity,
-              child: favorite.coverUrl?.isNotEmpty == true
-                  ? Image.network(
-                      favorite.coverUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _coverFallback(colors),
-                    )
-                  : _coverFallback(colors),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  favorite.coverUrl?.isNotEmpty == true
+                      ? Image.network(
+                          favorite.coverUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _coverFallback(colors),
+                        )
+                      : _coverFallback(colors),
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors.surface.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _statusIcon(favorite.status),
+                          const SizedBox(width: 5),
+                          Text(
+                            _statusLabel(favorite.status),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: Padding(
@@ -301,14 +402,12 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                     const Spacer(),
                     Row(
                       children: [
-                        _statusIcon(favorite.status),
-                        const SizedBox(width: 5),
                         Expanded(
                           child: Text(
-                            '${_statusLabel(favorite.status)} · ${_platformLabel(favorite.platformId)}',
+                            _platformLabel(favorite.platformId),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium,
+                            style: Theme.of(context).textTheme.labelLarge,
                           ),
                         ),
                         if (favorite.platformId == 'douyin' &&

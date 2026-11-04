@@ -131,7 +131,7 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
           ExcludeFocus(
             child: IgnorePointer(
               child: NavigationBar(
-                destinations: NavigationBarType.values
+                destinations: NavigationBarType.destinations
                     .map(
                       (item) => NavigationDestination(
                         icon: item.icon,
