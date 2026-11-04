@@ -23,6 +23,7 @@ class PureLiveFollowController extends GetxController {
   final isLoading = false.obs;
   final isAdding = false.obs;
   final errorMessage = RxnString();
+  Future<void>? _refreshInFlight;
 
   Future<void> load({bool markUnverified = false}) async {
     isLoading.value = true;
@@ -63,7 +64,10 @@ class PureLiveFollowController extends GetxController {
     }
   }
 
-  Future<void> refreshFavorites() async {
+  Future<void> refreshFavorites() => _refreshInFlight ??= _refreshFavorites()
+      .whenComplete(() => _refreshInFlight = null);
+
+  Future<void> _refreshFavorites() async {
     isLoading.value = true;
     errorMessage.value = null;
     try {

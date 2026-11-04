@@ -80,20 +80,33 @@ class PureLivePlaybackSource {
     LivePlaybackCatalog catalog, {
     int qualityIndex = 0,
     int lineIndex = 0,
+    ResolvedLivePlaybackSource? currentSource,
   }) async {
     if (qualityIndex < 0 || qualityIndex >= catalog.qualities.length) {
       throw RangeError.index(qualityIndex, catalog.qualities, 'qualityIndex');
     }
     final quality = catalog.qualities[qualityIndex];
-    final resolution = await site.resolvePlayUrls(
-      detail: catalog.room,
-      quality: quality,
-    );
-    final lines = resolution.urls
-        .map((url) => url.trim())
-        .where((url) => url.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+    final List<String> lines;
+    if (currentSource != null &&
+        identical(currentSource.room, catalog.room) &&
+        currentSource.qualityIndex == qualityIndex &&
+        site is! LivePlayRecoveryResolver) {
+      lines = currentSource.lines;
+    } else {
+      final resolution =
+          currentSource != null &&
+              identical(currentSource.room, catalog.room) &&
+              site is LivePlayRecoveryResolver
+          ? await site.resolvePlayUrlsForRecovery(
+              detail: catalog.room,
+              quality: quality,
+            )
+          : await site.resolvePlayUrls(
+              detail: catalog.room,
+              quality: quality,
+            );
+      lines = normalizeResolvedPlayUrls(resolution.urls);
+    }
     if (lines.isEmpty) {
       throw StateError('直播平台未返回可播放的视频流地址');
     }

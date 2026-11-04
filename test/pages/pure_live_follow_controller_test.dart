@@ -143,6 +143,42 @@ void main() {
     expect(peak, lessThanOrEqualTo(4));
     expect(controller.errorMessage.value, isNull);
   });
+
+  test(
+    'coalesces overlapping refreshes without multiplying platform requests',
+    () async {
+      for (var id = 0; id < 12; id++) {
+        await repository.add(_favorite('tracked', '$id'));
+      }
+      var requests = 0;
+      var active = 0;
+      var peak = 0;
+      controller = PureLiveFollowController(
+        repository: repository,
+        adapters: [
+          _ConcurrencyTrackingAdapter(
+            onStart: () {
+              requests++;
+              active++;
+              if (active > peak) peak = active;
+            },
+            onFinish: () => active--,
+          ),
+        ],
+      );
+
+      await Future.wait([
+        controller.refreshFavorites(),
+        controller.refreshFavorites(),
+        controller.refreshFavorites(),
+      ]);
+
+      expect(peak, lessThanOrEqualTo(4));
+      expect(requests, 12);
+      expect(controller.isLoading.value, isFalse);
+      expect(controller.errorMessage.value, isNull);
+    },
+  );
 }
 
 LiveFavorite _favorite(String platform, String id) => LiveFavorite(

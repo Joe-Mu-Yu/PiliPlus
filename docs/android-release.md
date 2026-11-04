@@ -5,12 +5,12 @@
 `pubspec.yaml` 保持上游的三段语义版本（现在是 `2.1.4+1`），不要改成四段，以免破坏 Pub / 其他平台构建。
 `tool/release.json` 记录对应的 `upstreamVersion` 和本分支 `revision`：
 
-- 当前版本：`2.1.4.0`；同一上游版本后续修复递增为 `2.1.4.1`、`2.1.4.2`。
+- 当前配置版本：`2.1.4.4`；同一上游版本后续修复继续递增 revision。`v2.1.4.3` 的错误 Release 已撤下，但标签仍保留，不覆盖历史标签。
 - 升级上游版本时，同步修改 `pubspec.yaml` 与 `upstreamVersion`，并将 `revision` 重置为 `0`。
 - Android `versionName` 与应用内版本均为四段，不再附加提交哈希；哈希单独保存到 `pili.hash`。
-- `versionCode = major × 10000000 + minor × 100000 + patch × 100 + revision`；当前版本对应 `20100400`。
+- `versionCode = major × 10000000 + minor × 100000 + patch × 100 + revision`；当前配置版本对应 `20100404`。
 - 范围：major 0–199，minor 0–99，patch 0–999，revision 0–99。脚本拒绝超界，以保证升级顺序和 Android 整数限制。
-- Release 标签严格为 `v上游版本.修订号`，例如当前版本为 `v2.1.4.0`。正式发布后不可覆盖同一标签；发布修复版必须递增 revision。
+- Release 标签严格为 `v上游版本.修订号`，例如当前配置版本为 `v2.1.4.4`。正式发布后不可覆盖同一标签；发布修复版必须递增 revision。
 
 ## 配置签名 Secrets
 

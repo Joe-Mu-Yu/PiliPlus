@@ -85,6 +85,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   Future<void> _resolveAndPlay({
     int qualityIndex = 0,
     int lineIndex = 0,
+    ResolvedLivePlaybackSource? currentSource,
   }) async {
     setState(() {
       _loading = true;
@@ -99,6 +100,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
         catalog,
         qualityIndex: qualityIndex,
         lineIndex: lineIndex,
+        currentSource: currentSource,
       );
       if (!mounted) return;
       _catalog = catalog;
@@ -277,7 +279,10 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       ),
     );
     if (selected != null && mounted) {
-      await _resolveAndPlay(qualityIndex: selected);
+      await _resolveAndPlay(
+        qualityIndex: selected,
+        currentSource: _activeSource,
+      );
     }
   }
 
@@ -309,6 +314,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       await _resolveAndPlay(
         qualityIndex: source.qualityIndex,
         lineIndex: selected,
+        currentSource: source,
       );
     }
   }
