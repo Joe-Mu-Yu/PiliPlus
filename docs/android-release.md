@@ -24,6 +24,8 @@
 | `KEY_ALIAS` | 签名密钥别名 |
 | `KEY_PASSWORD` | 密钥密码 |
 | `DEEPSEEK_API_KEY` | 可选；用于以 `deepseek-v4-flash` 生成中文 Release Notes |
+| `HYPER_FIREBASE_ANDROID_API_KEY` | 必填；主应用 Android Firebase 客户端 key，需轮换并限制到包名与签名证书 |
+| `PURE_LIVE_FIREBASE_ANDROID_API_KEY` | 必填；Pure Live Android Firebase 客户端 key，需轮换并限制到 Android 应用 |
 
 **必须使用此前本机 Release 的同一把签名密钥**，否则无法覆盖安装并保留现有应用数据。不要重新生成密钥替代旧密钥。
 Base64 不是加密；不要将编码内容、密码、`key.properties` 或 keystore 提交到 Git。
@@ -85,6 +87,8 @@ python3 scripts/release_metadata.py
 ./scripts/flutterw build apk --release --split-per-abi --no-pub \
   --build-name=2.3.0.0 --build-number=20300000 \
   --dart-define-from-file=pili_release.json \
+  --dart-define=HYPER_FIREBASE_ANDROID_API_KEY="$HYPER_FIREBASE_ANDROID_API_KEY" \
+  --dart-define=PURE_LIVE_FIREBASE_ANDROID_API_KEY="$PURE_LIVE_FIREBASE_ANDROID_API_KEY" \
   --android-project-arg requireReleaseSigning=true
 ```
 

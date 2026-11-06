@@ -29,6 +29,10 @@ on:
         required: true
       DEEPSEEK_API_KEY:
         required: false
+      HYPER_FIREBASE_ANDROID_API_KEY:
+        required: true
+      PURE_LIVE_FIREBASE_ANDROID_API_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -74,6 +78,26 @@ jobs:
                   'this repository. Environment secrets require an explicitly configured job '
                   'environment. Reusable workflow callers must pass all four secrets or use '
                   'secrets: inherit. See docs/android-release.md; do not generate a replacement key.'
+              )
+          PY
+      - name: Validate Android Firebase configuration secrets
+        env:
+          HYPER_FIREBASE_ANDROID_API_KEY: ${{ secrets.HYPER_FIREBASE_ANDROID_API_KEY }}
+          PURE_LIVE_FIREBASE_ANDROID_API_KEY: ${{ secrets.PURE_LIVE_FIREBASE_ANDROID_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os
+          required = (
+              'HYPER_FIREBASE_ANDROID_API_KEY',
+              'PURE_LIVE_FIREBASE_ANDROID_API_KEY',
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit(
+                  '::error title=Missing Android Firebase configuration::Missing required '
+                  'Actions secrets: ' + ', '.join(missing) + '. Configure the rotated, '
+                  'application-restricted client keys under Settings > Secrets and variables '
+                  '> Actions. Do not commit them to the repository.'
               )
           PY
       - name: Resolve flavor version
@@ -175,10 +199,14 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          HYPER_FIREBASE_ANDROID_API_KEY: ${{ secrets.HYPER_FIREBASE_ANDROID_API_KEY }}
+          PURE_LIVE_FIREBASE_ANDROID_API_KEY: ${{ secrets.PURE_LIVE_FIREBASE_ANDROID_API_KEY }}
         run: >-
           ./scripts/flutterw build apk --release --split-per-abi --no-pub
           --build-name="$VERSION" --build-number="$VERSION_CODE"
           --dart-define-from-file=pili_release.json
+          --dart-define=HYPER_FIREBASE_ANDROID_API_KEY="$HYPER_FIREBASE_ANDROID_API_KEY"
+          --dart-define=PURE_LIVE_FIREBASE_ANDROID_API_KEY="$PURE_LIVE_FIREBASE_ANDROID_API_KEY"
           --android-project-arg requireReleaseSigning=true
       - name: Verify and collect APKs
         env:

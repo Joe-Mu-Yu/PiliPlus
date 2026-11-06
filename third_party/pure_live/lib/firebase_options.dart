@@ -43,16 +43,46 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REDACTED_GOOGLE_API_KEY',
+  static FirebaseOptions get android => _requireApiKey(
+    _android,
+    'PURE_LIVE_FIREBASE_ANDROID_API_KEY',
+  );
+
+  static FirebaseOptions get ios => _requireApiKey(
+    _ios,
+    'PURE_LIVE_FIREBASE_APPLE_API_KEY',
+  );
+
+  static FirebaseOptions get macos => _requireApiKey(
+    _macos,
+    'PURE_LIVE_FIREBASE_APPLE_API_KEY',
+  );
+
+  static FirebaseOptions get windows => _requireApiKey(
+    _windows,
+    'PURE_LIVE_FIREBASE_WINDOWS_API_KEY',
+  );
+
+  static FirebaseOptions _requireApiKey(
+    FirebaseOptions options,
+    String define,
+  ) {
+    if (options.apiKey.isEmpty) {
+      throw StateError('Missing $define compile-time definition.');
+    }
+    return options;
+  }
+
+  static const FirebaseOptions _android = FirebaseOptions(
+    apiKey: String.fromEnvironment('PURE_LIVE_FIREBASE_ANDROID_API_KEY'),
     appId: '1:461427160915:android:85d419f5499527ef82d3a6',
     messagingSenderId: '461427160915',
     projectId: 'pure-live-26c7f',
     storageBucket: 'pure-live-26c7f.firebasestorage.app',
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'REDACTED_GOOGLE_API_KEY',
+  static const FirebaseOptions _ios = FirebaseOptions(
+    apiKey: String.fromEnvironment('PURE_LIVE_FIREBASE_APPLE_API_KEY'),
     appId: '1:461427160915:ios:ecdf416614414ce482d3a6',
     messagingSenderId: '461427160915',
     projectId: 'pure-live-26c7f',
@@ -60,8 +90,8 @@ class DefaultFirebaseOptions {
     iosBundleId: 'com.mystyle.purelive',
   );
 
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'REDACTED_GOOGLE_API_KEY',
+  static const FirebaseOptions _macos = FirebaseOptions(
+    apiKey: String.fromEnvironment('PURE_LIVE_FIREBASE_APPLE_API_KEY'),
     appId: '1:461427160915:ios:ecdf416614414ce482d3a6',
     messagingSenderId: '461427160915',
     projectId: 'pure-live-26c7f',
@@ -69,8 +99,8 @@ class DefaultFirebaseOptions {
     iosBundleId: 'com.mystyle.purelive',
   );
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'REDACTED_GOOGLE_API_KEY',
+  static const FirebaseOptions _windows = FirebaseOptions(
+    apiKey: String.fromEnvironment('PURE_LIVE_FIREBASE_WINDOWS_API_KEY'),
     appId: '1:461427160915:web:b1399df7920378d282d3a6',
     messagingSenderId: '461427160915',
     projectId: 'pure-live-26c7f',

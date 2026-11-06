@@ -13,7 +13,15 @@
    ```
 
    此命令会发布仓库中的 `firestore.rules`。本工程不会自动部署规则。
-4. Android Firebase 应用包名必须是 `com.aritxonly.hyperpiliplus`。配置文件放在 `android/app/google-services.json`。
+4. Android Firebase 应用包名必须是 `com.aritxonly.hyperpiliplus`。轮换并限制 Android API key 后，通过构建参数注入，不要把 `google-services.json` 或 key 提交到 Git：
+
+   ```sh
+   ./scripts/flutterw build apk \
+     --dart-define=HYPER_FIREBASE_ANDROID_API_KEY="$HYPER_FIREBASE_ANDROID_API_KEY" \
+     --dart-define=PURE_LIVE_FIREBASE_ANDROID_API_KEY="$PURE_LIVE_FIREBASE_ANDROID_API_KEY"
+   ```
+
+   本地变量值、CI Secrets 和生成的配置文件都不得提交。其他平台分别使用 `PURE_LIVE_FIREBASE_APPLE_API_KEY` 与 `PURE_LIVE_FIREBASE_WINDOWS_API_KEY`。
 
 ## 发送公告
 
@@ -27,4 +35,4 @@
 
 应用默认不共享位置。开启前会说明数据内容；定位只在应用前台并取得使用期间定位授权后更新。关闭开关会停止采集并删除该 UID 的最新文档。若卸载应用或清除其数据，设备无法发送删除请求，最后一条记录可能留在 Firestore，需要在控制台手动删除。
 
-Firestore 规则禁止客户端读取位置文档，并只允许已认证设备写入/删除自己的 UID 文档。项目所有者仍可从 Firebase Console 管理这些数据。`google-services.json` 与 Flutter Firebase 配置中的 API 标识属于客户端配置，不是服务账号私钥；不要将服务账号密钥或 Admin SDK 凭证放入应用。
+Firestore 规则禁止客户端读取位置文档，并只允许已认证设备写入/删除自己的 UID 文档。项目所有者仍可从 Firebase Console 管理这些数据。Firebase 客户端 API key 最终会存在于安装包中，不能当作服务端秘密；必须在 Google Cloud Console 限制到对应 Android 包名与签名证书，并限制可调用 API。仓库仍不保存这些 key，也绝不能保存服务账号私钥或 Admin SDK 凭证。

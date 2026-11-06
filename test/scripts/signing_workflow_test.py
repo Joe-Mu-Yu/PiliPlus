@@ -13,12 +13,19 @@ WORKFLOW = ROOT / '.github/workflows/android-release.yml'
 REQUIRED = (
     'SIGN_KEYSTORE_BASE64', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD',
 )
+FIREBASE_REQUIRED = (
+    'HYPER_FIREBASE_ANDROID_API_KEY',
+    'PURE_LIVE_FIREBASE_ANDROID_API_KEY',
+)
 
 
 class SigningWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.workflow = WORKFLOW.read_text()
         self.step, self.command = self.extract_step('Validate release signing secrets')
+        self.firebase_step, self.firebase_command = self.extract_step(
+            'Validate Android Firebase configuration secrets',
+        )
         self.decode_step, self.decode_command = self.extract_step('Decode signing keystore')
 
     def extract_step(self, name):
@@ -29,13 +36,21 @@ class SigningWorkflowTest(unittest.TestCase):
         )
         self.assertIsNotNone(match)
         step = match.group(0)
-        command = textwrap.dedent(step.split('        run: |\n', 1)[1])
+        command = (
+            textwrap.dedent(step.split('        run: |\n', 1)[1])
+            if '        run: |\n' in step
+            else ''
+        )
         return step, command
 
     def run_step(self, supplied, command=None):
         with tempfile.TemporaryDirectory() as temporary:
             environment = {
-                **{name: value for name, value in os.environ.items() if name not in REQUIRED},
+                **{
+                    name: value
+                    for name, value in os.environ.items()
+                    if name not in REQUIRED + FIREBASE_REQUIRED
+                },
                 'RUNNER_TEMP': temporary,
                 'GITHUB_REPOSITORY': 'Joe-Mu-Yu/PiliPlus',
                 'GITHUB_SERVER_URL': 'https://github.com',
@@ -121,6 +136,38 @@ class SigningWorkflowTest(unittest.TestCase):
         self.assertGreater(
             self.workflow.index(self.decode_step),
             self.workflow.index('      - name: Test release metadata and app'),
+        )
+
+    def test_firebase_check_reports_only_missing_secret_names(self):
+        for missing in FIREBASE_REQUIRED:
+            with self.subTest(missing=missing):
+                supplied = {
+                    name: 'private-placeholder-' + name
+                    for name in FIREBASE_REQUIRED if name != missing
+                }
+                output = self.run_step(supplied, self.firebase_command)
+                self.assertIn(missing, output)
+                self.assertIn('::error', output)
+                self.assertIn('Do not commit', output)
+                for value in supplied.values():
+                    self.assertNotIn(value, output)
+
+    def test_android_build_injects_only_android_firebase_keys(self):
+        build_step, _ = self.extract_step('Build signed APKs')
+        for name in FIREBASE_REQUIRED:
+            self.assertIn('${{ secrets.' + name + ' }}', build_step)
+            self.assertIn('--dart-define=' + name, build_step)
+        self.assertNotIn('PURE_LIVE_FIREBASE_APPLE_API_KEY', build_step)
+        self.assertNotIn('PURE_LIVE_FIREBASE_WINDOWS_API_KEY', build_step)
+
+    def test_firebase_check_precedes_sdk_and_dependency_setup(self):
+        self.assertLess(
+            self.workflow.index(self.firebase_step),
+            self.workflow.index('      - name: Resolve flavor version'),
+        )
+        self.assertLess(
+            self.workflow.index(self.firebase_step),
+            self.workflow.index('      - name: Set up Java'),
         )
 
 
