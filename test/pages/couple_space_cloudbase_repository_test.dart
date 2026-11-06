@@ -5,6 +5,13 @@ import 'package:PiliPlus/pages/couple_space/cloudbase_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('app pages reuse one CloudBase repository session', () {
+    expect(
+      CoupleSpaceCloudRepository.appSession,
+      same(CoupleSpaceCloudRepository.appSession),
+    );
+  });
+
   test('CloudBase login errors are translated for the native UI', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final subscription = server.listen((request) async {
@@ -38,6 +45,58 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('an invalid refresh token clears the reusable app session', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final subscription = server.listen((request) async {
+      request.response.headers.contentType = ContentType.json;
+      if (request.uri.path == '/auth/v1/signin') {
+        await utf8.decoder.bind(request).join();
+        request.response.write(
+          jsonEncode({
+            'access_token': 'expired-access-token',
+            'refresh_token': 'revoked-refresh-token',
+            'sub': 'uid-a',
+            'expires_in': 0,
+          }),
+        );
+      } else if (request.uri.path == '/auth/v1/token') {
+        request.response
+          ..statusCode = HttpStatus.badRequest
+          ..write(jsonEncode({'error': 'invalid_refresh_token'}));
+      }
+      await request.response.close();
+    });
+    addTearDown(() async {
+      await subscription.cancel();
+      await server.close(force: true);
+    });
+
+    final repository = CoupleSpaceCloudRepository(
+      baseUrl: 'http://${server.address.address}:${server.port}',
+      deviceId: 'test-device',
+    );
+    await repository.signIn(account: 'member-a', password: 'secret');
+    expect(repository.isSignedIn, isTrue);
+
+    await expectLater(
+      repository.loadSpace(),
+      throwsA(
+        isA<CoupleSpaceCloudException>()
+            .having(
+              (error) => error.code,
+              'code',
+              'SESSION_EXPIRED',
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              '小窝登录已过期，请重新登录',
+            ),
+      ),
+    );
+    expect(repository.isSignedIn, isFalse);
   });
 
   test(
@@ -126,6 +185,18 @@ void main() {
       final snapshot = await repository.loadSpace();
       expect(snapshot?.spaceId, 'space-a');
       expect(snapshot?.revision, 2);
+      final restoredSnapshot = await repository.loadSpace();
+      expect(restoredSnapshot?.spaceId, 'space-a');
+      expect(
+        requests.where((request) => request == 'POST /auth/v1/signin'),
+        hasLength(1),
+      );
+      expect(
+        requests.where(
+          (request) => request == 'GET /v1/rdb/rest/couple_spaces',
+        ),
+        hasLength(2),
+      );
       expect(
         await repository.saveState(
           spaceId: 'space-a',

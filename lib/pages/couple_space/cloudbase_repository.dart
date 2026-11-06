@@ -64,6 +64,9 @@ class CoupleSpaceCloudSnapshot {
 }
 
 class CoupleSpaceCloudRepository {
+  static final CoupleSpaceCloudRepository appSession =
+      CoupleSpaceCloudRepository();
+
   CoupleSpaceCloudRepository({
     Dio? dio,
     String? baseUrl,
@@ -326,26 +329,46 @@ class CoupleSpaceCloudRepository {
     if (current == null || current.refreshToken.isEmpty) {
       throw const CoupleSpaceCloudException('小窝登录已过期，请重新登录');
     }
-    final token = _asMap(
-      await _requestJson(
-        'POST',
-        '/auth/v1/token',
-        authenticated: false,
-        body: {
-          'grant_type': 'refresh_token',
-          'refresh_token': current.refreshToken,
-        },
-      ),
-    );
-    _session = CoupleSpaceSession(
-      accessToken: token['access_token']?.toString() ?? '',
-      refreshToken: token['refresh_token']?.toString() ?? current.refreshToken,
-      userId: token['sub']?.toString() ?? current.userId,
-      expiresAt: DateTime.now().add(
-        Duration(seconds: (token['expires_in'] as num?)?.toInt() ?? 7200),
-      ),
-      account: current.account,
-    );
+    try {
+      final token = _asMap(
+        await _requestJson(
+          'POST',
+          '/auth/v1/token',
+          authenticated: false,
+          body: {
+            'grant_type': 'refresh_token',
+            'refresh_token': current.refreshToken,
+          },
+        ),
+      );
+      final accessToken = token['access_token']?.toString() ?? '';
+      if (accessToken.isEmpty) {
+        throw const CoupleSpaceCloudException(
+          '小窝登录已过期，请重新登录',
+          code: 'SESSION_EXPIRED',
+        );
+      }
+      _session = CoupleSpaceSession(
+        accessToken: accessToken,
+        refreshToken:
+            token['refresh_token']?.toString() ?? current.refreshToken,
+        userId: token['sub']?.toString() ?? current.userId,
+        expiresAt: DateTime.now().add(
+          Duration(seconds: (token['expires_in'] as num?)?.toInt() ?? 7200),
+        ),
+        account: current.account,
+      );
+    } on CoupleSpaceCloudException catch (error) {
+      if (error.statusCode == 400 || error.statusCode == 401) {
+        signOut();
+        throw CoupleSpaceCloudException(
+          '小窝登录已过期，请重新登录',
+          code: 'SESSION_EXPIRED',
+          statusCode: error.statusCode,
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<Response<dynamic>> _performRequest(

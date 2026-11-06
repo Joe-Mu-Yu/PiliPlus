@@ -14,7 +14,9 @@ const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
 const _cloudPhotoPrefix = 'cloud:';
 
 class CoupleSpacePage extends StatefulWidget {
-  const CoupleSpacePage({super.key});
+  const CoupleSpacePage({super.key, this.cloudRepository});
+
+  final CoupleSpaceCloudRepository? cloudRepository;
 
   @override
   State<CoupleSpacePage> createState() => _CoupleSpacePageState();
@@ -278,13 +280,14 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
   Color get _mutedColor => _colors.onSurfaceVariant;
   late Map<String, dynamic> _data;
   late final Map<String, dynamic> _legacyData;
-  final _cloud = CoupleSpaceCloudRepository();
+  late final CoupleSpaceCloudRepository _cloud;
   final _account = TextEditingController();
   final _password = TextEditingController();
   final _inviteCode = TextEditingController();
   final Map<String, String> _photoUrls = {};
   CoupleSpaceCloudSnapshot? _snapshot;
   Future<void> _saveQueue = Future<void>.value();
+  bool _restoringSession = false;
   bool _busy = false;
   String? _cloudError;
   int _tab = 0;
@@ -296,11 +299,16 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
   @override
   void initState() {
     super.initState();
+    _cloud = widget.cloudRepository ?? CoupleSpaceCloudRepository.appSession;
     final raw = GStorage.localCache.get(_storeKey);
     _data = raw is String
         ? Map<String, dynamic>.from(jsonDecode(raw))
         : _initialData();
     _legacyData = Map<String, dynamic>.from(jsonDecode(jsonEncode(_data)));
+    if (_cloud.isSignedIn) {
+      _restoringSession = true;
+      unawaited(_restoreCloudSession());
+    }
   }
 
   @override
@@ -385,7 +393,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     _data['memberNames'] = names;
   }
 
-  void _applySnapshot(CoupleSpaceCloudSnapshot snapshot) {
+  Future<void> _applySnapshot(CoupleSpaceCloudSnapshot snapshot) async {
     final payload = snapshot.payload.isEmpty
         ? _initialData()
         : Map<String, dynamic>.from(jsonDecode(jsonEncode(snapshot.payload)));
@@ -402,8 +410,8 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
         : names[otherId]?.toString() ?? 'TA';
     _snapshot = snapshot;
     _data = payload;
-    GStorage.localCache.put(_storeKey, jsonEncode(_data));
-    _resolvePhotoUrls();
+    await GStorage.localCache.put(_storeKey, jsonEncode(_data));
+    unawaited(_resolvePhotoUrls());
   }
 
   Future<void> _resolvePhotoUrls() async {
@@ -437,6 +445,28 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     });
   }
 
+  Future<void> _restoreCloudSession() async {
+    try {
+      final snapshot = await _cloud.loadSpace();
+      if (!mounted) return;
+      if (snapshot != null) await _applySnapshot(snapshot);
+    } catch (error) {
+      if (!mounted) return;
+      _cloudError = error.toString();
+    } finally {
+      if (mounted) setState(() => _restoringSession = false);
+    }
+  }
+
+  void _signOut() {
+    setState(() {
+      _cloud.signOut();
+      _snapshot = null;
+      _photoUrls.clear();
+      _cloudError = null;
+    });
+  }
+
   Future<void> _loadCloudSpace({bool showMessage = true}) async {
     var snapshot = await _cloud.loadSpace();
     if (snapshot != null) {
@@ -460,7 +490,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       } else if (pendingRevision != null) {
         _showMessage('云端已有新内容，本机未同步副本已保留但没有覆盖 TA 的更新');
       }
-      _applySnapshot(snapshot);
+      await _applySnapshot(snapshot);
     }
     if (mounted) setState(() {});
     if (showMessage) _showMessage('已同步 CloudBase 最新内容');
@@ -471,14 +501,14 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       final payload = _initialData();
       payload['nickname'] = _cloud.account;
       payload['memberNames'] = {_cloud.userId: _cloud.account};
-      _applySnapshot(await _cloud.createSpace(payload));
+      await _applySnapshot(await _cloud.createSpace(payload));
     });
   }
 
   Future<void> _joinSpace() async {
     if (_inviteCode.text.trim().isEmpty) return;
     await _runCloudAction(() async {
-      _applySnapshot(await _cloud.joinSpace(_inviteCode.text.trim()));
+      await _applySnapshot(await _cloud.joinSpace(_inviteCode.text.trim()));
       _inviteCode.clear();
     });
   }
@@ -674,6 +704,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_restoringSession) return _sessionRestorePage();
     if (!_cloud.isSignedIn) return _loginPage();
     if (_snapshot == null) return _spaceSetupPage();
     return SimpleScaffold(
@@ -716,6 +747,20 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       ),
     );
   }
+
+  Widget _sessionRestorePage() => SimpleScaffold(
+    appBar: AppBar(title: const Text('小窝')),
+    body: const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('正在恢复小窝登录…'),
+        ],
+      ),
+    ),
+  );
 
   Widget _loginPage() => SimpleScaffold(
     appBar: AppBar(title: const Text('登录小窝')),
@@ -805,7 +850,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       title: const Text('连接小窝'),
       actions: [
         TextButton(
-          onPressed: () => setState(_cloud.signOut),
+          onPressed: _signOut,
           child: const Text('退出'),
         ),
       ],
@@ -1828,11 +1873,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       ),
     ),
     TextButton.icon(
-      onPressed: () => setState(() {
-        _cloud.signOut();
-        _snapshot = null;
-        _photoUrls.clear();
-      }),
+      onPressed: _signOut,
       icon: const Icon(Icons.logout),
       label: const Text('退出小窝账号'),
     ),

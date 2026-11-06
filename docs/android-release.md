@@ -14,7 +14,7 @@
 
 ## 配置签名 Secrets
 
-仓库：`AritxOnly/Hyper-PiliPlus` → Settings → Secrets and variables → Actions。
+仓库：`Joe-Mu-Yu/PiliPlus` → Settings → Secrets and variables → Actions。
 按 GitHub 的 [Secrets 文档](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) 添加：
 
 | 名称 | 内容 |
@@ -62,7 +62,7 @@ git push origin refs/tags/v2.3.0.1
 4. 勾选 `publish`：构建和签名验证成功后创建当前四段版本对应的正式 Release，附 APK、SHA256SUMS 和 release-metadata.json。
 5. 老的 **Build** 工作流中的 Android 选项也复用新流程。若填写 tag，必须与配置生成的标签完全一致；它的其他平台仍沿用上游流程与三段版本。
 
-应用启动后自动通过 `AritxOnly/Hyper-PiliPlus` 的 `/releases/latest` 接口检查更新，也可在关于页手动检查；按四段数字而不是时间比较，同版本重编译不会反复提示。可在设置中关闭或重新开启自动检查。
+应用启动后自动通过 `Joe-Mu-Yu/PiliPlus` 的 `/releases/latest` 接口检查更新，也可在关于页手动检查；按四段数字而不是时间比较，同版本重编译不会反复提示。可在设置中关闭或重新开启自动检查。
 草稿、预发布和三段旧标签不会被当成新的正式 flavor 版本。只有上传 Artifact、不发布 Release 时，不会触发应用更新提示。
 详情参见 GitHub 的 [Release API](https://docs.github.com/en/rest/releases/releases#get-the-latest-release)。
 
