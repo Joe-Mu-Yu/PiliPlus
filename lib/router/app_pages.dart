@@ -2,6 +2,7 @@ import 'package:PiliPlus/pages/article/view.dart';
 import 'package:PiliPlus/pages/article_list/view.dart';
 import 'package:PiliPlus/pages/audio/view.dart';
 import 'package:PiliPlus/pages/blacklist/view.dart';
+import 'package:PiliPlus/pages/couple_space/view.dart';
 import 'package:PiliPlus/pages/bubble/view.dart';
 import 'package:PiliPlus/pages/danmaku_block/view.dart';
 import 'package:PiliPlus/pages/dlna/view.dart';
@@ -179,6 +180,7 @@ class Routes {
     GetPage(name: '/popularSeries', page: () => const PopularSeriesPage()),
     GetPage(name: '/popularPrecious', page: () => const PopularPreciousPage()),
     GetPage(name: '/audio', page: () => const AudioPage()),
+    GetPage(name: '/coupleSpace', page: () => const CoupleSpacePage()),
     GetPage(name: '/mainReply', page: () => const MainReplyPage()),
     GetPage(name: '/followed', page: () => const FollowedPage()),
     GetPage(name: '/sameFollowing', page: () => const FollowSamePage()),

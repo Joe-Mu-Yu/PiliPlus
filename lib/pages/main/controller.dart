@@ -275,7 +275,7 @@ class MainController extends GetxController
   int? _mineIndex;
   void toMinePage() {
     _mineIndex ??= navigationBars.indexOf(NavigationBarType.mine);
-    if (_mineIndex != -1) {
+    if (_mineIndex! >= 0) {
       setIndex(_mineIndex!);
     } else {
       Get.to(

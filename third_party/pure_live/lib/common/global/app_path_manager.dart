@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:pure_live/common/utils/windows_multi_instance_launcher.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:win32_registry/win32_registry.dart';
 
@@ -44,11 +43,26 @@ class AppPathManager {
 
   List<String> get legacyHiveFiles => List.unmodifiable(_legacyHiveFiles);
 
+  /// Keep path initialization independent from the Windows launcher, which
+  /// also imports the complete backup and routing feature graph.
+  static String _sanitizeInstanceId(String value) {
+    var result = value.replaceAll(RegExp(r'[^a-zA-Z0-9_.-]'), '');
+    result = result.replaceAll(RegExp(r'\.{2,}'), '.');
+    result = result.replaceAll(RegExp(r'^[.-]+|[.-]+$'), '');
+    if (result.length > 96) result = result.substring(0, 96);
+    if (result.isEmpty) return '';
+    final stem = result.split('.').first.toUpperCase();
+    if (RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$').hasMatch(stem)) {
+      result = 'instance_$result';
+    }
+    return result;
+  }
+
   Future<void> initialize({String instanceId = ''}) async {
     // Treat the command line as untrusted even if it normally comes from our
     // launcher. A path segment such as `..` must never escape the portable
     // AppData root.
-    final sanitizedInstanceId = WindowsMultiInstanceLauncher.sanitizeInstanceId(instanceId);
+    final sanitizedInstanceId = _sanitizeInstanceId(instanceId);
 
     final originalPathProvider = PathProviderPlatform.instance;
     final appDir = await getApplicationDocumentsDirectory();

@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:PiliPlus/pages/movies/view.dart';
 import 'package:PiliPlus/pages/movies/movie_catalog_service.dart';
+import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/painting.dart' show ResizeImage;
 import 'package:get/get.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -48,11 +48,14 @@ void main() {
 }
 
 class _FakeMovieCatalogService extends MovieCatalogService {
+  _FakeMovieCatalogService() : super(Dio());
+
   @override
-  Future<List<MovieHotItem>> fetchHot(String tab) async => const [
+  Future<List<MovieHotItem>> fetchHot(String tab) async => [
     MovieHotItem(
       title: '示例影片',
       posterUrl: 'https://images.example/poster.jpg',
+      detailUrl: Uri.parse('https://gimytv.biz/voddetail/42.html'),
     ),
   ];
 }

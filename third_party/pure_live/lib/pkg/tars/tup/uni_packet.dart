@@ -1,7 +1,7 @@
 import 'const.dart';
 import 'uni_attribute.dart';
 import 'request_packet.dart';
-import 'package:pure_live/core/common/log.dart';
+import 'package:pure_live/core/common/core_log.dart';
 import 'package:pure_live/pkg/tars/tup/write_buffer.dart';
 import 'package:pure_live/pkg/tars/codec/tars_input_stream.dart';
 import 'package:pure_live/pkg/tars/codec/tars_output_stream.dart';
@@ -127,7 +127,7 @@ class UniPacket extends UniAttribute {
         );
       }
     } catch (e) {
-      Log.d('decode exception: $e');
+      CoreLog.d('decode exception: $e');
       rethrow;
     }
   }

@@ -400,7 +400,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
           _linuxWebview?.back();
         } else {
           if (await _webViewController?.canGoBack() == true) {
-            _webViewController?.goBack();
+            await _webViewController?.goBack();
           } else {
             Get.back();
           }
@@ -425,13 +425,6 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
 
   Widget _wrapMovieShell(Widget child) =>
       widget.movieShell ? MovieWebViewShell(child: child) : child;
-
-  bool _isMovieSiteUrl(String url) {
-    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
-    return const ['sotvla6.cc', 'sotvla.cc'].any(
-      (domain) => host == domain || host.endsWith('.$domain'),
-    );
-  }
 
   void _onMoviePlaybackState(List<dynamic> args) {
     if (!mounted || args.length < 2 || args[0] is! String || args[1] is! bool) {
@@ -518,6 +511,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
     final shadowOpacity = colors.brightness == Brightness.dark
         ? '0.36'
         : '0.12';
+    final isDark = colors.brightness == Brightness.dark;
     final css =
         '''
       :root {
@@ -532,61 +526,68 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
         --accent-2: ${cssColor(colors.secondary)};
         --shadow: 0 12px 32px rgba(0, 0, 0, $shadowOpacity);
       }
-      html, body.page-detail, body.page-play {
+      html,
+      body.gimy-detail-page,
+      body.gimy-play-page {
         color: var(--text) !important;
         background: var(--bg-deep) !important;
       }
-      body.page-detail .site-header,
-      body.page-play .site-header,
-      body.page-detail .site-footer,
-      body.page-play .site-footer,
-      body.page-detail .sotv-guide-modal,
-      body.page-play .sotv-guide-modal,
-      body.page-detail .sotv-announce-modal,
-      body.page-play .sotv-announce-modal,
-      body.page-detail .ad-slot,
-      body.page-play .ad-slot,
-      body.page-detail .play-sidebar-outside-ad,
-      body.page-play .play-sidebar-outside-ad {
+      body.gimy-detail-page,
+      body.gimy-play-page {
+        padding-top: 0 !important;
+      }
+      body.gimy-detail-page > br,
+      body.gimy-play-page > br,
+      body.gimy-detail-page .gimy-site-header,
+      body.gimy-play-page .gimy-site-header,
+      body.gimy-detail-page .gimy-site-footer,
+      body.gimy-play-page .gimy-site-footer,
+      body.gimy-detail-page [class*="g2_"],
+      body.gimy-play-page [class*="g2_"] {
         display: none !important;
       }
-      body.page-detail .main-content,
-      body.page-play .main-content,
-      body.page-detail .detail-container,
-      body.page-detail .detail-main,
-      body.page-detail .detail-info,
-      body.page-detail .detail-poster,
-      body.page-play .play-main,
-      body.page-play .play-page-sidebar-col,
-      body.page-play .play-sidebar {
+      body.gimy-detail-page .gimy-detail-container,
+      body.gimy-detail-page .gimy-detail-main,
+      body.gimy-play-page .gimy-play-container,
+      body.gimy-play-page .gimy-play-main,
+      body.gimy-play-page .gimy-play-grid {
         color: var(--text) !important;
         background-color: var(--bg-deep) !important;
         border-color: var(--border) !important;
       }
-      body.page-detail .play-ep-cell,
-      body.page-play .play-ep-cell,
-      body.page-detail .play-nav-btn,
-      body.page-play .play-nav-btn,
-      body.page-detail .play-line-select-wrap,
-      body.page-play .play-line-select-wrap {
+      body.gimy-detail-page .gimy-detail-card,
+      body.gimy-play-page .gimy-play-card,
+      body.gimy-detail-page .layout-box,
+      body.gimy-play-page .layout-box {
         color: var(--text) !important;
         background-color: var(--bg-card) !important;
         border-color: var(--border) !important;
+        box-shadow: var(--shadow) !important;
       }
-      body.page-detail .play-ep-cell.is-active,
-      body.page-play .play-ep-cell.is-active {
+      body.gimy-detail-page .episode-card-link,
+      body.gimy-play-page .gimy-play-mobile-episode-card a,
+      body.gimy-play-page .gimy-source-item > a,
+      body.gimy-play-page .gimy-source-toggle {
+        color: var(--text) !important;
+        background-color: var(--bg-elevated) !important;
+        border-color: var(--border) !important;
+      }
+      body.gimy-detail-page .gimy-detail-primary-action,
+      body.gimy-play-page .gimy-source-item.is-playing > a,
+      body.gimy-play-page .gimy-source-item.active > a {
+        color: ${cssColor(colors.onPrimary)} !important;
         background-color: var(--accent) !important;
         border-color: var(--accent) !important;
       }
-      body.page-detail a,
-      body.page-play a {
-        color: inherit;
+      body.gimy-detail-page .text-muted,
+      body.gimy-play-page .text-muted,
+      body.gimy-detail-page .gimy-detail-meta-label,
+      body.gimy-play-page .span-title {
+        color: var(--muted) !important;
       }
-      body.page-detail .play-main--below-ad,
-      body.page-play .play-main--below-ad,
-      body.page-detail .play-page-sidebar-col--below-ad,
-      body.page-play .play-page-sidebar-col--below-ad {
-        display: none !important;
+      body.gimy-detail-page a,
+      body.gimy-play-page a {
+        border-color: var(--border);
       }
     ''';
     await controller.evaluateJavascript(
@@ -594,7 +595,8 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
           '''
         (() => {
           const body = document.body;
-          if (!body || !(body.classList.contains('page-detail') || body.classList.contains('page-play'))) return;
+          if (!body || !(body.classList.contains('gimy-detail-page') || body.classList.contains('gimy-play-page'))) return;
+          document.documentElement.classList.toggle('gimy-dark', $isDark);
           let style = document.getElementById('hyper-pili-movie-theme');
           if (!style) {
             style = document.createElement('style');
@@ -611,8 +613,8 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
         source:
             '''
           (() => {
-            if (!document.body?.classList.contains('page-detail')) return;
-            const poster = document.querySelector('.detail-poster img.sotv-poster-img');
+            if (!document.body?.classList.contains('gimy-detail-page')) return;
+            const poster = document.querySelector('img.details-poster-image');
             if (poster) poster.src = ${jsonEncode(posterUrl)};
           })();
         ''',
@@ -660,7 +662,18 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
       backgroundColor: widget.movieShell
           ? Theme.of(context).colorScheme.surface
           : null,
-      appBar: widget.movieShell || widget.url != null
+      appBar: widget.movieShell
+          ? PreferredSize(
+              preferredSize: const Size.fromHeight(kToolbarHeight),
+              child: Obx(
+                () => MovieWebViewAppBar(
+                  title: _title.value.isNotEmpty ? _title.value : _url,
+                  progress: _progress.value,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+            )
+          : widget.url != null
           ? null
           : AppBar(
               toolbarHeight: _livePlayerMode ? 68 : null,
@@ -830,7 +843,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
                   },
                   onLoadStop: (controller, uri) {
                     final url = uri.toString();
-                    if (widget.movieShell && _isMovieSiteUrl(url)) {
+                    if (widget.movieShell && isMovieSiteUrl(url)) {
                       unawaited(_applyMovieWebTheme(controller));
                     }
                     if (url.startsWith(
@@ -931,12 +944,6 @@ document.styleSheets[0].insertRule('#app__display-area > div.control-panel {disp
                   },
                   shouldInterceptRequest: (controller, request) async {
                     String url = request.url.toString();
-                    if (widget.movieShell &&
-                        _isMovieSiteUrl(url) &&
-                        Uri.tryParse(url)?.path.endsWith('/announce.js') ==
-                            true) {
-                      return WebResourceResponse();
-                    }
                     if (url.startsWith(
                       'https://passport.bilibili.com/x/passport-login/web',
                     )) {
@@ -951,7 +958,7 @@ document.styleSheets[0].insertRule('#app__display-area > div.control-panel {disp
                             navigationAction.request.url?.toString() ?? '';
                         if (widget.movieShell &&
                             navigationAction.isForMainFrame &&
-                            !_isMovieSiteUrl(url)) {
+                            !isMovieSiteUrl(url)) {
                           _progress.value = 1;
                           return .CANCEL;
                         }

@@ -1,15 +1,20 @@
 import 'dart:async';
 
-import 'package:pure_live/common/index.dart';
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+import 'package:pure_live/common/services/utils/hive_rx.dart';
 import 'package:pure_live/core/iptv/services/auto_sync_scheduler.dart';
 
 class IptvSettingsController extends GetxController {
+  static IptvSettingsController get to => Get.find<IptvSettingsController>();
+
   static const String autoSyncHoursIntervalKey = 'autoSyncHoursInterval';
   static const int defaultAutoSyncHours = 24;
   static const int minAutoSyncHours = 2;
   static const int maxAutoSyncHours = 72;
 
-  static int normalizeAutoSyncHours(int hours) => hours.clamp(minAutoSyncHours, maxAutoSyncHours);
+  static int normalizeAutoSyncHours(int hours) =>
+      hours.clamp(minAutoSyncHours, maxAutoSyncHours);
 
   int normalizeCurrentAutoSyncHours() {
     final normalizedHours = normalizeAutoSyncHours(autoSyncHoursInterval.v);
@@ -22,7 +27,10 @@ class IptvSettingsController extends GetxController {
   final RxString selectedSourceName = hiveString('selectedSourceName', '');
   final RxString selectedSourceId = hiveString('selectedSourceId', '');
   final RxBool isAutoSyncEnabled = hiveBool('isAutoSyncEnabled', false);
-  final RxInt autoSyncHoursInterval = hiveInt(autoSyncHoursIntervalKey, defaultAutoSyncHours);
+  final RxInt autoSyncHoursInterval = hiveInt(
+    autoSyncHoursIntervalKey,
+    defaultAutoSyncHours,
+  );
   final RxString customIptvUserAgent = hiveString('customIptvUserAgent', '');
   final RxString m3uDirectory = hiveString('m3uDirectory', 'm3uDirectory');
 
@@ -33,9 +41,13 @@ class IptvSettingsController extends GetxController {
     super.onInit();
     normalizeCurrentAutoSyncHours();
     if (!isAutoSyncEnabled.v) return;
-    _startupSyncTimer = Timer(3.seconds, () {
-      final iptvEnabled = SettingsService.to.fav.hotAreasList.v.contains(Sites.iptvSite);
-      if (!shouldRunBackgroundStartupSync(iptvEnabled: iptvEnabled, autoSyncEnabled: isAutoSyncEnabled.v)) return;
+    _startupSyncTimer = Timer(const Duration(seconds: 3), () {
+      if (!shouldRunBackgroundStartupSync(
+        iptvEnabled: true,
+        autoSyncEnabled: isAutoSyncEnabled.v,
+      )) {
+        return;
+      }
       unawaited(AutoSyncScheduler.instance.checkAndExecuteAutoSync());
     });
   }
@@ -51,8 +63,10 @@ class IptvSettingsController extends GetxController {
   /// may schedule maintenance, and built-in IPTV/EPG resources are loaded by
   /// their feature entry points instead of by application startup.
   @visibleForTesting
-  static bool shouldRunBackgroundStartupSync({required bool iptvEnabled, required bool autoSyncEnabled}) =>
-      iptvEnabled && autoSyncEnabled;
+  static bool shouldRunBackgroundStartupSync({
+    required bool iptvEnabled,
+    required bool autoSyncEnabled,
+  }) => iptvEnabled && autoSyncEnabled;
 
   Map<String, dynamic> toJson() {
     return {
@@ -71,7 +85,9 @@ class IptvSettingsController extends GetxController {
       'selectedSourceName': (json['selectedSourceName'] ?? '') as String,
       'selectedSourceId': (json['selectedSourceId'] ?? '') as String,
       'isAutoSyncEnabled': (json['isAutoSyncEnabled'] ?? false) as bool,
-      'autoSyncHoursInterval': normalizeAutoSyncHours((json['autoSyncHoursInterval'] ?? defaultAutoSyncHours) as int),
+      'autoSyncHoursInterval': normalizeAutoSyncHours(
+        (json['autoSyncHoursInterval'] ?? defaultAutoSyncHours) as int,
+      ),
       'customIptvUserAgent': (json['customIptvUserAgent'] ?? '') as String,
       'm3uDirectory': (json['m3uDirectory'] ?? 'm3uDirectory') as String,
     };
@@ -93,13 +109,18 @@ class IptvSettingsController extends GetxController {
       'selectedSourceName': iptv['selectedSourceName'] ?? '',
       'selectedSourceId': iptv['selectedSourceId'] ?? '',
       'isAutoSyncEnabled': iptv['isAutoSyncEnabled'] ?? false,
-      'autoSyncHoursInterval': normalizeAutoSyncHours((iptv['autoSyncHoursInterval'] ?? defaultAutoSyncHours) as int),
+      'autoSyncHoursInterval': normalizeAutoSyncHours(
+        (iptv['autoSyncHoursInterval'] ?? defaultAutoSyncHours) as int,
+      ),
       'customIptvUserAgent': iptv['customIptvUserAgent'] ?? '',
       'm3uDirectory': iptv['m3uDirectory'] ?? 'm3uDirectory',
     };
   }
 
-  static Map<String, dynamic> mergeConfig(Map<String, dynamic> rootConfig, Map<String, dynamic> updateFields) {
+  static Map<String, dynamic> mergeConfig(
+    Map<String, dynamic> rootConfig,
+    Map<String, dynamic> updateFields,
+  ) {
     final iptv = Map<String, dynamic>.from(rootConfig['iptv'] ?? {});
     updateFields.forEach((k, v) => iptv[k] = v);
     rootConfig['iptv'] = iptv;

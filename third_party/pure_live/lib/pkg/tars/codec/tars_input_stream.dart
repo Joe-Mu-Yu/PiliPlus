@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'tars_struct.dart';
 import 'tars_decode_exception.dart';
-import 'package:pure_live/core/common/log.dart';
+import 'package:pure_live/core/common/core_log.dart';
 
 class HeadData {
   int type = 0;
@@ -148,9 +148,9 @@ class TarsInputStream {
       }
     } catch (e) {
       if (e is TarsDecodeException) {
-        Log.d('skipToTag error: $e');
+        CoreLog.d('skipToTag error: $e');
       }
-      Log.d(e.toString());
+      CoreLog.d(e.toString());
     }
     return false;
   }
@@ -416,7 +416,7 @@ class TarsInputStream {
             try {
               lr = br.readBytes(size);
             } catch (e) {
-              Log.d(e.toString());
+              CoreLog.d(e.toString());
               return Uint8List(0);
             }
           }

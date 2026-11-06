@@ -1,4 +1,5 @@
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
+import 'package:PiliPlus/pages/couple_space/view.dart';
 import 'package:PiliPlus/pages/movies/view.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,29 +15,33 @@ void main() {
     expect(NavigationBarType.movies.index, 5);
     expect(NavigationBarType.movies.label, '影视');
     expect(NavigationBarType.movies.page, isA<MovieHomePage>());
+    expect(NavigationBarType.coupleSpace.index, 6);
+    expect(NavigationBarType.coupleSpace.label, '小窝');
+    expect(NavigationBarType.coupleSpace.page, isA<CoupleSpacePage>());
   });
 
-  test(
-    'saved navigation order excludes recording and appends new destinations',
-    () {
-      expect(
-        NavigationBarType.fromSavedIndexes([2, 0, 1]),
-        [
-          NavigationBarType.mine,
-          NavigationBarType.home,
-          NavigationBarType.dynamics,
-          NavigationBarType.follow,
-          NavigationBarType.movies,
-        ],
-      );
-      expect(
-        NavigationBarType.fromSavedIndexes([0, 1, 2, 3, 4]),
-        NavigationBarType.destinations,
-      );
-      expect(
-        NavigationBarType.destinations,
-        isNot(contains(NavigationBarType.recorderCenter)),
-      );
-    },
-  );
+  test('saved navigation order hides mine and recording destinations', () {
+    expect(
+      NavigationBarType.fromSavedIndexes([2, 0, 1]),
+      [
+        NavigationBarType.home,
+        NavigationBarType.dynamics,
+        NavigationBarType.follow,
+        NavigationBarType.movies,
+        NavigationBarType.coupleSpace,
+      ],
+    );
+    expect(
+      NavigationBarType.fromSavedIndexes([0, 1, 2, 3, 4]),
+      NavigationBarType.destinations,
+    );
+    expect(
+      NavigationBarType.destinations,
+      isNot(contains(NavigationBarType.mine)),
+    );
+    expect(
+      NavigationBarType.destinations,
+      isNot(contains(NavigationBarType.recorderCenter)),
+    );
+  });
 }

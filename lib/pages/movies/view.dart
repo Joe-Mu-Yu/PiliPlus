@@ -23,7 +23,7 @@ class _MovieHomePageState extends State<MovieHomePage> {
     ('综艺热播', 'variety'),
   ];
 
-  late final _service = widget.service ?? MovieCatalogService();
+  late final _service = widget.service ?? MovieCatalogService(Request.dio);
   final _searchController = TextEditingController();
   late Map<String, Future<List<MovieHotItem>>> _sections;
 
@@ -35,7 +35,7 @@ class _MovieHomePageState extends State<MovieHomePage> {
   }
 
   void _onProxyConfigurationChanged() {
-    if (mounted) setState(_loadSections);
+    if (mounted) _reloadSections();
   }
 
   void _loadSections() {
@@ -55,12 +55,18 @@ class _MovieHomePageState extends State<MovieHomePage> {
   }
 
   Future<void> _refresh() async {
+    _service.clearHotCache();
     setState(_loadSections);
     await Future.wait(
       _sections.values.map(
         (future) => future.catchError((_) => <MovieHotItem>[]),
       ),
     );
+  }
+
+  void _reloadSections() {
+    _service.clearHotCache();
+    setState(_loadSections);
   }
 
   void _search(String value) {
@@ -78,52 +84,55 @@ class _MovieHomePageState extends State<MovieHomePage> {
         backgroundColor: colors.surfaceContainerLowest,
         body: RefreshIndicator(
           onRefresh: _refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                  child: Material(
-                    color: colors.surfaceContainerLow,
-                    shape: StadiumBorder(
-                      side: BorderSide(color: colors.outlineVariant),
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      textInputAction: TextInputAction.search,
-                      onSubmitted: _search,
-                      decoration: InputDecoration(
-                        hintText: '搜索电影、电视剧或动漫',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: IconButton(
-                          tooltip: '搜索',
-                          onPressed: () => _search(_searchController.text),
-                          icon: const Icon(Icons.arrow_forward_rounded),
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 16,
+          child: SafeArea(
+            top: false,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    child: Material(
+                      color: colors.surfaceContainerLow,
+                      shape: StadiumBorder(
+                        side: BorderSide(color: colors.outlineVariant),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: _search,
+                        decoration: InputDecoration(
+                          hintText: '搜索电影、电视剧或动漫',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          suffixIcon: IconButton(
+                            tooltip: '搜索',
+                            onPressed: () => _search(_searchController.text),
+                            icon: const Icon(Icons.arrow_forward_rounded),
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              for (final category in _categories)
-                _buildSection(category.$1, category.$2),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-                  child: Text(
-                    '影片信息由 SOTVLA 提供；选择影片后将在应用内打开来源页面。',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colors.onSurfaceVariant,
+                for (final category in _categories)
+                  _buildSection(category.$1, category.$2),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 180),
+                    child: Text(
+                      '影片信息由 Gimy 劇迷提供；选择影片后将在应用内打开来源页面。',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -164,7 +173,7 @@ class _MovieHomePageState extends State<MovieHomePage> {
                 ),
               ),
               if (snapshot.hasError)
-                _SectionError(onRetry: () => setState(_loadSections))
+                _SectionError(onRetry: _reloadSections)
               else if (snapshot.hasData && snapshot.data!.isNotEmpty)
                 SizedBox(
                   height: 250,
@@ -177,7 +186,14 @@ class _MovieHomePageState extends State<MovieHomePage> {
                       final item = snapshot.data![index];
                       return _HotMovieCard(
                         item: item,
-                        onTap: () => _search(item.title),
+                        onTap: () => Get.to(
+                          () => WebviewPage(
+                            url: item.detailUrl.toString(),
+                            title: item.title,
+                            movieShell: true,
+                            moviePosterUrl: item.posterUrl,
+                          ),
+                        ),
                       );
                     },
                   ),
@@ -210,7 +226,7 @@ class MovieSearchPage extends StatefulWidget {
 }
 
 class _MovieSearchPageState extends State<MovieSearchPage> {
-  final _service = MovieCatalogService();
+  final _service = MovieCatalogService(Request.dio);
   late Future<MovieSearchResponse> _future;
 
   @override

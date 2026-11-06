@@ -1,6 +1,10 @@
 import 'dart:developer';
 
-import 'package:pure_live/common/index.dart';
+import 'package:get/get.dart';
+import 'package:pure_live/common/models/live_area.dart';
+import 'package:pure_live/common/models/live_message.dart';
+import 'package:pure_live/common/models/live_room.dart';
+import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
 import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/plugins/file_utils.dart';
 import 'package:pure_live/model/live_category.dart';
@@ -17,7 +21,7 @@ import 'package:pure_live/core/common/http_header_policy.dart';
 
 class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   @override
-  String id = Sites.iptvSite;
+  String id = 'iptv';
 
   @override
   String name = '网络';
@@ -33,7 +37,8 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
     final categoryTypes = <LiveCategory>[];
 
     for (final provider in providers) {
-      if (provider.id == FileUtils.systemHotProviderId || provider.name == 'hot') {
+      if (provider.id == FileUtils.systemHotProviderId ||
+          provider.name == 'hot') {
         continue;
       } else {
         final channels = await db.getChannelsForProvider(provider.id);
@@ -47,12 +52,14 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
               areaPic: ch.tvgLogo ?? '',
               typeName: provider.name,
               areaType: provider.id,
-              platform: Sites.iptvSite,
+              platform: 'iptv',
             ),
           );
         }
 
-        categoryTypes.add(LiveCategory(id: provider.id, name: provider.name, children: subs));
+        categoryTypes.add(
+          LiveCategory(id: provider.id, name: provider.name, children: subs),
+        );
       }
     }
     return categoryTypes;
@@ -63,14 +70,21 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LiveRoom>> getCategoryRooms(LiveArea category, {int page = 1, int pageSize = 30}) async {
+  Future<List<LiveRoom>> getCategoryRooms(
+    LiveArea category, {
+    int page = 1,
+    int pageSize = 30,
+  }) async {
     final db = Get.find<DbService>().db;
     final items = <LiveRoom>[];
 
     final ch = await db.getChannelById(category.areaId!);
     if (ch == null) return [];
 
-    final epgId = await _resolveEpgChannelId(ch, SettingsService.to.iptv.selectedSourceId.v);
+    final epgId = await _resolveEpgChannelId(
+      ch,
+      IptvSettingsController.to.selectedSourceId.value,
+    );
     EpgProgramme? nowProg;
     if (epgId != null) {
       final nowList = await db.getNowPlaying([epgId]);
@@ -88,7 +102,7 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
         avatar: defaultAvatar,
         status: true,
         liveStatus: LiveStatus.live,
-        platform: Sites.iptvSite,
+        platform: 'iptv',
         link: ch.streamUrl,
         data: ch.streamUrl,
         epgId: epgId,
@@ -110,7 +124,10 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<LiveRoom> getRoomDetail({required String platform, required String roomId}) async {
+  Future<LiveRoom> getRoomDetail({
+    required String platform,
+    required String roomId,
+  }) async {
     final db = Get.find<DbService>().db;
     final channel = await db.getChannelById(roomId);
     if (channel == null) {
@@ -127,13 +144,16 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
           notice: '',
           status: true,
           liveStatus: LiveStatus.live,
-          platform: Sites.iptvSite,
+          platform: 'iptv',
           link: roomId,
           data: roomId,
         );
       }
     }
-    final finalEpgChannelId = await _resolveEpgChannelId(channel, SettingsService.to.iptv.selectedSourceId.v);
+    final finalEpgChannelId = await _resolveEpgChannelId(
+      channel,
+      IptvSettingsController.to.selectedSourceId.value,
+    );
 
     EpgProgramme? nowProg;
     if (finalEpgChannelId != null) {
@@ -144,7 +164,10 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
     return _buildLiveRoom(channel, nowProg, epgId: finalEpgChannelId);
   }
 
-  Future<String?> _resolveEpgChannelId(Channel channel, String currentEpgSourceId) async {
+  Future<String?> _resolveEpgChannelId(
+    Channel channel,
+    String currentEpgSourceId,
+  ) async {
     final db = Get.find<DbService>().db;
     String? finalEpgChannelId;
 
@@ -152,9 +175,16 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
       return null;
     }
 
-    EpgMapping? existingMapping = await db.getMappingByChannelId(channel.id, providerId: channel.providerId);
-    if (existingMapping != null && existingMapping.epgSourceId == currentEpgSourceId) {
-      final mapped = await db.resolveEpgChannelId(currentEpgSourceId, existingMapping.epgChannelId);
+    EpgMapping? existingMapping = await db.getMappingByChannelId(
+      channel.id,
+      providerId: channel.providerId,
+    );
+    if (existingMapping != null &&
+        existingMapping.epgSourceId == currentEpgSourceId) {
+      final mapped = await db.resolveEpgChannelId(
+        currentEpgSourceId,
+        existingMapping.epgChannelId,
+      );
       if (mapped != null || existingMapping.locked) return mapped;
     }
     final dbChannels = await db.getEpgChannelsForSource(currentEpgSourceId);
@@ -163,16 +193,19 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
     if (dbChannels.isNotEmpty) {
       final cleanTvgId = channel.tvgId?.trim().toLowerCase();
       if (cleanTvgId != null && cleanTvgId.isNotEmpty) {
-        final matchedTvg = dbChannels.firstWhereOrNull((dbCh) {
-          return dbCh.channelId.trim().toLowerCase() == cleanTvgId;
-        });
+        final matchedTvg = dbChannels
+            .where((dbCh) => dbCh.channelId.trim().toLowerCase() == cleanTvgId)
+            .firstOrNull;
         if (matchedTvg != null) {
           finalEpgChannelId = matchedTvg.id;
         }
       }
       if (finalEpgChannelId == null) {
         final cleanRegex = RegExp(r'[^a-zA-Z0-9\u4e00-\u9fa5]');
-        final suffixRegex = RegExp(r'(综合|高清|超清|中央|电视台|频道|hd)', caseSensitive: false);
+        final suffixRegex = RegExp(
+          r'(综合|高清|超清|中央|电视台|频道|hd)',
+          caseSensitive: false,
+        );
 
         String targetClean = channel.name.trim().split(' ').first;
         targetClean = targetClean.toLowerCase().replaceAll(cleanRegex, '');
@@ -226,14 +259,21 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   }
 
   @override
-  Future<LiveRoom> getRoomDetailForRecording({required String platform, required String roomId}) {
+  Future<LiveRoom> getRoomDetailForRecording({
+    required String platform,
+    required String roomId,
+  }) {
     // Imported channels already store their playback URL as room data. The
     // database lookup is authoritative and does not use a presentation
     // fallback, so the same loader is the strict recording contract.
     return getRoomDetail(platform: platform, roomId: roomId);
   }
 
-  LiveRoom _buildLiveRoom(Channel channel, EpgProgramme? prog, {String? epgId}) {
+  LiveRoom _buildLiveRoom(
+    Channel channel,
+    EpgProgramme? prog, {
+    String? epgId,
+  }) {
     return LiveRoom(
       roomId: channel.id,
       title: channel.name,
@@ -244,7 +284,7 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
       avatar: defaultAvatar,
       status: true,
       liveStatus: LiveStatus.live,
-      platform: Sites.iptvSite,
+      platform: 'iptv',
       link: channel.streamUrl,
       data: channel.streamUrl,
       epgId: epgId,
@@ -263,12 +303,19 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LiveRoom>> getRecommendRooms({int page = 1, int pageSize = 30}) async {
-    var channels = await IptvRepository().getChannels(FileUtils.systemHotProviderId);
+  Future<List<LiveRoom>> getRecommendRooms({
+    int page = 1,
+    int pageSize = 30,
+  }) async {
+    var channels = await IptvRepository().getChannels(
+      FileUtils.systemHotProviderId,
+    );
     if (channels.isEmpty) {
       await AutoSyncScheduler.instance.loadHotResources();
     }
-    channels = await IptvRepository().getChannels(FileUtils.systemHotProviderId);
+    channels = await IptvRepository().getChannels(
+      FileUtils.systemHotProviderId,
+    );
     final items = <LiveRoom>[];
     for (final ch in channels) {
       items.add(
@@ -284,7 +331,7 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
           notice: '',
           status: true,
           liveStatus: LiveStatus.live,
-          platform: Sites.iptvSite,
+          platform: 'iptv',
           link: ch.streamUrl,
           data: ch.streamUrl,
           catchUpMode: ch.catchupMode,
@@ -304,11 +351,18 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LivePlayQuality>> getPlayQualites({required LiveRoom detail}) async {
+  Future<List<LivePlayQuality>> getPlayQualites({
+    required LiveRoom detail,
+  }) async {
     final url = detail.data?.toString().trim() ?? '';
     if (url.isEmpty) return const <LivePlayQuality>[];
     return [
-      LivePlayQuality(quality: '默认', id: 'default', sort: 1, data: <String>[url]),
+      LivePlayQuality(
+        quality: '默认',
+        id: 'default',
+        sort: 1,
+        data: <String>[url],
+      ),
     ];
   }
 
@@ -317,10 +371,16 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<String>> getPlayUrls({required LiveRoom detail, required LivePlayQuality quality}) async {
+  Future<List<String>> getPlayUrls({
+    required LiveRoom detail,
+    required LivePlayQuality quality,
+  }) async {
     final data = quality.data;
     if (data is! List) return const <String>[];
-    return data.map((item) => item.toString().trim()).where((url) => url.isNotEmpty).toList(growable: false);
+    return data
+        .map((item) => item.toString().trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
   }
 
   // =========================================================
@@ -335,7 +395,10 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<bool> getLiveStatus({required String platform, required String roomId}) async {
+  Future<bool> getLiveStatus({
+    required String platform,
+    required String roomId,
+  }) async {
     return true;
   }
 
@@ -344,7 +407,9 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LiveSuperChatMessage>> getSuperChatMessage({required String roomId}) async {
+  Future<List<LiveSuperChatMessage>> getSuperChatMessage({
+    required String roomId,
+  }) async {
     return [];
   }
 
@@ -353,7 +418,11 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LiveAnchorItem>> searchAnchors(String keyword, {int page = 1, int pageSize = 30}) async {
+  Future<List<LiveAnchorItem>> searchAnchors(
+    String keyword, {
+    int page = 1,
+    int pageSize = 30,
+  }) async {
     return [];
   }
 
@@ -362,7 +431,11 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
   // =========================================================
 
   @override
-  Future<List<LiveRoom>> searchRooms(String keyword, {int page = 1, int pageSize = 30}) async {
+  Future<List<LiveRoom>> searchRooms(
+    String keyword, {
+    int page = 1,
+    int pageSize = 30,
+  }) async {
     final db = Get.find<DbService>().db;
     if (keyword.trim().isEmpty) return [];
     final matched = await db.searchChannelsByName(keyword);
@@ -377,7 +450,7 @@ class IptvSite implements LiveSite, LiveSiteRecordRoomResolver {
         avatar: defaultAvatar,
         status: true,
         liveStatus: LiveStatus.live,
-        platform: Sites.iptvSite,
+        platform: 'iptv',
         link: ch.streamUrl,
         data: ch.streamUrl,
         catchUpMode: ch.catchupMode,

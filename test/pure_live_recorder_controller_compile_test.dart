@@ -5,6 +5,7 @@ import 'package:pure_live/recorder/pages/record_settings/record_settings_page.da
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_event.dart';
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_types.dart';
 import 'package:pure_live/recorder/services/video_processor_service.dart';
+import 'package:pure_live/recorder/services/recorder_continuation_policy.dart';
 
 void main() {
   test(
@@ -68,6 +69,21 @@ void main() {
         fallback: 'FFmpeg merge failed',
       ),
       'FFmpeg merge failed',
+    );
+  });
+
+  test('confirmed offline finalizes recorded attempts instead of waiting', () {
+    expect(
+      RecorderContinuationPolicy.shouldFinalizeAfterOfflineResolution(
+        hasPendingAttempts: true,
+      ),
+      isTrue,
+    );
+    expect(
+      RecorderContinuationPolicy.shouldFinalizeAfterOfflineResolution(
+        hasPendingAttempts: false,
+      ),
+      isFalse,
     );
   });
 }

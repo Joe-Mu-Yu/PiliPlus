@@ -1,6 +1,8 @@
 import 'dart:developer';
 
-import 'package:pure_live/common/index.dart';
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
 import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/core/iptv/local/database.dart';
 import 'package:pure_live/common/global/app_path_manager.dart';
@@ -17,20 +19,27 @@ class AutoSyncScheduler {
   final IptvResourceLoadGate _defaultEpgResourcesGate = IptvResourceLoadGate();
 
   Future<void> checkAndExecuteAutoSync() async {
-    if (!SettingsService.to.iptv.isAutoSyncEnabled.v) return;
+    if (!IptvSettingsController.to.isAutoSyncEnabled.value) return;
 
     final db = Get.find<DbService>().db;
-    final int hoursInterval = SettingsService.to.iptv.normalizeCurrentAutoSyncHours();
+    final int hoursInterval = IptvSettingsController.to
+        .normalizeCurrentAutoSyncHours();
     final Duration checkInterval = Duration(hours: hoursInterval);
 
     try {
-      final expiredPlaylists = await db.getExpiredNetworkProviders(checkInterval);
+      final expiredPlaylists = await db.getExpiredNetworkProviders(
+        checkInterval,
+      );
       for (var playlist in expiredPlaylists) {
         await IptvSyncEngine.instance.syncPlaylist(playlist);
       }
       final expiredEpgs = await db.getExpiredEpgSources(checkInterval);
       for (var epg in expiredEpgs) {
-        await EpgSyncEngine.instance.updateEpgCache(epg, forceUpdate: true, showTips: false);
+        await EpgSyncEngine.instance.updateEpgCache(
+          epg,
+          forceUpdate: true,
+          showTips: false,
+        );
       }
     } catch (e) {
       log("Auto sync background task working failed: $e");
@@ -40,7 +49,7 @@ class AutoSyncScheduler {
   Future<void> loadHotResources() => _hotResourcesGate.run(_loadHotResources);
 
   Future<void> _loadHotResources() async {
-    final iptvUrl = 'https://iptv-org.github.io/iptv/countries/cn.m3u';
+    const iptvUrl = 'https://iptv-org.github.io/iptv/countries/cn.m3u';
     await IptvImportManager().importFromNetworkUrl(
       iptvUrl,
       AppPathManager.iptvHotFile,
@@ -50,23 +59,25 @@ class AutoSyncScheduler {
     );
   }
 
-  Future<void> loadDefaultEpgResources() => _defaultEpgResourcesGate.run(_loadDefaultEpgResources);
+  Future<void> loadDefaultEpgResources() =>
+      _defaultEpgResourcesGate.run(_loadDefaultEpgResources);
 
   Future<void> _loadDefaultEpgResources() async {
-    final epgSource = 'https://epg.zsdc.eu.org/t.xml.gz';
+    const epgSource = 'https://epg.zsdc.eu.org/t.xml.gz';
     await EpgImportManager().importFromNetworkUrl(
       epgSource,
       AppPathManager.iptvHotFile,
       forceUpdate: true,
       showTips: false,
     );
-    if (SettingsService.to.iptv.selectedSourceId.v.isEmpty) {
+    if (IptvSettingsController.to.selectedSourceId.value.isEmpty) {
       final db = Get.find<DbService>().db;
       List<EpgSource> epgSources = await db.getAllEpgSources();
-      if (epgSources.isNotEmpty && SettingsService.to.iptv.selectedSourceId.v.isEmpty) {
+      if (epgSources.isNotEmpty &&
+          IptvSettingsController.to.selectedSourceId.value.isEmpty) {
         final activeSource = epgSources.first;
-        SettingsService.to.iptv.selectedSourceId.v = activeSource.id;
-        SettingsService.to.iptv.selectedSourceName.v = activeSource.name;
+        IptvSettingsController.to.selectedSourceId.value = activeSource.id;
+        IptvSettingsController.to.selectedSourceName.value = activeSource.name;
       }
     }
   }

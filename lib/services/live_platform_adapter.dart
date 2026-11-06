@@ -11,6 +11,11 @@ import 'package:dio/dio.dart';
 import 'package:pure_live/common/models/live_room.dart'
     show LiveRoom, LiveStatus;
 import 'package:pure_live/core/site/douyin/douyin_site.dart';
+import 'package:pure_live/core/interface/live_site.dart'
+    show LiveSite, normalizeResolvedPlayUrls;
+import 'package:pure_live/core/interface/live_danmaku.dart' show LiveDanmaku;
+import 'package:pure_live/core/danmaku/empty_danmaku.dart' show EmptyDanmaku;
+import 'package:pure_live/model/live_play_quality.dart' show LivePlayQuality;
 
 class LiveRoomResolutionException extends FormatException {
   const LiveRoomResolutionException(super.message);
@@ -324,6 +329,147 @@ class DouyinLivePlatformAdapter implements LivePlatformAdapter {
 
   static Future<LiveRoom> _fetchWebRidRoom(String webRid) =>
       DouyinSite().getRoomDetailByWebRid(webRid);
+}
+
+/// Resolves direct stream links through Pure Live's room and playback contract.
+class PureLiveDirectLinkAdapter implements LivePlatformAdapter {
+  PureLiveDirectLinkAdapter({LiveSite? site})
+    : _site = site ?? PureLiveDirectLinkSite();
+
+  final LiveSite _site;
+
+  @override
+  String get platformId => 'pure_live';
+
+  static Uri? uriFromLink(String rawLink) {
+    final uri = Uri.tryParse(rawLink.trim());
+    if (uri == null ||
+        !{'http', 'https'}.contains(uri.scheme.toLowerCase()) ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment) {
+      return null;
+    }
+    final path = uri.path.toLowerCase();
+    if (!path.endsWith('.m3u8') &&
+        !path.endsWith('.flv') &&
+        !path.endsWith('.mp4')) {
+      return null;
+    }
+    return uri;
+  }
+
+  @override
+  bool canResolve(String rawLink) => uriFromLink(rawLink) != null;
+
+  @override
+  Future<LiveFavorite> resolveFavorite(String rawLink) async {
+    final uri = uriFromLink(rawLink);
+    if (uri == null) {
+      throw const LiveRoomResolutionException('不是受支持的直播流链接');
+    }
+    final roomId = uri.toString();
+    final room = LiveRoom(
+      roomId: roomId,
+      title: uri.pathSegments.isEmpty ? uri.host : uri.pathSegments.last,
+      nick: uri.host,
+      area: '自定义直播源',
+      watching: '',
+      cover: '',
+      avatar: '',
+      status: true,
+      liveStatus: LiveStatus.live,
+      platform: _site.id,
+      link: roomId,
+      data: roomId,
+    );
+    final urls = normalizeResolvedPlayUrls(
+      await _site.getPlayUrls(
+        detail: room,
+        quality:
+            (await _site.getPlayQualites(detail: room)).firstOrNull ??
+            (throw const LiveRoomResolutionException('Pure Live 未识别该直播流链接')),
+      ),
+    );
+    if (urls.isEmpty) {
+      throw const LiveRoomResolutionException('该直播流链接没有可播放地址');
+    }
+    return LiveFavorite(
+      platformId: platformId,
+      roomId: roomId,
+      roomUrl: roomId,
+      title: room.title,
+      anchorName: uri.host,
+      status: LiveFavoriteStatus.live,
+    );
+  }
+
+  @override
+  Future<LiveFavorite> refreshFavorite(LiveFavorite favorite) =>
+      resolveFavorite(favorite.roomUrl);
+}
+
+class PureLiveDirectLinkSite extends LiveSite {
+  @override
+  String get id => 'iptv';
+
+  @override
+  String get name => '自定义直播源';
+
+  @override
+  LiveDanmaku getDanmaku() => EmptyDanmaku();
+
+  @override
+  Future<LiveRoom> getRoomDetail({
+    required String platform,
+    required String roomId,
+  }) async {
+    final uri = PureLiveDirectLinkAdapter.uriFromLink(roomId);
+    if (uri == null) {
+      throw const LiveRoomResolutionException('不是受支持的直播流链接');
+    }
+    return LiveRoom(
+      roomId: roomId,
+      title: uri.pathSegments.isEmpty ? uri.host : uri.pathSegments.last,
+      nick: uri.host,
+      area: '自定义直播源',
+      watching: '',
+      cover: '',
+      avatar: '',
+      status: true,
+      liveStatus: LiveStatus.live,
+      platform: id,
+      link: roomId,
+      data: roomId,
+    );
+  }
+
+  @override
+  Future<List<LivePlayQuality>> getPlayQualites({
+    required LiveRoom detail,
+  }) async {
+    final link = detail.data?.toString().trim() ?? '';
+    if (PureLiveDirectLinkAdapter.uriFromLink(link) == null) return const [];
+    return [
+      LivePlayQuality(
+        quality: '默认',
+        id: 'default',
+        sort: 1,
+        data: <String>[link],
+      ),
+    ];
+  }
+
+  @override
+  Future<List<String>> getPlayUrls({
+    required LiveRoom detail,
+    required LivePlayQuality quality,
+  }) async {
+    final data = quality.data;
+    return data is List
+        ? data.map((value) => value.toString().trim()).toList(growable: false)
+        : const [];
+  }
 }
 
 int? _asInt(Object? value) =>

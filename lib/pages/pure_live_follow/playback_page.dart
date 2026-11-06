@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
+import 'package:PiliPlus/services/live_platform_adapter.dart'
+    show PureLiveDirectLinkSite;
 import 'package:PiliPlus/services/pure_live_playback_source.dart';
+import 'package:PiliPlus/services/service_locator.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -16,6 +19,9 @@ import 'package:pure_live/core/interface/live_site.dart';
 import 'package:pure_live/core/site/bilibili/bilibili_site.dart';
 import 'package:pure_live/core/site/douyin/douyin_site.dart';
 import 'package:pure_live/core/site/douyu/douyu_site.dart';
+import 'package:pure_live/core/site/huya/huya_site.dart';
+import 'package:pure_live/core/site/iptv/iptv_site.dart';
+import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_controller.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -34,6 +40,9 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     'bilibili': BiliBiliSite(),
     'douyin': DouyinSite(),
     'douyu': DouyuSite(),
+    'huya': HuyaSite(),
+    'pure_live': PureLiveDirectLinkSite(),
+    'iptv': IptvSite(),
   };
   Player? _player;
   VideoController? _videoController;
@@ -92,6 +101,9 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       _error = null;
     });
     try {
+      if (widget.favorite.platformId == 'iptv') {
+        await setupPureLiveIptvServices();
+      }
       final site = _siteForPlatform;
       final resolver = PureLivePlaybackSource(site);
       final catalog =
@@ -124,13 +136,19 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
             if (_fullscreen) unawaited(_applyFullscreenOrientation());
           }
         });
-        player.setMediaHeader(
-          userAgent:
-              'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
-              '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-          referer: _refererForPlatform(widget.favorite.platformId),
-        );
       }
+      final headers = _mediaHeaders(source);
+      final userAgent = _removeHeader(headers, 'user-agent');
+      final referer = _removeHeader(headers, 'referer');
+      player.setMediaHeader(
+        userAgent: userAgent ?? _defaultUserAgent,
+        referer:
+            referer ??
+            (widget.favorite.platformId == 'iptv'
+                ? null
+                : _refererForPlatform(widget.favorite.platformId)),
+        headers: headers,
+      );
       setState(() => _loading = false);
       await player.open(Media(source.url), play: true);
       if (_danmaku == null) await _connectDanmaku(site, source.room);
@@ -151,6 +169,60 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     'huya' => 'https://www.huya.com',
     _ => widget.favorite.roomUrl,
   };
+
+  static const _defaultUserAgent =
+      'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
+  Map<String, String> _mediaHeaders(ResolvedLivePlaybackSource source) {
+    final headers = Map<String, String>.from(source.room.httpHeaders);
+    final customIptvUserAgent =
+        widget.favorite.platformId == 'iptv' &&
+            Get.isRegistered<IptvSettingsController>()
+        ? IptvSettingsController.to.customIptvUserAgent.value.trim()
+        : '';
+    _putHeaderIfAbsent(
+      headers,
+      'User-Agent',
+      customIptvUserAgent.isEmpty ? _defaultUserAgent : customIptvUserAgent,
+    );
+    if (widget.favorite.platformId != 'iptv') {
+      _putHeaderIfAbsent(
+        headers,
+        'Referer',
+        _refererForPlatform(widget.favorite.platformId),
+      );
+    }
+    return headers;
+  }
+
+  String? _headerValue(Map<String, String> headers, String name) {
+    final normalized = name.toLowerCase();
+    for (final entry in headers.entries) {
+      if (entry.key.toLowerCase() == normalized) return entry.value;
+    }
+    return null;
+  }
+
+  String? _removeHeader(Map<String, String> headers, String name) {
+    final normalized = name.toLowerCase();
+    String? matchedKey;
+    for (final key in headers.keys) {
+      if (key.toLowerCase() == normalized) {
+        matchedKey = key;
+        break;
+      }
+    }
+    return matchedKey == null ? null : headers.remove(matchedKey);
+  }
+
+  void _putHeaderIfAbsent(
+    Map<String, String> headers,
+    String name,
+    String value,
+  ) {
+    if (_headerValue(headers, name) == null) headers[name] = value;
+  }
 
   Future<void> _connectDanmaku(dynamic site, LiveRoom room) async {
     final engine = (site as LiveSite).getDanmaku();

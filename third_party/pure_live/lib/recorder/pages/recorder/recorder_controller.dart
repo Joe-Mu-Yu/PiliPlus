@@ -1169,10 +1169,16 @@ class RecorderController extends GetxService {
       );
       if (error.type == StreamErrorType.notLive) {
         _rapidRecoveryTasks.remove(task.taskId);
-        task.clearFailure();
-        task.status = RecordStatus.waitingLive;
-        updateTask(task);
-        _schedulePoll(task);
+        if (RecorderContinuationPolicy.shouldFinalizeAfterOfflineResolution(
+          hasPendingAttempts: task.pendingAttempts.isNotEmpty,
+        )) {
+          await _finalizeAfterOfflineResolution(task);
+        } else {
+          task.clearFailure();
+          task.status = RecordStatus.waitingLive;
+          updateTask(task);
+          _schedulePoll(task);
+        }
       } else if (!error.retryable || !task.autoReconnect) {
         task.status = RecordStatus.failed;
         updateTask(task);
@@ -1234,6 +1240,24 @@ class RecorderController extends GetxService {
         await _releaseBackgroundLease(backgroundLease);
       }
     }
+  }
+
+  Future<void> _finalizeAfterOfflineResolution(LiveRecordTask task) async {
+    if (_isClosing || !_ownsTask(task)) return;
+    _retryTimers.remove(task.taskId)?.cancel();
+    _cancelRecorderLease(task.taskId);
+    task.clearFailure();
+    task.status = RecordStatus.processing;
+    updateTask(task);
+
+    final merged = await _finalizePendingAttempts(task);
+    if (_isClosing || !_ownsTask(task)) return;
+    await settings.refreshCacheSize();
+    if (_isClosing || !_ownsTask(task)) return;
+
+    task.status = merged ? RecordStatus.completed : RecordStatus.failed;
+    if (!merged) _markFinalizationFailure(task);
+    updateTask(task);
   }
 
   Future<_RecorderBackgroundTaskLease> _acquireBackgroundLease(

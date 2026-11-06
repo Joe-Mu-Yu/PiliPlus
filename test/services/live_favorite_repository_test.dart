@@ -36,6 +36,33 @@ void main() {
         expect(favorite.identityKey, 'twitch:CaseSensitiveChannel');
       },
     );
+
+    test('allows IPTV stream protocols without weakening room URL checks', () {
+      for (final url in [
+        'rtmp://stream.example/live',
+        'rtsp://stream.example/channel',
+        'udp://@239.0.0.1:1234',
+        'mms://stream.example/channel',
+        'p2p://stream-id',
+      ]) {
+        expect(
+          LiveFavorite(
+            platformId: 'iptv',
+            roomId: 'channel',
+            roomUrl: url,
+          ).roomUrl,
+          url,
+        );
+      }
+      expect(
+        () => LiveFavorite(
+          platformId: 'douyin',
+          roomId: 'channel',
+          roomUrl: 'rtmp://stream.example/live',
+        ),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('LiveFavoriteRepository', () {

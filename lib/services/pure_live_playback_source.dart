@@ -33,6 +33,16 @@ class ResolvedLivePlaybackSource {
 class PureLivePlaybackSource {
   const PureLivePlaybackSource(this.site);
 
+  static const supportedStreamSchemes = {
+    'http',
+    'https',
+    'rtmp',
+    'rtsp',
+    'udp',
+    'mms',
+    'p2p',
+  };
+
   static double aspectRatioForDimensions({
     required int width,
     required int height,
@@ -115,7 +125,7 @@ class PureLivePlaybackSource {
     }
     final url = lines[lineIndex];
     final uri = Uri.tryParse(url);
-    if (uri == null || !const {'http', 'https'}.contains(uri.scheme)) {
+    if (uri == null || !supportedStreamSchemes.contains(uri.scheme)) {
       throw StateError('直播平台未返回有效的视频流地址');
     }
     return ResolvedLivePlaybackSource(

@@ -1,13 +1,16 @@
 import 'dart:io';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 import 'package:archive/archive.dart';
 import 'package:drift/drift.dart' as drift;
-import 'package:pure_live/common/index.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:pure_live/common/utils/toast_util.dart';
 import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/plugins/file_utils.dart';
+import 'package:pure_live/plugins/locale_helper.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/iptv/parsers/xmltv_parser.dart';
 import 'package:pure_live/common/global/app_path_manager.dart';
@@ -21,7 +24,8 @@ class EpgImportManager {
 
   final Future<Directory> Function() _cacheDirectory;
 
-  static Future<Directory> _defaultCacheDirectory() => AppPathManager().getDir(AppPathManager.dirIptvCache);
+  static Future<Directory> _defaultCacheDirectory() =>
+      AppPathManager().getDir(AppPathManager.dirIptvCache);
 
   /// 1. 本地文件浏览器选择导入
   Future<bool> importFromLocalPicker() async {
@@ -54,7 +58,9 @@ class EpgImportManager {
       }
       sourceName = cleanName;
       final ext = extensionForUrl(url);
-      file = File(p.join(dir.path, 'download_epg_${FileUtils.generateUuid()}$ext'));
+      file = File(
+        p.join(dir.path, 'download_epg_${FileUtils.generateUuid()}$ext'),
+      );
       await HttpClient.instance.download(
         url,
         file.path,
@@ -105,7 +111,9 @@ class EpgImportManager {
     try {
       final dir = await _cacheDirectory();
       final String ext = fileString.trim().startsWith('{') ? '.json' : '.xml';
-      final file = File(p.join(dir.path, 'web_epg_${FileUtils.generateUuid()}$ext'));
+      final file = File(
+        p.join(dir.path, 'web_epg_${FileUtils.generateUuid()}$ext'),
+      );
       await file.writeAsString(fileString);
 
       final success = await importEpgFile(file: file, sourceName: sourceName);
@@ -132,7 +140,10 @@ class EpgImportManager {
         ToastUtil.show(i18n("unsupported_file_format"));
         return false;
       }
-      final success = await importEpgFile(file: file, sourceName: FileUtils.getBaseName(file.path));
+      final success = await importEpgFile(
+        file: file,
+        sourceName: FileUtils.getBaseName(file.path),
+      );
       return success;
     } catch (e) {
       debugPrint("Shared EPG Import Process Crash: $e");
@@ -178,13 +189,16 @@ class EpgImportManager {
         return false;
       }
 
-      if (parsedResult == null || (parsedResult.channels.isEmpty && parsedResult.programmes.isEmpty)) {
+      if (parsedResult == null ||
+          (parsedResult.channels.isEmpty && parsedResult.programmes.isEmpty)) {
         if (showTips) ToastUtil.show(i18n("unsupported_file_format"));
         return false;
       }
 
       final existing = await db.getAllEpgSources();
-      final matchedList = existing.where((e) => (e.name).trim().toLowerCase() == cleanName).toList();
+      final matchedList = existing
+          .where((e) => (e.name).trim().toLowerCase() == cleanName)
+          .toList();
 
       String finalSourceId = FileUtils.generateUuid();
 
@@ -193,20 +207,29 @@ class EpgImportManager {
       }
 
       if (!forceUpdate && matchedList.isNotEmpty) {
-        final confirmed = await Get.dialog<bool>(
-          Builder(
-            builder: (context) => AlertDialog(
-              scrollable: true,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text(i18n("provider_name_exists_tip")),
-              content: Text('"$sourceName"\n\n${i18n("replace_confirm_message").replaceAll("{}", typeName)}'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(i18n("cancel"))),
-                TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text(i18n("confirm"))),
-              ],
-            ),
-          ),
+        final confirmed = await showDialog<bool>(
+          context: Get.context!,
           barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            scrollable: true,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Text(i18n("provider_name_exists_tip")),
+            content: Text(
+              '"$sourceName"\n\n${i18n("replace_confirm_message").replaceAll("{}", typeName)}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(i18n("cancel")),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(i18n("confirm")),
+              ),
+            ],
+          ),
         );
         if (confirmed != true) return false;
       }
@@ -218,7 +241,9 @@ class EpgImportManager {
           await db.deleteEpgSourceCascading(duplicate.id);
         }
         await db.deleteEpgProgrammesForSource(finalSourceId);
-        await (db.delete(db.epgChannels)..where((t) => t.sourceId.equals(finalSourceId))).go();
+        await (db.delete(
+          db.epgChannels,
+        )..where((t) => t.sourceId.equals(finalSourceId))).go();
         await _executeDatabaseWrite(
           db: db,
           file: file,
@@ -252,13 +277,16 @@ class EpgImportManager {
     String url = '',
   }) async {
     // Updating only imported fields preserves switches, interval and creation time.
-    final updated = await (db.update(db.epgSources)..where((t) => t.id.equals(sourceId))).write(
-      database.EpgSourcesCompanion(
-        name: drift.Value(sourceName),
-        url: drift.Value(url.isNotEmpty ? url : file.path),
-        lastRefresh: drift.Value(DateTime.now()),
-      ),
-    );
+    final updated =
+        await (db.update(
+          db.epgSources,
+        )..where((t) => t.id.equals(sourceId))).write(
+          database.EpgSourcesCompanion(
+            name: drift.Value(sourceName),
+            url: drift.Value(url.isNotEmpty ? url : file.path),
+            lastRefresh: drift.Value(DateTime.now()),
+          ),
+        );
     if (updated == 0) {
       await db.upsertEpgSource(
         database.EpgSourcesCompanion.insert(
@@ -271,15 +299,19 @@ class EpgImportManager {
     }
 
     if (parsedResult.channels.isNotEmpty) {
-      final channelCompanions = parsedResult.channels.map<database.EpgChannelsCompanion>((e) {
-        return database.EpgChannelsCompanion.insert(
-          id: epgChannelKey(sourceId, e.id),
-          sourceId: sourceId, // 绑定正确的映射主键
-          channelId: e.id,
-          displayName: e.displayNames.isNotEmpty ? e.displayNames.first : e.id,
-          iconUrl: drift.Value(e.iconUrl),
-        );
-      }).toList();
+      final channelCompanions = parsedResult.channels
+          .map<database.EpgChannelsCompanion>((e) {
+            return database.EpgChannelsCompanion.insert(
+              id: epgChannelKey(sourceId, e.id),
+              sourceId: sourceId, // 绑定正确的映射主键
+              channelId: e.id,
+              displayName: e.displayNames.isNotEmpty
+                  ? e.displayNames.first
+                  : e.id,
+              iconUrl: drift.Value(e.iconUrl),
+            );
+          })
+          .toList();
       await db.upsertEpgChannels(channelCompanions);
     }
 

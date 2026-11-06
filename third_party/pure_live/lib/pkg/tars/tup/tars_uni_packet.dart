@@ -1,7 +1,7 @@
 import 'const.dart';
 import 'dart:typed_data';
 import 'uni_packet.dart';
-import 'package:pure_live/core/common/log.dart';
+import 'package:pure_live/core/common/core_log.dart';
 
 class TarsUniPacket extends UniPacket {
   TarsUniPacket() {
@@ -91,7 +91,7 @@ class TarsUniPacket extends UniPacket {
       String? rcode = package.status?[Const.STATUS_RESULT_CODE];
       result = (rcode != null ? int.tryParse(rcode) : 0)!;
     } catch (e) {
-      Log.d('getTarsResultCode exception: $e');
+      CoreLog.d('getTarsResultCode exception: $e');
       return 0;
     }
     return result;

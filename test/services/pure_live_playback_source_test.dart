@@ -116,6 +116,14 @@ void main() {
     expect(source.lines, ['https://stream.example/live.m3u8']);
   });
 
+  test('accepts stream protocols supported by Pure Live IPTV', () async {
+    final source = await PureLivePlaybackSource(
+      _FakeLiveSite(urls: const ['udp://@239.0.0.1:1234']),
+    ).resolve('room-123');
+
+    expect(source.url, 'udp://@239.0.0.1:1234');
+  });
+
   test(
     'switches to the displayed line even if the next response reorders CDNs',
     () async {
@@ -302,8 +310,8 @@ class _RecoveringFakeLiveSite extends _FakeLiveSite
     required LivePlayQuality quality,
   }) async {
     recoveryRequests++;
-    return LivePlayUrlResolution(
-      urls: const ['https://backup.example/live.m3u8?sign=fresh'],
+    return const LivePlayUrlResolution(
+      urls: ['https://backup.example/live.m3u8?sign=fresh'],
     );
   }
 }

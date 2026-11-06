@@ -1,7 +1,18 @@
 class RecorderContinuationPolicy {
   const RecorderContinuationPolicy._();
 
-  static bool shouldMonitorAfterExit({required bool manuallyStopped, required bool autoReconnect}) {
+  /// A failed reconnect that authoritatively resolves the room as offline is
+  /// the end of the user-visible recording session once at least one native
+  /// attempt has produced segments. Those attempts must be finalized instead
+  /// of leaving the task in [RecordStatus.waitingLive] with orphaned TS files.
+  static bool shouldFinalizeAfterOfflineResolution({
+    required bool hasPendingAttempts,
+  }) => hasPendingAttempts;
+
+  static bool shouldMonitorAfterExit({
+    required bool manuallyStopped,
+    required bool autoReconnect,
+  }) {
     return !manuallyStopped && autoReconnect;
   }
 
@@ -12,7 +23,10 @@ class RecorderContinuationPolicy {
   /// intentionally retryable: signed live URLs expire and platform adapters
   /// may select a different CDN on the next resolve. Local path, permission or
   /// malformed-command failures need user/configuration changes instead.
-  static bool shouldRetryFailure({required int errorCode, required String rawLogs}) {
+  static bool shouldRetryFailure({
+    required int errorCode,
+    required String rawLogs,
+  }) {
     if (errorCode == -2) return false;
 
     final normalizedLogs = rawLogs.toLowerCase();
@@ -97,7 +111,10 @@ class RecorderContinuationPolicy {
   /// A timer that is already late runs on the next event-loop turn rather than
   /// being silently omitted. This matters after sleep/resume where wall time
   /// may cross the signed transport boundary while Dart timers are suspended.
-  static Duration leaseRotationDelay({required DateTime now, required DateTime refreshAt}) {
+  static Duration leaseRotationDelay({
+    required DateTime now,
+    required DateTime refreshAt,
+  }) {
     final remaining = refreshAt.toUtc().difference(now.toUtc());
     return remaining > Duration.zero ? remaining : Duration.zero;
   }
@@ -105,9 +122,14 @@ class RecorderContinuationPolicy {
   /// Keep one future credential ready without cancelling a long-lived input.
   /// Failed/missing/already-stale metadata is rate limited to one maintenance
   /// attempt per 30 seconds; successful future leases keep their own deadline.
-  static Duration leaseMaintenanceDelay({required DateTime now, required DateTime? refreshAt}) {
+  static Duration leaseMaintenanceDelay({
+    required DateTime now,
+    required DateTime? refreshAt,
+  }) {
     const minimum = Duration(seconds: 30);
-    final remaining = refreshAt == null ? minimum : leasePrefetchDelay(now: now, refreshAt: refreshAt);
+    final remaining = refreshAt == null
+        ? minimum
+        : leasePrefetchDelay(now: now, refreshAt: refreshAt);
     return remaining > minimum ? remaining : minimum;
   }
 }

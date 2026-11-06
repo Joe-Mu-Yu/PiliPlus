@@ -1,6 +1,9 @@
 import 'package:PiliPlus/services/audio_handler.dart';
 import 'package:PiliPlus/services/audio_session.dart';
 import 'package:get/get.dart';
+import 'package:pure_live/common/global/app_path_manager.dart';
+import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
+import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/recorder/pages/record_settings/record_settings_controller.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_controller.dart';
 import 'package:pure_live/recorder/services/cache_service.dart';
@@ -8,6 +11,7 @@ import 'package:pure_live/recorder/services/stream_resolver_service.dart';
 
 VideoPlayerServiceHandler? videoPlayerServiceHandler;
 AudioSessionHandler? audioSessionHandler;
+Future<void>? _pureLiveIptvSetup;
 
 Future<void> setupServiceLocator() async {
   setupPureLiveRecordingServices();
@@ -28,5 +32,41 @@ void setupPureLiveRecordingServices() {
   }
   if (!Get.isRegistered<StreamResolverService>()) {
     Get.lazyPut(StreamResolverService.new, fenix: true);
+  }
+}
+
+/// Starts the vendored IPTV data layer only when the user opens IPTV.
+///
+/// Hyper-PiliPlus owns Flutter startup and Hive initialization, so calling the
+/// full Pure Live app initializer would replace unrelated app-wide services.
+/// This host bridge initializes only the path, settings and Drift services
+/// required by the original IPTV import, EPG and management modules.
+Future<void> setupPureLiveIptvServices() async {
+  final pending = _pureLiveIptvSetup;
+  if (pending != null) return pending;
+
+  final setup = _setupPureLiveIptvServices();
+  _pureLiveIptvSetup = setup;
+  try {
+    await setup;
+  } catch (_) {
+    if (identical(_pureLiveIptvSetup, setup)) _pureLiveIptvSetup = null;
+    rethrow;
+  }
+}
+
+Future<void> _setupPureLiveIptvServices() async {
+  await AppPathManager().initialize();
+
+  if (!Get.isRegistered<DbService>()) {
+    final database = DbService();
+    await database.init();
+    Get.put<DbService>(database, permanent: true);
+  }
+  if (!Get.isRegistered<IptvSettingsController>()) {
+    Get.put<IptvSettingsController>(
+      IptvSettingsController(),
+      permanent: true,
+    );
   }
 }

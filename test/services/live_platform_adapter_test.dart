@@ -139,6 +139,42 @@ void main() {
     });
   });
 
+  group('PureLiveDirectLinkAdapter', () {
+    test('accepts direct stream links and rejects unrelated URLs', () {
+      for (final link in [
+        'https://cdn.example/live.m3u8?token=abc',
+        'http://cdn.example:8080/live.m3u8',
+        'https://cdn.example/live.flv',
+        'https://cdn.example/live.mp4',
+      ]) {
+        expect(PureLiveDirectLinkAdapter.uriFromLink(link), isNotNull);
+      }
+      for (final link in [
+        'http://cdn.example/channel.m3u',
+        'https://cdn.example/watch/123',
+        'https://user@cdn.example/live.m3u8',
+        'https://cdn.example/live.m3u8#fragment',
+        'file:///tmp/live.m3u8',
+      ]) {
+        expect(PureLiveDirectLinkAdapter.uriFromLink(link), isNull);
+      }
+    });
+
+    test(
+      'uses Pure Live IPTV URL resolution for direct stream links',
+      () async {
+        final adapter = PureLiveDirectLinkAdapter();
+        final favorite = await adapter.resolveFavorite(
+          'https://cdn.example/live.m3u8?token=abc',
+        );
+        expect(favorite.platformId, 'pure_live');
+        expect(favorite.roomUrl, 'https://cdn.example/live.m3u8?token=abc');
+        expect(favorite.status, LiveFavoriteStatus.live);
+        expect(() => PureLiveDirectLinkSite().getDanmaku(), returnsNormally);
+      },
+    );
+  });
+
   group('DouyinLivePlatformAdapter', () {
     test('imports a Douyin root live link as its fixed web RID', () async {
       const rawLink =

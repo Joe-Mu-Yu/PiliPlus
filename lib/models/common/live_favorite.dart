@@ -11,9 +11,9 @@ class LiveFavorite {
     this.coverUrl,
     this.status = LiveFavoriteStatus.unknown,
     Iterable<String> tagIds = const [],
-  }) : platformId = _required(platformId, 'platformId').toLowerCase(),
+  }) : platformId = _normalizedPlatform(platformId),
        roomId = _required(roomId, 'roomId'),
-       roomUrl = _validatedUrl(roomUrl),
+       roomUrl = _validatedUrl(roomUrl, _normalizedPlatform(platformId)),
        tagIds = List.unmodifiable(
          tagIds.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty).toSet(),
        );
@@ -67,18 +67,35 @@ class LiveFavorite {
     return normalized;
   }
 
-  static String _validatedUrl(String value) {
+  static String _normalizedPlatform(String value) =>
+      _required(value, 'platformId').toLowerCase();
+
+  static String _validatedUrl(String value, String platformId) {
     final normalized = _required(value, 'roomUrl');
     final uri = Uri.tryParse(normalized);
+    final scheme = uri?.scheme.toLowerCase();
+    final allowedSchemes = platformId == 'iptv'
+        ? const {'http', 'https', 'rtmp', 'rtsp', 'udp', 'mms', 'p2p'}
+        : const {'http', 'https'};
+    final invalidHttpHost =
+        {'http', 'https'}.contains(scheme) && (uri?.host.isEmpty ?? true);
     if (uri == null ||
-        !{'http', 'https'}.contains(uri.scheme) ||
-        uri.host.isEmpty ||
+        !allowedSchemes.contains(scheme) ||
+        invalidHttpHost ||
         uri.userInfo.isNotEmpty) {
       throw ArgumentError.value(
         value,
         'roomUrl',
-        'must be an absolute HTTP(S) URL without user info',
+        platformId == 'iptv'
+            ? 'must be a supported IPTV stream URL without user info'
+            : 'must be an absolute HTTP(S) URL without user info',
       );
+    }
+    // Dart's URI serializer removes the empty-user-info marker from multicast
+    // addresses such as udp://@239.0.0.1:1234. IPTV players use that spelling
+    // to select the receive/listen form, so preserve non-HTTP stream URLs.
+    if (platformId == 'iptv' && scheme != 'http' && scheme != 'https') {
+      return normalized;
     }
     return uri.toString();
   }

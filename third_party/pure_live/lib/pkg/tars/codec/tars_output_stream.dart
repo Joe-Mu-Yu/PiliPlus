@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import './tars_struct.dart';
 import './tars_encode_exception.dart';
-import 'package:pure_live/core/common/log.dart';
+import 'package:pure_live/core/common/core_log.dart';
 
 class BinaryWriter {
   List<int> buffer;
@@ -71,7 +71,7 @@ class TarsOutputStream {
       try {
         bw.writeInt(b, 1);
       } catch (e) {
-        Log.d(e.toString());
+        CoreLog.d(e.toString());
       }
     } else if (tag < 256) {
       try {
@@ -81,7 +81,7 @@ class TarsOutputStream {
           bw.writeInt(tag, 1);
         }
       } catch (e) {
-        Log.d('${toString()} writeHead: $e');
+        CoreLog.d('${toString()} writeHead: $e');
       }
     } else {
       throw TarsEncodeException('tag is too large: $tag');
@@ -127,7 +127,7 @@ class TarsOutputStream {
       try {
         bw.writeInt(b, 1);
       } catch (e) {
-        Log.d(e.toString());
+        CoreLog.d(e.toString());
       }
     }
   }

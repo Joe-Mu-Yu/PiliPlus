@@ -2,6 +2,8 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 import 'package:pure_live/core/iptv/models/channel.dart' as model;
@@ -9,11 +11,13 @@ import 'package:pure_live/core/iptv/models/channel.dart' as model;
 import 'playlist_channel_reconciler.dart';
 
 import 'package:drift/drift.dart' as drift;
-import 'package:pure_live/common/index.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:synchronized/synchronized.dart';
+import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
+import 'package:pure_live/common/utils/toast_util.dart';
 import 'package:pure_live/plugins/file_utils.dart';
 import 'package:pure_live/plugins/db_service.dart';
+import 'package:pure_live/plugins/locale_helper.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:charset_converter/charset_converter.dart';
 import 'package:pure_live/core/iptv/parsers/m3u_parser.dart';
@@ -25,7 +29,8 @@ class IptvImportManager {
   IptvImportManager({Future<Directory> Function()? cacheDirectory})
     : _cacheDirectory = cacheDirectory ?? _defaultCacheDirectory;
   final Future<Directory> Function() _cacheDirectory;
-  static Future<Directory> _defaultCacheDirectory() => AppPathManager().getDir(AppPathManager.dirIptvCache);
+  static Future<Directory> _defaultCacheDirectory() =>
+      AppPathManager().getDir(AppPathManager.dirIptvCache);
   static final _mappingLock = Lock();
   static final _importLock = Lock();
 
@@ -69,7 +74,8 @@ class IptvImportManager {
         if (showTips) ToastUtil.show(i18n('unsupported_file_format'));
         return false;
       }
-      if (p.extension(file.path) != extension) file = await file.rename(p.setExtension(file.path, extension));
+      if (p.extension(file.path) != extension)
+        file = await file.rename(p.setExtension(file.path, extension));
       return await importIptvFile(
         file: file,
         providerName: _playlistName(fileName),
@@ -97,7 +103,8 @@ class IptvImportManager {
     try {
       final extension = fileString.trim().startsWith('#EXTM3U')
           ? '.m3u'
-          : fileName.toLowerCase().endsWith('.txt') || fileString.contains(',#genre#')
+          : fileName.toLowerCase().endsWith('.txt') ||
+                fileString.contains(',#genre#')
           ? '.txt'
           : '.m3u';
       final cache = await _cacheDirectory();
@@ -113,7 +120,8 @@ class IptvImportManager {
       );
     } catch (e) {
       debugPrint('Web IPTV Import Failure: $e');
-      if (showTips) ToastUtil.show(i18n('subscription_download_or_parse_failed'));
+      if (showTips)
+        ToastUtil.show(i18n('subscription_download_or_parse_failed'));
       return false;
     } finally {
       await _cleanupTemporaryDirectory(temporary);
@@ -146,7 +154,11 @@ class IptvImportManager {
     }
   }
 
-  Future<bool> importFromSharedMedia(dynamic media, {bool forceUpdate = false, bool showTips = true}) async {
+  Future<bool> importFromSharedMedia(
+    dynamic media, {
+    bool forceUpdate = false,
+    bool showTips = true,
+  }) async {
     File? file;
     try {
       if (media.content == null || media.content!.isEmpty) {
@@ -195,7 +207,8 @@ class IptvImportManager {
     try {
       final ext = p.extension(file.path).toLowerCase();
       final cleanName = providerName.trim();
-      if (cleanName.isEmpty || !{'.m3u', '.m3u8', '.txt'}.contains(ext)) return false;
+      if (cleanName.isEmpty || !{'.m3u', '.m3u8', '.txt'}.contains(ext))
+        return false;
       final bytes = await file.readAsBytes();
       final content = await _decode(bytes);
       // Parser IDs are transient. Reconciliation selects durable IDs at commit.
@@ -224,13 +237,19 @@ class IptvImportManager {
         } else {
           final matches = (await db.getAllProviders())
               .where(
-                (e) => e.id != FileUtils.systemHotProviderId && e.name.trim().toLowerCase() == cleanName.toLowerCase(),
+                (e) =>
+                    e.id != FileUtils.systemHotProviderId &&
+                    e.name.trim().toLowerCase() == cleanName.toLowerCase(),
               )
               .toList();
           if (matches.length > 1) {
-            final byUrl = matches.where((e) => url.isNotEmpty && e.url == url).toList();
+            final byUrl = matches
+                .where((e) => url.isNotEmpty && e.url == url)
+                .toList();
             if (byUrl.length != 1) {
-              throw StateError('Multiple saved playlists share this name; select a source to refresh');
+              throw StateError(
+                'Multiple saved playlists share this name; select a source to refresh',
+              );
             }
             existing = byUrl.single;
           } else if (matches.isNotEmpty) {
@@ -238,29 +257,38 @@ class IptvImportManager {
           }
         }
         if (existing != null && !hot && !forceUpdate) {
-          final confirmed = await Get.dialog<bool>(
-            Builder(
-              builder: (context) => AlertDialog(
-                scrollable: true,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                title: Text(i18n('provider_name_exists_tip')),
-                content: Text(
-                  '"$cleanName"\n\n${i18n("replace_confirm_message").replaceAll("{}", ext == '.txt' ? 'TXT' : 'M3U')}',
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(i18n('cancel'))),
-                  TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text(i18n('confirm'))),
-                ],
-              ),
-            ),
+          final confirmed = await showDialog<bool>(
+            context: Get.context!,
             barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              scrollable: true,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(i18n('provider_name_exists_tip')),
+              content: Text(
+                '"$cleanName"\n\n${i18n("replace_confirm_message").replaceAll("{}", ext == '.txt' ? 'TXT' : 'M3U')}',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(i18n('cancel')),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(i18n('confirm')),
+                ),
+              ],
+            ),
           );
           if (confirmed != true) {
             cancelled = true;
             return false;
           }
         }
-        final providerId = existing?.id ?? (hot ? FileUtils.systemHotProviderId : const Uuid().v4());
+        final providerId =
+            existing?.id ??
+            (hot ? FileUtils.systemHotProviderId : const Uuid().v4());
         await _saveToDatabase(
           bytes: bytes,
           ext: ext,
@@ -272,7 +300,8 @@ class IptvImportManager {
         );
         return true;
       });
-      if (showTips && !cancelled) ToastUtil.show(i18n(success ? 'sync_success' : 'sync_failed'));
+      if (showTips && !cancelled)
+        ToastUtil.show(i18n(success ? 'sync_success' : 'sync_failed'));
       return success;
     } catch (e) {
       debugPrint('IPTV Import Error: $e');
@@ -312,9 +341,14 @@ class IptvImportManager {
       await _mappingLock.synchronized(
         () => db.transaction(() async {
           final current = await db.getProviderById(providerId);
-          if (current != expected) throw StateError('Saved playlist changed while import was pending');
+          if (current != expected)
+            throw StateError('Saved playlist changed while import was pending');
           final previous = await db.getChannelsForProvider(providerId);
-          final entries = reconcilePlaylistChannels(providerId: providerId, previous: previous, incoming: channels);
+          final entries = reconcilePlaylistChannels(
+            providerId: providerId,
+            previous: previous,
+            incoming: channels,
+          );
           if (current == null) {
             await db.upsertProvider(
               database.ProvidersCompanion.insert(
@@ -323,11 +357,16 @@ class IptvImportManager {
                 type: ext.substring(1),
                 url: drift.Value(sourceUrl),
                 lastRefresh: drift.Value(DateTime.now()),
-                isAutoUpdate: drift.Value(url.isNotEmpty && SettingsService.to.iptv.isAutoSyncEnabled.value),
+                isAutoUpdate: drift.Value(
+                  url.isNotEmpty &&
+                      IptvSettingsController.to.isAutoSyncEnabled.value,
+                ),
               ),
             );
           } else {
-            await (db.update(db.providers)..where((t) => t.id.equals(providerId))).write(
+            await (db.update(
+              db.providers,
+            )..where((t) => t.id.equals(providerId))).write(
               database.ProvidersCompanion(
                 name: drift.Value(providerName),
                 type: drift.Value(ext.substring(1)),
@@ -340,10 +379,24 @@ class IptvImportManager {
           final retained = entries.map((e) => e.id.value).toSet();
           await db.batch((batch) {
             for (final old in previous.where((e) => !retained.contains(e.id))) {
-              batch.deleteWhere(db.epgMappings, (t) => t.channelId.equals(old.id) & t.providerId.equals(providerId));
-              batch.deleteWhere(db.favoriteListChannels, (t) => t.channelId.equals(old.id));
-              batch.deleteWhere(db.failoverGroupChannels, (t) => t.channelId.equals(old.id));
-              batch.deleteWhere(db.channels, (t) => t.id.equals(old.id) & t.providerId.equals(providerId));
+              batch.deleteWhere(
+                db.epgMappings,
+                (t) =>
+                    t.channelId.equals(old.id) &
+                    t.providerId.equals(providerId),
+              );
+              batch.deleteWhere(
+                db.favoriteListChannels,
+                (t) => t.channelId.equals(old.id),
+              );
+              batch.deleteWhere(
+                db.failoverGroupChannels,
+                (t) => t.channelId.equals(old.id),
+              );
+              batch.deleteWhere(
+                db.channels,
+                (t) => t.id.equals(old.id) & t.providerId.equals(providerId),
+              );
             }
           });
           await _rebuildEpgMappings(providerId: providerId);
@@ -354,7 +407,12 @@ class IptvImportManager {
       if (expected?.url != null && expected!.url != sourceUrl) {
         try {
           cache ??= await _cacheDirectory();
-          await _deleteOwnedLocalFile(expected.url!, cache, legacyProviderId: expected.id, db: db);
+          await _deleteOwnedLocalFile(
+            expected.url!,
+            cache,
+            legacyProviderId: expected.id,
+            db: db,
+          );
         } catch (e) {
           debugPrint('Old playlist cache cleanup failed: $e');
         }
@@ -384,43 +442,57 @@ class IptvImportManager {
     required database.AppDatabase db,
   }) async {
     final candidate = _localPlaylistPath(path);
-    if (candidate == null || !p.equals(p.dirname(p.absolute(candidate)), p.absolute(cache.path))) return;
+    if (candidate == null ||
+        !p.equals(p.dirname(p.absolute(candidate)), p.absolute(cache.path)))
+      return;
     final name = p.basename(candidate);
-    final versioned = RegExp(r'^playlist_[0-9a-f-]{36}\.(m3u8?|txt)$', caseSensitive: false).hasMatch(name);
+    final versioned = RegExp(
+      r'^playlist_[0-9a-f-]{36}\.(m3u8?|txt)$',
+      caseSensitive: false,
+    ).hasMatch(name);
     final legacy =
-        RegExp(r'^[0-9a-f-]+$', caseSensitive: false).hasMatch(legacyProviderId) &&
+        RegExp(
+          r'^[0-9a-f-]+$',
+          caseSensitive: false,
+        ).hasMatch(legacyProviderId) &&
         {'.m3u', '.m3u8', '.txt'}.any((ext) => name == '$legacyProviderId$ext');
     if (!versioned && !legacy) return;
-    if (await FileSystemEntity.type(candidate, followLinks: false) != FileSystemEntityType.file) return;
+    if (await FileSystemEntity.type(candidate, followLinks: false) !=
+        FileSystemEntityType.file)
+      return;
     // Keep the DB reference snapshot stable through deletion. URI, separator,
     // case and symlink aliases must not make a shared file look unreferenced.
     await db.transaction(() async {
       final resolved = await File(candidate).resolveSymbolicLinks();
       for (final provider in await db.getAllProviders()) {
-        final reference = provider.url == null ? null : _localPlaylistPath(provider.url!);
+        final reference = provider.url == null
+            ? null
+            : _localPlaylistPath(provider.url!);
         if (reference == null) continue;
         if (p.equals(p.absolute(reference), p.absolute(candidate))) return;
         final type = await FileSystemEntity.type(reference, followLinks: false);
-        if (type != FileSystemEntityType.file && type != FileSystemEntityType.link) continue;
-        if (p.equals(await File(reference).resolveSymbolicLinks(), resolved)) return;
+        if (type != FileSystemEntityType.file &&
+            type != FileSystemEntityType.link)
+          continue;
+        if (p.equals(await File(reference).resolveSymbolicLinks(), resolved))
+          return;
       }
       await File(candidate).delete();
     });
   }
 
-  Future<void> runAutoEpgMapping({required String providerId}) =>
-      _mappingLock.synchronized(() => _rebuildEpgMappings(providerId: providerId));
+  Future<void> runAutoEpgMapping({required String providerId}) => _mappingLock
+      .synchronized(() => _rebuildEpgMappings(providerId: providerId));
 
   Future<void> _rebuildEpgMappings({required String providerId}) async {
     final db = Get.find<DbService>().db;
-    final selected = SettingsService.to.iptv.selectedSourceId;
+    final selected = IptvSettingsController.to.selectedSourceId;
     final sourceId = selected.value;
     if (sourceId.isEmpty) return;
     bool sourceChanged = false;
-    // A synchronous listener also catches A -> B -> A during a database await.
-    final detach = selected.addListener(() => sourceChanged = true);
+    final sourceWorker = ever<String>(selected, (_) => sourceChanged = true);
     void checkSource() {
-      if (sourceChanged || selected.isDisposed || selected.value != sourceId) {
+      if (sourceChanged || selected.value != sourceId) {
         throw const _MappingSourceChanged();
       }
     }
@@ -433,8 +505,12 @@ class IptvImportManager {
         checkSource();
         // Missing data is not an instruction to remove saved user mappings.
         if (channels.isEmpty || epgChannels.isEmpty) return;
-        final previous = await (db.select(db.epgMappings)..where((t) => t.providerId.equals(providerId))).get();
-        final byChannel = {for (final mapping in previous) mapping.channelId: mapping};
+        final previous = await (db.select(
+          db.epgMappings,
+        )..where((t) => t.providerId.equals(providerId))).get();
+        final byChannel = {
+          for (final mapping in previous) mapping.channelId: mapping,
+        };
         final index = _ImportEpgIndex(epgChannels);
         final matched = <String>{};
         final updates = <database.EpgMappingsCompanion>[];
@@ -445,7 +521,8 @@ class IptvImportManager {
           if (epgId == null) continue;
           matched.add(channel.id);
           // Do not reset confidence or timestamps for an unchanged mapping.
-          if (old?.epgChannelId == epgId && old?.epgSourceId == sourceId) continue;
+          if (old?.epgChannelId == epgId && old?.epgSourceId == sourceId)
+            continue;
           updates.add(
             database.EpgMappingsCompanion.insert(
               channelId: channel.id,
@@ -458,7 +535,9 @@ class IptvImportManager {
         }
         checkSource();
         for (final old in previous) {
-          if (!old.locked && old.source == 'auto' && !matched.contains(old.channelId)) {
+          if (!old.locked &&
+              old.source == 'auto' &&
+              !matched.contains(old.channelId)) {
             await db.deleteMapping(old.channelId, providerId);
           }
         }
@@ -469,7 +548,7 @@ class IptvImportManager {
     } on _MappingSourceChanged {
       // Transaction rollback retains the last committed mapping snapshot.
     } finally {
-      detach();
+      sourceWorker.dispose();
     }
   }
 }
@@ -490,11 +569,13 @@ class _ImportEpgIndex {
   }
 
   static final _clean = RegExp(r'[^a-zA-Z0-9\u4e00-\u9fa5]');
-  static String _name(String value) => value.toLowerCase().replaceAll(_clean, '');
+  static String _name(String value) =>
+      value.toLowerCase().replaceAll(_clean, '');
   final _byId = <String, List<String>>{};
   final _byName = <String, List<String>>{};
   final _nameMatches = <String, String?>{};
-  String? _unique(List<String> matches) => matches.length == 1 ? matches.single : null;
+  String? _unique(List<String> matches) =>
+      matches.length == 1 ? matches.single : null;
 
   String? match(database.Channel channel) {
     final tvgId = channel.tvgId?.trim().toLowerCase();
@@ -510,7 +591,8 @@ class _ImportEpgIndex {
     String? match;
     for (final entry in _byName.entries) {
       if (name.contains(entry.key) || entry.key.contains(name)) {
-        if (match != null || entry.value.length != 1) return _nameMatches[name] = null;
+        if (match != null || entry.value.length != 1)
+          return _nameMatches[name] = null;
         match = entry.value.single;
       }
     }

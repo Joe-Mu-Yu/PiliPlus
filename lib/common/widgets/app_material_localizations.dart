@@ -1,4 +1,5 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter_localizations/flutter_localizations.dart' as fl;
+import 'package:material_ui/material_ui.dart' hide GlobalMaterialLocalizations;
 
 /// Material routes opened outside the page subtree must provide their own
 /// localization scope because GetX may build them in the root navigator.
@@ -13,9 +14,10 @@ class AppMaterialLocalizations extends StatelessWidget {
   final Locale locale;
 
   @override
-  Widget build(BuildContext context) => Localizations(
+  Widget build(BuildContext context) => Localizations.override(
+    context: context,
     locale: locale,
-    delegates: GlobalMaterialLocalizations.delegates,
+    delegates: fl.GlobalMaterialLocalizations.delegates,
     child: child,
   );
 }

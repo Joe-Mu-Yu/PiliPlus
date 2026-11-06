@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart' as account_follow;
+import 'package:PiliPlus/pages/pure_live_follow/iptv_page.dart';
+import 'package:PiliPlus/pages/pure_live_follow/link_parser_page.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
 import 'package:PiliPlus/pages/pure_live_follow/controller.dart';
 import 'package:PiliPlus/services/hive_live_favorite_store.dart';
@@ -52,6 +54,7 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
               BilibiliLivePlatformAdapter(),
               DouyuLivePlatformAdapter(),
               DouyinLivePlatformAdapter(),
+              PureLiveDirectLinkAdapter(),
             ],
           ),
           tag: _controllerTag,
@@ -84,11 +87,9 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
         titleSpacing: 16,
         actions: [
           IconButton(
-            tooltip: 'B站账号关注',
-            onPressed: () => Get.to<void>(
-              () => const account_follow.LiveFollowPage(),
-            ),
-            icon: const Icon(Icons.live_tv_outlined),
+            tooltip: '链接解析',
+            onPressed: _openLinkParser,
+            icon: const Icon(Icons.link),
           ),
           TextButton(
             key: const ValueKey('recorder-center-action'),
@@ -108,9 +109,36 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
             child: const Text('录制'),
           ),
           IconButton(
-            tooltip: '添加直播间',
-            onPressed: _showAddDialog,
-            icon: const Icon(Icons.add_link),
+            tooltip: 'IPTV 频道',
+            onPressed: _openIptv,
+            icon: const Icon(Icons.playlist_play),
+          ),
+          PopupMenuButton<_LiveHeaderAction>(
+            tooltip: '更多直播功能',
+            onSelected: (action) {
+              switch (action) {
+                case _LiveHeaderAction.accountFollows:
+                  Get.to<void>(() => const account_follow.LiveFollowPage());
+                case _LiveHeaderAction.addFavorite:
+                  unawaited(_showAddDialog());
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _LiveHeaderAction.addFavorite,
+                child: ListTile(
+                  leading: Icon(Icons.add_link),
+                  title: Text('添加到关注'),
+                ),
+              ),
+              PopupMenuItem(
+                value: _LiveHeaderAction.accountFollows,
+                child: ListTile(
+                  leading: Icon(Icons.live_tv_outlined),
+                  title: Text('B站账号关注'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -287,7 +315,9 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
                   ),
                   if (_controller.favorites.isEmpty) ...[
                     const SizedBox(height: 8),
-                    const Center(child: Text('粘贴支持平台的直播间链接即可添加')),
+                    const Center(
+                      child: Text('可粘贴直播间链接，或从右上角导入 IPTV 播放列表'),
+                    ),
                     const SizedBox(height: 16),
                     Center(
                       child: FilledButton.icon(
@@ -491,6 +521,8 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
     'bilibili' => '哔哩哔哩',
     'douyu' => '斗鱼',
     'douyin' => '抖音',
+    'pure_live' => '自定义直播源',
+    'iptv' => 'IPTV',
     _ => platform,
   };
 
@@ -537,6 +569,13 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
 
   Future<void> _openPureLiveRoom(LiveFavorite favorite) async {
     try {
+      if (favorite.platformId == 'pure_live' || favorite.platformId == 'iptv') {
+        await Get.toNamed<void>(
+          '/pure_live/live_play',
+          arguments: favorite,
+        );
+        return;
+      }
       if (favorite.platformId != 'douyin') {
         throw UnsupportedError('当前应用内播放先支持抖音，其他平台适配中');
       }
@@ -548,6 +587,14 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
       SmartDialog.showToast('打开直播间失败：$error');
     }
   }
+
+  Future<void> _openIptv() => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => const PureLiveIptvPage()),
+  );
+
+  Future<void> _openLinkParser() => Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(builder: (_) => const PureLiveLinkParserPage()),
+  );
 
   Future<void> _showAddDialog() async {
     final link = await showDialog<String>(
@@ -644,6 +691,8 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
   }
 }
 
+enum _LiveHeaderAction { addFavorite, accountFollows }
+
 class _AddLiveRoomDialog extends StatefulWidget {
   const _AddLiveRoomDialog({
     this.title = '添加直播间',
@@ -675,7 +724,7 @@ class _AddLiveRoomDialogState extends State<_AddLiveRoomDialog> {
       keyboardType: TextInputType.url,
       decoration: InputDecoration(
         labelText: '直播间链接',
-        hintText: '当前支持 B站、斗鱼、抖音链接',
+        hintText: '支持 B站、斗鱼、抖音房间，以及 M3U8/FLV/MP4 单条直播流',
         suffixIcon: IconButton(
           tooltip: '粘贴',
           icon: const Icon(Icons.content_paste),
