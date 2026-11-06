@@ -1,8 +1,11 @@
 import 'package:PiliPlus/services/audio_handler.dart';
 import 'package:PiliPlus/services/audio_session.dart';
+import 'package:PiliPlus/services/live_platform_adapter.dart';
 import 'package:get/get.dart';
 import 'package:pure_live/common/global/app_path_manager.dart';
 import 'package:pure_live/common/services/settings/iptv_settings_controller.dart';
+import 'package:pure_live/core/site/iptv/iptv_site.dart';
+import 'package:pure_live/host/recording_site_registry.dart';
 import 'package:pure_live/plugins/db_service.dart';
 import 'package:pure_live/recorder/pages/record_settings/record_settings_controller.dart';
 import 'package:pure_live/recorder/pages/recorder/recorder_controller.dart';
@@ -21,6 +24,8 @@ Future<void> setupServiceLocator() async {
 }
 
 void setupPureLiveRecordingServices() {
+  RecordingSiteRegistry.register('pure_live', PureLiveDirectLinkSite.new);
+  RecordingSiteRegistry.register('iptv', IptvSite.new);
   if (!Get.isRegistered<CacheService>()) {
     Get.lazyPut(CacheService.new, fenix: true);
   }

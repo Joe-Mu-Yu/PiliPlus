@@ -423,7 +423,10 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
   }
 
   Future<void> _signIn() async {
-    if (_account.text.trim().isEmpty || _password.text.isEmpty) return;
+    if (_account.text.trim().isEmpty || _password.text.isEmpty) {
+      setState(() => _cloudError = '请输入 CloudBase 用户名和密码');
+      return;
+    }
     await _runCloudAction(() async {
       await _cloud.signIn(
         account: _account.text.trim(),
@@ -619,7 +622,12 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       for (final path in paths) {
         try {
           await _cloud.deletePhoto(path.substring(_cloudPhotoPrefix.length));
-        } catch (_) {}
+        } catch (cleanupError, cleanupStackTrace) {
+          debugPrint(
+            'CoupleSpace photo rollback failed for $path: $cleanupError\n'
+            '$cleanupStackTrace',
+          );
+        }
       }
       return;
     } finally {

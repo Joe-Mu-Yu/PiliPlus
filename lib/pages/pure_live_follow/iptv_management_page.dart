@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -115,39 +116,41 @@ class _PureLiveIptvManagementPageState
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('IPTV 导入与设置'),
-      actions: [
-        IconButton(
-          tooltip: '同步已启用的网络源',
-          onPressed: _loading || _syncingAll ? null : _syncAll,
-          icon: _syncingAll
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.sync),
-        ),
-        IconButton(
-          tooltip: '刷新资源',
-          onPressed: _loading ? null : _refresh,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    body: FutureBuilder<void>(
-      future: _initialization,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return _buildFailure('IPTV 初始化失败：${snapshot.error}');
-        }
-        if (_loadError case final error?) return _buildFailure(error);
-        return _buildBody();
-      },
+  Widget build(BuildContext context) => NativeNavigationForeground(
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('IPTV 导入与设置'),
+        actions: [
+          IconButton(
+            tooltip: '同步已启用的网络源',
+            onPressed: _loading || _syncingAll ? null : _syncAll,
+            icon: _syncingAll
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+          ),
+          IconButton(
+            tooltip: '刷新资源',
+            onPressed: _loading ? null : _refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: FutureBuilder<void>(
+        future: _initialization,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _buildFailure('IPTV 初始化失败：${snapshot.error}');
+          }
+          if (_loadError case final error?) return _buildFailure(error);
+          return _buildBody();
+        },
+      ),
     ),
   );
 

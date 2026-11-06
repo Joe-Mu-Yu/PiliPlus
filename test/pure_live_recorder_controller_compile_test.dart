@@ -6,6 +6,7 @@ import 'package:pure_live/recorder/ffmpeg/ffmpeg_event.dart';
 import 'package:pure_live/recorder/ffmpeg/ffmpeg_types.dart';
 import 'package:pure_live/recorder/services/video_processor_service.dart';
 import 'package:pure_live/recorder/services/recorder_continuation_policy.dart';
+import 'package:pure_live/host/recording_site_registry.dart';
 
 void main() {
   test(
@@ -16,6 +17,17 @@ void main() {
       expect(RecordSettingsPage, isNotNull);
     },
   );
+
+  test('recording registry covers every native live playback platform', () {
+    for (final platform in ['bilibili', 'douyin', 'douyu', 'huya']) {
+      expect(
+        RecordingSiteRegistry.isSupported(platform),
+        isTrue,
+        reason: '$platform playback must not expose an unsupported recorder',
+      );
+      expect(RecordingSiteRegistry.of(platform).id, platform);
+    }
+  });
 
   test('merge errors preserve the native diagnostic message for the UI', () {
     final event = FFmpegEvent(

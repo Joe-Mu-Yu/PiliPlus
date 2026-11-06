@@ -411,7 +411,7 @@ class PureLiveDirectLinkAdapter implements LivePlatformAdapter {
 
 class PureLiveDirectLinkSite extends LiveSite {
   @override
-  String get id => 'iptv';
+  String get id => 'pure_live';
 
   @override
   String get name => '自定义直播源';

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/pure_live_follow/iptv_management_page.dart';
 import 'package:PiliPlus/pages/pure_live_follow/playback_page.dart';
@@ -168,33 +169,35 @@ class _PureLiveIptvPageState extends State<PureLiveIptvPage> {
   };
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('IPTV 频道'),
-      actions: [
-        IconButton(
-          tooltip: '导入与设置',
-          onPressed: _openSettings,
-          icon: const Icon(Icons.playlist_add),
-        ),
-        IconButton(
-          tooltip: '刷新频道',
-          onPressed: _loading ? null : _reload,
-          icon: const Icon(Icons.refresh),
-        ),
-      ],
-    ),
-    body: FutureBuilder<void>(
-      future: _initialization,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return _buildFailure('IPTV 初始化失败：${snapshot.error}');
-        }
-        return _buildBody();
-      },
+  Widget build(BuildContext context) => NativeNavigationForeground(
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('IPTV 频道'),
+        actions: [
+          IconButton(
+            tooltip: '导入与设置',
+            onPressed: _openSettings,
+            icon: const Icon(Icons.playlist_add),
+          ),
+          IconButton(
+            tooltip: '刷新频道',
+            onPressed: _loading ? null : _reload,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: FutureBuilder<void>(
+        future: _initialization,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return _buildFailure('IPTV 初始化失败：${snapshot.error}');
+          }
+          return _buildBody();
+        },
+      ),
     ),
   );
 

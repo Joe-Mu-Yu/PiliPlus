@@ -160,19 +160,18 @@ void main() {
       }
     });
 
-    test(
-      'uses Pure Live IPTV URL resolution for direct stream links',
-      () async {
-        final adapter = PureLiveDirectLinkAdapter();
-        final favorite = await adapter.resolveFavorite(
-          'https://cdn.example/live.m3u8?token=abc',
-        );
-        expect(favorite.platformId, 'pure_live');
-        expect(favorite.roomUrl, 'https://cdn.example/live.m3u8?token=abc');
-        expect(favorite.status, LiveFavoriteStatus.live);
-        expect(() => PureLiveDirectLinkSite().getDanmaku(), returnsNormally);
-      },
-    );
+    test('keeps direct streams on their own recording platform', () async {
+      final adapter = PureLiveDirectLinkAdapter();
+      final favorite = await adapter.resolveFavorite(
+        'https://cdn.example/live.m3u8?token=abc',
+      );
+      expect(favorite.platformId, 'pure_live');
+      expect(favorite.roomUrl, 'https://cdn.example/live.m3u8?token=abc');
+      expect(favorite.status, LiveFavoriteStatus.live);
+      final site = PureLiveDirectLinkSite();
+      expect(site.id, 'pure_live');
+      expect(site.getDanmaku, returnsNormally);
+    });
   });
 
   group('DouyinLivePlatformAdapter', () {
