@@ -174,6 +174,22 @@ class SigningWorkflowTest(unittest.TestCase):
         self.assertIn('PUB_HOSTED_URL: https://pub.dev', self.workflow)
         self.assertNotIn('PUB_HOSTED_URL: https://pub.flutter-io.cn', self.workflow)
 
+    def test_release_reclaims_only_unneeded_runner_sdks(self):
+        cleanup_step, cleanup_command = self.extract_step('Reclaim runner disk space')
+        for path in (
+            '/opt/ghc',
+            '/opt/hostedtoolcache/CodeQL',
+            '/usr/local/share/boost',
+            '/usr/share/dotnet',
+            '/usr/local/lib/android/sdk/ndk',
+        ):
+            self.assertIn(path, cleanup_command)
+        self.assertNotIn('/usr/local/lib/android/sdk/platform-tools', cleanup_command)
+        self.assertLess(
+            self.workflow.index(cleanup_step),
+            self.workflow.index('      - name: Install Android SDK components'),
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
