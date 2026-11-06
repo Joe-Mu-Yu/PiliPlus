@@ -85,7 +85,7 @@ Flutter 按固定 SHA 检出后还必须获取官方 `3.47.4` 标签：仅有提
 ```sh
 python3 scripts/release_metadata.py
 ./scripts/flutterw build apk --release --split-per-abi --no-pub \
-  --build-name=2.3.0.0 --build-number=20300000 \
+  --build-name=2.3.0.1 --build-number=20300001 \
   --dart-define-from-file=pili_release.json \
   --dart-define=HYPER_FIREBASE_ANDROID_API_KEY="$HYPER_FIREBASE_ANDROID_API_KEY" \
   --dart-define=PURE_LIVE_FIREBASE_ANDROID_API_KEY="$PURE_LIVE_FIREBASE_ANDROID_API_KEY" \

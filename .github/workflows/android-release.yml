@@ -50,8 +50,9 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       release_notes: ${{ steps.release_notes.outputs.body }}
     env:
-      # Match the hosted origin recorded in pubspec.lock.
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      # Use the canonical archive origin so enforce-lockfile validates the
+      # exact artifacts whose checksums are recorded in pubspec.lock.
+      PUB_HOSTED_URL: https://pub.dev
     steps:
       - uses: actions/checkout@v7
         with:

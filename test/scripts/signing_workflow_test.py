@@ -170,6 +170,10 @@ class SigningWorkflowTest(unittest.TestCase):
             self.workflow.index('      - name: Set up Java'),
         )
 
+    def test_release_uses_canonical_pub_archive_origin(self):
+        self.assertIn('PUB_HOSTED_URL: https://pub.dev', self.workflow)
+        self.assertNotIn('PUB_HOSTED_URL: https://pub.flutter-io.cn', self.workflow)
+
 
 if __name__ == '__main__':
     unittest.main()
