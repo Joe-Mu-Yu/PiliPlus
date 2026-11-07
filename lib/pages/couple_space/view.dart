@@ -1537,6 +1537,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       final recentMessages = _list('messages').take(3).toList();
       final hero = _homeHero();
       final nextDay = _nextAnniversaryCard(next);
+      final sharedLife = _sharedLifeSummary();
       return ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
@@ -1546,12 +1547,18 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
               children: [
                 Expanded(flex: 6, child: hero),
                 const SizedBox(width: 16),
-                Expanded(flex: 4, child: nextDay),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    children: [nextDay, sharedLife],
+                  ),
+                ),
               ],
             )
           else ...[
             hero,
             nextDay,
+            sharedLife,
           ],
           _heading('今天，想一起做什么？'),
           LayoutBuilder(
@@ -1618,23 +1625,6 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
             )
           else
             ...recentMessages.map(_messageCard),
-          _heading(
-            '共同生活',
-            action: TextButton(
-              onPressed: () => setState(() => _tab = 1),
-              child: const Text('去相册'),
-            ),
-          ),
-          _card(
-            child: Row(
-              children: [
-                Expanded(child: _stat('📷', '照片', _photoCount)),
-                Expanded(child: _stat('💌', '心语', _list('messages').length)),
-                Expanded(child: _stat('✅', '清单', _list('tasks').length)),
-                Expanded(child: _stat('🎂', '纪念日', _list('days').length)),
-              ],
-            ),
-          ),
         ],
       );
     },
@@ -1776,6 +1766,29 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       ),
     );
   }
+
+  Widget _sharedLifeSummary() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      _heading(
+        '共同生活',
+        action: TextButton(
+          onPressed: () => setState(() => _tab = 1),
+          child: const Text('去相册'),
+        ),
+      ),
+      _card(
+        child: Row(
+          children: [
+            Expanded(child: _stat('📷', '照片', _photoCount)),
+            Expanded(child: _stat('💌', '心语', _list('messages').length)),
+            Expanded(child: _stat('✅', '清单', _list('tasks').length)),
+            Expanded(child: _stat('🎂', '纪念日', _list('days').length)),
+          ],
+        ),
+      ),
+    ],
+  );
 
   Widget _quickAction(
     double width,

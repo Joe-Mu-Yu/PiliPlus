@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:pure_live/host/recording_common.dart';
 import 'package:PiliPlus/services/pure_live_recording_preferences.dart'
     as _hostPrefs;
@@ -290,6 +291,7 @@ class RecorderController extends GetxService {
             error: message?.isNotEmpty == true
                 ? message!
                 : 'FFmpeg exit code $errorCode',
+            diagnostic: rawLogs,
           );
           final silent = event.data['silent'] == true;
           if (!silent &&
@@ -580,11 +582,21 @@ class RecorderController extends GetxService {
     final damaged = task.pendingAttempts.any(
       (attempt) => attempt.inputIntegrityError,
     );
+    final sourceMissing = mergeError == i18n('recorder_source_missing');
     task.markFailure(
-      stage: damaged ? 'ffmpeg.inputIntegrity' : 'merge',
-      error: damaged
-          ? i18n('recorder_input_integrity_failed')
-          : mergeError ?? i18n('video_ffmpeg_failed'),
+      stage: sourceMissing
+          ? 'merge.sourceMissing'
+          : damaged
+          ? 'ffmpeg.inputIntegrity'
+          : 'merge',
+      // A concrete merge failure (especially a missing source directory) is
+      // more actionable than the older capture verdict for the same attempt.
+      error:
+          mergeError ??
+          (damaged
+              ? i18n('recorder_input_integrity_failed')
+              : i18n('video_ffmpeg_failed')),
+      diagnostic: mergeError,
     );
   }
 
@@ -661,7 +673,7 @@ class RecorderController extends GetxService {
         allSucceeded = false;
       }
     }
-    if (attempts.isNotEmpty) {
+    if (attempts.isNotEmpty && (allSucceeded || publishedRecordings > 0)) {
       ToastUtil.show(
         publishedRecordings > 0
             ? '录制完成：已保存 $publishedRecordings 个视频到相册 Movies/PiliPlus'
@@ -685,6 +697,59 @@ class RecorderController extends GetxService {
     if (published == 0) {
       ToastUtil.show('没有视频保存到相册，请确认 MP4 已完成或检查文件夹');
     }
+  }
+
+  Future<void> recoverPendingRecordings(LiveRecordTask task) async {
+    if (_isClosing || !_ownsTask(task) || task.pendingAttempts.isEmpty) return;
+    task.status = RecordStatus.processing;
+    updateTask(task);
+    final recovered = await _finalizePendingAttempts(task);
+    if (_isClosing || !_ownsTask(task)) return;
+    await settings.refreshCacheSize();
+    if (_isClosing || !_ownsTask(task)) return;
+    if (recovered) {
+      task.clearFailure();
+      task.status = RecordStatus.stopped;
+      ToastUtil.show(i18n('recorder_recovery_completed'));
+    } else {
+      _markFinalizationFailure(task);
+      task.status = RecordStatus.failed;
+    }
+    updateTask(task);
+  }
+
+  Future<void> copyTaskDiagnostics(LiveRecordTask task) async {
+    final diagnostic = task.lastDiagnostic?.trim() ?? '';
+    if (diagnostic.isEmpty) return;
+    final failedAt = task.lastFailTime?.toIso8601String() ?? '-';
+    await Clipboard.setData(
+      ClipboardData(
+        text: [
+          'task=${task.taskId}',
+          'platform=${task.platform}',
+          'stage=${task.lastErrorStage ?? '-'}',
+          'failedAt=$failedAt',
+          'diagnostic=$diagnostic',
+        ].join('\n'),
+      ),
+    );
+    ToastUtil.show(i18n('recorder_diagnostic_copied'));
+  }
+
+  /// Starts a genuinely new recording after an unrecoverable historical
+  /// failure. Only references whose directories are confirmed absent are
+  /// removed; no existing recording file is deleted.
+  Future<void> restartAfterMissingSource(LiveRecordTask task) async {
+    if (_isClosing || !_ownsTask(task)) return;
+    final attempts = List<PendingRecordingAttempt>.of(task.pendingAttempts);
+    for (final attempt in attempts) {
+      if (!await Directory(attempt.directoryPath).exists()) {
+        task.removePendingAttempt(attempt);
+      }
+    }
+    if (_isClosing || !_ownsTask(task)) return;
+    updateTask(task);
+    await startTask(task);
   }
 
   Future<int> _publishFinalizedRecording(

@@ -114,16 +114,14 @@ class VideoProcessorService extends GetxService {
           ? filePrefix!.trim()
           : task.recordingFilePrefix;
       if (resolvedDirectoryPath.isEmpty) {
-        _emitFailed(taskId, i18n('video_dir_not_exist'));
+        _emitFailed(taskId, i18n('recorder_source_missing'));
         return false;
       }
 
-      // The capture can log packet damage yet return zero on manual stop.
-      // Stream-copy remux does not decode that bitstream and can also return
-      // zero. Preserve the exact attempt instead of committing/deleting it.
-      // Check persisted provenance here as well as in controller flows, so
-      // interrupted recovery and direct conversion obey the same contract.
-      if (task.pendingAttempts.any(
+      // A damaged attempt is recoverable, but never disposable. Use FFmpeg's
+      // packet-discarding path to create a best-effort MP4 while retaining the
+      // exact TS source for later inspection or a different repair strategy.
+      final damagedInput = task.pendingAttempts.any(
         (attempt) =>
             p.equals(
               p.absolute(attempt.directoryPath),
@@ -131,10 +129,11 @@ class VideoProcessorService extends GetxService {
             ) &&
             attempt.filePrefix == resolvedFilePrefix &&
             attempt.inputIntegrityError,
-      )) {
-        _emitFailed(taskId, i18n('recorder_input_integrity_failed'));
-        return false;
-      }
+      );
+      final shouldDeleteSourceTs = shouldDeleteSourceSegments(
+        requested: deleteSourceTs,
+        damagedInput: damagedInput,
+      );
 
       // Own a separate cache lease: the recorder's outer lifecycle may finish
       // before a native writer acknowledges timeout cancellation.
@@ -146,7 +145,7 @@ class VideoProcessorService extends GetxService {
 
       final tsDirectory = Directory(resolvedDirectoryPath);
       if (!await tsDirectory.exists()) {
-        _emitFailed(taskId, i18n('video_dir_not_exist'));
+        _emitFailed(taskId, i18n('recorder_source_missing'));
         return false;
       }
       if (operation.cancelled) return false;
@@ -300,33 +299,11 @@ class VideoProcessorService extends GetxService {
         }
       });
 
-      final arguments = <String>[
-        '-y',
-        '-hide_banner',
-        '-loglevel',
-        'warning',
-        // Fail on demux/mux errors before atomic MP4 commit/source deletion.
-        // FFmpegService also latches error diagnostics: some native versions
-        // return zero even with -xerror. Neither check is full codec decoding.
-        '-xerror',
-        '-f',
-        'concat',
-        '-safe',
-        '0',
-        '-i',
-        listFile.path,
-        '-map',
-        '0:v?',
-        '-map',
-        '0:a?',
-        '-c',
-        'copy',
-        '-movflags',
-        '+faststart',
-        '-f',
-        'mp4',
-        partialFile.path,
-      ];
+      final arguments = buildMergeArguments(
+        manifestPath: listFile.path,
+        outputPath: partialFile.path,
+        recoverDamagedInput: damagedInput,
+      );
 
       execution = _ffmpeg
           .start(taskId: ffmpegTaskId, arguments: arguments)
@@ -364,7 +341,7 @@ class VideoProcessorService extends GetxService {
       operation.commitStarted = true;
       await partialFile.rename(outputFile.path);
       partialFile = null;
-      if (deleteSourceTs) {
+      if (shouldDeleteSourceTs) {
         final removedAllSegments = await _deleteFiles(segments, taskId);
         // Retain metadata too if a locked TS remains, enabling exact recovery.
         if (clockJournal != null && removedAllSegments) {
@@ -468,6 +445,54 @@ class VideoProcessorService extends GetxService {
     }
     return manifest.toString();
   }
+
+  /// Healthy recordings remain strict: any demux/mux error aborts before the
+  /// atomic output commit. A recording already proven damaged instead uses a
+  /// bounded salvage mode which drops corrupt packets and always retains its
+  /// source TS files, even when the recovered MP4 is successfully committed.
+  @visibleForTesting
+  static List<String> buildMergeArguments({
+    required String manifestPath,
+    required String outputPath,
+    required bool recoverDamagedInput,
+  }) => <String>[
+    '-y',
+    '-hide_banner',
+    '-loglevel',
+    'warning',
+    if (recoverDamagedInput) ...[
+      '-fflags',
+      '+discardcorrupt',
+      '-err_detect',
+      'ignore_err',
+    ] else
+      // FFmpegService also latches diagnostics because some native versions
+      // can still report a zero exit status after a media warning.
+      '-xerror',
+    '-f',
+    'concat',
+    '-safe',
+    '0',
+    '-i',
+    manifestPath,
+    '-map',
+    '0:v?',
+    '-map',
+    '0:a?',
+    '-c',
+    'copy',
+    '-movflags',
+    '+faststart',
+    '-f',
+    'mp4',
+    outputPath,
+  ];
+
+  @visibleForTesting
+  static bool shouldDeleteSourceSegments({
+    required bool requested,
+    required bool damagedInput,
+  }) => requested && !damagedInput;
 
   @visibleForTesting
   static String mergeFailureMessage(

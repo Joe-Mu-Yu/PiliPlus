@@ -108,6 +108,9 @@ class LiveRecordTask {
   /// Sanitized user-visible failure from the most recent attempt.
   String? lastError;
 
+  /// Sanitized native diagnostic tail retained across restarts for support.
+  String? lastDiagnostic;
+
   /// Stable stage id: room, stream, ffmpeg, merge, scheduler or status.
   String? lastErrorStage;
 
@@ -162,6 +165,7 @@ class LiveRecordTask {
     this.wasStoppedByUser = false,
     this.lastFailTime,
     this.lastError,
+    this.lastDiagnostic,
     this.lastErrorStage,
     this.inputTailDiscarded = false,
     this.inputCoverageIncomplete = false,
@@ -298,15 +302,26 @@ class LiveRecordTask {
     selectedQuality = null;
   }
 
-  void markFailure({required String stage, required Object error, DateTime? now}) {
+  void markFailure({
+    required String stage,
+    required Object error,
+    Object? diagnostic,
+    DateTime? now,
+  }) {
     lastFailTime = now ?? DateTime.now();
     lastErrorStage = stage.trim().toLowerCase();
     final sanitized = RecorderDiagnostics.sanitize(error);
     lastError = sanitized.isEmpty ? null : sanitized;
+    final sanitizedDiagnostic = RecorderDiagnostics.sanitize(
+      diagnostic,
+      maxLength: 1600,
+    );
+    lastDiagnostic = sanitizedDiagnostic.isEmpty ? null : sanitizedDiagnostic;
   }
 
   void clearFailure() {
     lastError = null;
+    lastDiagnostic = null;
     lastErrorStage = null;
   }
 
@@ -371,6 +386,7 @@ class LiveRecordTask {
 
     "lastFailTime": lastFailTime?.toIso8601String(),
     "lastError": lastError,
+    "lastDiagnostic": lastDiagnostic,
     "lastErrorStage": lastErrorStage,
     "inputTailDiscarded": inputTailDiscarded,
     "inputCoverageIncomplete": inputCoverageIncomplete,
@@ -463,6 +479,7 @@ class LiveRecordTask {
 
       lastFailTime: _date(json["lastFailTime"]),
       lastError: _diagnostic(json["lastError"]),
+      lastDiagnostic: _diagnostic(json["lastDiagnostic"], maxLength: 1600),
       lastErrorStage: _stage(json["lastErrorStage"]),
       inputTailDiscarded: _bool(json["inputTailDiscarded"]),
       inputCoverageIncomplete: _bool(json["inputCoverageIncomplete"]),
@@ -489,14 +506,19 @@ class LiveRecordTask {
     return text.isEmpty ? null : text;
   }
 
-  static String? _diagnostic(dynamic value) {
-    final sanitized = RecorderDiagnostics.sanitize(value);
+  static String? _diagnostic(dynamic value, {int maxLength = 320}) {
+    final sanitized = RecorderDiagnostics.sanitize(
+      value,
+      maxLength: maxLength,
+    );
     return sanitized.isEmpty ? null : sanitized;
   }
 
   static String? _stage(dynamic value) {
     final normalized = value?.toString().trim().toLowerCase() ?? '';
-    if (normalized.startsWith('ffmpeg.')) return normalized;
+    if (normalized.startsWith('ffmpeg.') || normalized.startsWith('merge.')) {
+      return normalized;
+    }
     return const {
           'room',
           'quality',

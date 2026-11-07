@@ -512,10 +512,20 @@ class _TaskCard extends StatelessWidget {
 
     if (canRestart.contains(task.status)) {
       String text = i18n("recorder_start");
+      VoidCallback action = () => controller.forceStartTask(task);
 
       switch (task.status) {
         case RecordStatus.failed:
-          text = i18n("retry");
+          if (task.pendingAttempts.isNotEmpty &&
+              task.lastErrorStage != 'merge.sourcemissing') {
+            text = i18n('recorder_recover_recording');
+            action = () => controller.recoverPendingRecordings(task);
+          } else if (task.lastErrorStage == 'merge.sourcemissing') {
+            text = i18n('recorder_restart_record');
+            action = () => controller.restartAfterMissingSource(task);
+          } else {
+            text = i18n("retry");
+          }
           break;
 
         case RecordStatus.waitingLive:
@@ -538,7 +548,7 @@ class _TaskCard extends StatelessWidget {
           deleteButton(),
           FilledButton(
             style: primaryStyle,
-            onPressed: () => controller.forceStartTask(task),
+            onPressed: action,
             child: Text(text),
           ),
         ],
@@ -865,20 +875,36 @@ class _TaskCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          i18n(
-                            'recorder_last_error',
-                            args: {
-                              'stage': _failureStageText(),
-                              'error': task.lastError!,
-                            },
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: _recorderTextStyle(theme, 12).copyWith(
-                            color: theme.colorScheme.onErrorContainer,
-                            height: 1.3,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              i18n(
+                                'recorder_last_error',
+                                args: {
+                                  'stage': _failureStageText(),
+                                  'error': task.lastError!,
+                                },
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: _recorderTextStyle(theme, 12).copyWith(
+                                color: theme.colorScheme.onErrorContainer,
+                                height: 1.3,
+                              ),
+                            ),
+                            if (task.lastDiagnostic?.isNotEmpty == true)
+                              TextButton.icon(
+                                onPressed: () =>
+                                    controller.copyTaskDiagnostics(task),
+                                style: TextButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.only(top: 4),
+                                ),
+                                icon: const Icon(Icons.copy_rounded, size: 14),
+                                label: Text(i18n('recorder_copy_diagnostic')),
+                              ),
+                          ],
                         ),
                       ),
                     ],
