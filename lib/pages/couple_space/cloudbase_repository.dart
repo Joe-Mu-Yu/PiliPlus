@@ -219,6 +219,11 @@ class CoupleSpaceCloudRepository {
   Future<String> uploadPhoto({
     required String spaceId,
     required File file,
+  }) => uploadMedia(spaceId: spaceId, file: file);
+
+  Future<String> uploadMedia({
+    required String spaceId,
+    required File file,
   }) async {
     final extension = p.extension(file.path).toLowerCase();
     final key = '$spaceId/$userId/${_uuid.v4()}$extension';
@@ -232,7 +237,9 @@ class CoupleSpaceCloudRepository {
     return key;
   }
 
-  Future<String> signedPhotoUrl(String key) async {
+  Future<String> signedPhotoUrl(String key) => signedMediaUrl(key);
+
+  Future<String> signedMediaUrl(String key) async {
     final result = _asMap(
       await _requestJson(
         'POST',
@@ -242,12 +249,16 @@ class CoupleSpaceCloudRepository {
     );
     final url = (result['fullSignedURL'] ?? result['signedURL'])?.toString();
     if (url == null || url.isEmpty) {
-      throw const CoupleSpaceCloudException('CloudBase 未返回照片访问地址');
+      throw const CoupleSpaceCloudException('CloudBase 未返回文件访问地址');
     }
     return url;
   }
 
   Future<void> deletePhoto(String key) async {
+    await deleteMedia(key);
+  }
+
+  Future<void> deleteMedia(String key) async {
     await _authorizedRequest(
       'DELETE',
       '/v1/storages/object/couple-space/$key',

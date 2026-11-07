@@ -5,9 +5,16 @@ import 'dart:math';
 
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/pages/couple_space/cloudbase_repository.dart';
+import 'package:PiliPlus/pages/couple_space/cloud_sync_coordinator.dart';
+import 'package:PiliPlus/pages/couple_space/couple_space_model.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:uuid/uuid.dart';
 
 const _storeKey = 'coupleSpace.data.v1';
 const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
@@ -201,15 +208,32 @@ class _MomentDraftDialogState extends State<_MomentDraftDialog> {
 }
 
 class _AnniversaryDialog extends StatefulWidget {
-  const _AnniversaryDialog();
+  const _AnniversaryDialog({this.initialValue});
+
+  final Map<String, dynamic>? initialValue;
 
   @override
   State<_AnniversaryDialog> createState() => _AnniversaryDialogState();
 }
 
 class _AnniversaryDialogState extends State<_AnniversaryDialog> {
-  final _title = TextEditingController();
-  DateTime _date = DateTime.now();
+  late final TextEditingController _title;
+  late DateTime _date;
+  late CoupleAnniversaryType _type;
+  late CoupleAnniversaryRepeat _repeat;
+
+  @override
+  void initState() {
+    super.initState();
+    final value = widget.initialValue == null
+        ? <String, dynamic>{}
+        : normalizeCoupleAnniversary(widget.initialValue!);
+    _title = TextEditingController(text: value['title']?.toString() ?? '');
+    _date =
+        DateTime.tryParse(value['date']?.toString() ?? '') ?? DateTime.now();
+    _type = CoupleAnniversaryType.fromValue(value['type']);
+    _repeat = CoupleAnniversaryRepeat.fromValue(value['repeat']);
+  }
 
   @override
   void dispose() {
@@ -229,7 +253,7 @@ class _AnniversaryDialogState extends State<_AnniversaryDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('添加纪念日'),
+    title: Text(widget.initialValue == null ? '添加纪念日' : '编辑纪念日'),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -243,6 +267,44 @@ class _AnniversaryDialogState extends State<_AnniversaryDialog> {
           icon: const Icon(Icons.calendar_month),
           label: Text(_formatDate(_date)),
         ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<CoupleAnniversaryType>(
+          initialValue: _type,
+          decoration: const InputDecoration(labelText: '类型'),
+          items: CoupleAnniversaryType.values
+              .map(
+                (type) => DropdownMenuItem(
+                  value: type,
+                  child: Text(type.label),
+                ),
+              )
+              .toList(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() {
+              _type = value;
+              if (value == CoupleAnniversaryType.birthday ||
+                  value == CoupleAnniversaryType.festival) {
+                _repeat = CoupleAnniversaryRepeat.yearly;
+              }
+            });
+          },
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<CoupleAnniversaryRepeat>(
+          segments: CoupleAnniversaryRepeat.values
+              .map(
+                (repeat) => ButtonSegment(
+                  value: repeat,
+                  label: Text(repeat.label),
+                ),
+              )
+              .toList(),
+          selected: {_repeat},
+          onSelectionChanged: (value) {
+            setState(() => _repeat = value.first);
+          },
+        ),
       ],
     ),
     actions: [
@@ -254,8 +316,11 @@ class _AnniversaryDialogState extends State<_AnniversaryDialog> {
         onPressed: () {
           if (_title.text.trim().isNotEmpty) {
             Navigator.pop(context, {
+              ...?widget.initialValue,
               'title': _title.text.trim(),
               'date': _date.toIso8601String(),
+              'type': _type.value,
+              'repeat': _repeat.value,
             });
           }
         },
@@ -273,7 +338,10 @@ String _formatDate(dynamic raw) {
   return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
 }
 
-class _CoupleSpacePageState extends State<CoupleSpacePage> {
+class _CoupleSpacePageState extends State<CoupleSpacePage>
+    with WidgetsBindingObserver {
+  static const _cloudSyncInterval = Duration(seconds: 15);
+
   ColorScheme get _colors => ColorScheme.of(context);
   Color get _accent => _colors.primary;
   Color get _textColor => _colors.onSurface;
@@ -285,10 +353,26 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
   final _password = TextEditingController();
   final _inviteCode = TextEditingController();
   final Map<String, String> _photoUrls = {};
+  final AudioRecorder _voiceRecorder = AudioRecorder();
+  final Uuid _uuid = const Uuid();
   CoupleSpaceCloudSnapshot? _snapshot;
   Future<void> _saveQueue = Future<void>.value();
+  late final CoupleSpaceCloudSyncCoordinator _cloudSync;
+  final List<StreamSubscription<dynamic>> _voicePlayerSubscriptions = [];
+  Player? _voicePlayer;
+  Future<Player?>? _voicePlayerInitialization;
+  StreamSubscription<RecordState>? _voiceRecordStateSubscription;
+  Timer? _dayRefreshTimer;
+  Timer? _recordingTimer;
+  int _pendingSaves = 0;
   bool _restoringSession = false;
   bool _busy = false;
+  bool _recordingVoice = false;
+  bool _uploadingVoice = false;
+  bool _voicePlaying = false;
+  int _recordingSeconds = 0;
+  String? _recordingPath;
+  String? _playingVoicePath;
   String? _cloudError;
   int _tab = 0;
   int _heartMode = 0;
@@ -304,21 +388,64 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     _data = raw is String
         ? Map<String, dynamic>.from(jsonDecode(raw))
         : _initialData();
+    _normalizePayload(_data);
     _legacyData = Map<String, dynamic>.from(jsonDecode(jsonEncode(_data)));
-    if (_cloud.isSignedIn) {
-      _restoringSession = true;
+    _restoringSession = _cloud.isSignedIn;
+    _cloudSync = CoupleSpaceCloudSyncCoordinator(
+      interval: _cloudSyncInterval,
+      canSync: () =>
+          mounted &&
+          !_restoringSession &&
+          !_busy &&
+          _pendingSaves == 0 &&
+          _cloud.isSignedIn &&
+          _snapshot != null,
+      sync: () => _loadCloudSpace(showMessage: false, skipIfUnchanged: true),
+      onError: (error, stackTrace) {
+        debugPrint('CoupleSpace background sync failed: $error\n$stackTrace');
+      },
+    )..start();
+    WidgetsBinding.instance.addObserver(this);
+    _scheduleDayRefresh();
+    if (_restoringSession) {
       unawaited(_restoreCloudSession());
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cloudSync.dispose();
+    _dayRefreshTimer?.cancel();
+    _recordingTimer?.cancel();
+    for (final subscription in _voicePlayerSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    unawaited(_voiceRecordStateSubscription?.cancel());
+    final player = _voicePlayer;
+    if (player != null) unawaited(player.dispose());
+    unawaited(_voiceRecorder.cancel());
+    unawaited(_voiceRecorder.dispose());
     _message.dispose();
     _task.dispose();
     _account.dispose();
     _password.dispose();
     _inviteCode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) setState(() {});
+      _scheduleDayRefresh();
+      unawaited(_cloudSync.syncNow());
+    } else if (_recordingVoice &&
+        (state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached)) {
+      unawaited(_cancelVoiceRecording(showMessage: false));
+    }
   }
 
   static Map<String, dynamic> _initialData() => {
@@ -333,15 +460,95 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     'letter': '',
   };
 
+  void _normalizePayload(Map<String, dynamic> payload) {
+    final messages = List<Map<String, dynamic>>.from(
+      (payload['messages'] as List? ?? const []).map(
+        (item) => Map<String, dynamic>.from(item as Map),
+      ),
+    );
+    for (var index = 0; index < messages.length; index++) {
+      final item = messages[index];
+      item
+        ..['id'] = item['id']?.toString().isNotEmpty == true
+            ? item['id']
+            : 'legacy-message-$index-${item['date'] ?? ''}'
+        ..['type'] = item['type'] == 'voice' ? 'voice' : 'text'
+        ..['text'] = item['text']?.toString() ?? '';
+    }
+    payload['messages'] = messages;
+
+    final days = List<Map<String, dynamic>>.from(
+      (payload['days'] as List? ?? const []).map(
+        (item) => normalizeCoupleAnniversary(
+          Map<String, dynamic>.from(item as Map),
+        ),
+      ),
+    );
+    for (var index = 0; index < days.length; index++) {
+      if (days[index]['id']?.toString().isEmpty ?? true) {
+        days[index]['id'] = 'legacy-day-$index-${days[index]['date']}';
+      }
+    }
+    payload['days'] = days;
+  }
+
+  void _scheduleDayRefresh() {
+    _dayRefreshTimer?.cancel();
+    final now = DateTime.now();
+    final nextDay = DateTime(now.year, now.month, now.day + 1);
+    _dayRefreshTimer = Timer(nextDay.difference(now), () {
+      if (mounted) setState(() {});
+      _scheduleDayRefresh();
+    });
+  }
+
+  Future<Player?> _initializeVoicePlayer() {
+    if (_voicePlayer case final player?) return Future.value(player);
+    return _voicePlayerInitialization ??= _createVoicePlayer().whenComplete(
+      () => _voicePlayerInitialization = null,
+    );
+  }
+
+  Future<Player?> _createVoicePlayer() async {
+    try {
+      final player = await Player.create();
+      if (!mounted) {
+        await player.dispose();
+        return null;
+      }
+      _voicePlayer = player;
+      _voicePlayerSubscriptions
+        ..add(
+          player.stream.playing.listen((playing) {
+            if (mounted) setState(() => _voicePlaying = playing);
+          }),
+        )
+        ..add(
+          player.stream.completed.listen((completed) {
+            if (completed && mounted) {
+              setState(() => _voicePlaying = false);
+            }
+          }),
+        );
+      return player;
+    } catch (error, stackTrace) {
+      debugPrint('CoupleSpace voice player init failed: $error\n$stackTrace');
+      return null;
+    }
+  }
+
   Future<bool> _save() {
     final completer = Completer<bool>();
     final previous = _saveQueue;
+    _pendingSaves += 1;
     _saveQueue = () async {
       await previous;
       try {
         completer.complete(await _saveNow());
       } catch (error, stackTrace) {
         completer.completeError(error, stackTrace);
+      } finally {
+        _pendingSaves -= 1;
       }
     }();
     return completer.future;
@@ -408,21 +615,27 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     payload['partner'] = otherId == null
         ? '等待 TA 加入'
         : names[otherId]?.toString() ?? 'TA';
+    _normalizePayload(payload);
     _snapshot = snapshot;
     _data = payload;
     await GStorage.localCache.put(_storeKey, jsonEncode(_data));
-    unawaited(_resolvePhotoUrls());
+    unawaited(_resolveMediaUrls());
   }
 
-  Future<void> _resolvePhotoUrls() async {
-    final keys = _list('albums')
+  Future<void> _resolveMediaUrls() async {
+    final photoKeys = _list('albums')
         .expand(_momentPhotos)
         .where((path) => path.startsWith(_cloudPhotoPrefix))
-        .map((path) => path.substring(_cloudPhotoPrefix.length))
-        .toSet();
+        .map((path) => path.substring(_cloudPhotoPrefix.length));
+    final audioKeys = _list('messages')
+        .where((message) => message['type'] == 'voice')
+        .map((message) => message['audioPath']?.toString() ?? '')
+        .where((path) => path.startsWith(_cloudPhotoPrefix))
+        .map((path) => path.substring(_cloudPhotoPrefix.length));
+    final keys = {...photoKeys, ...audioKeys};
     for (final key in keys) {
       try {
-        _photoUrls[key] = await _cloud.signedPhotoUrl(key);
+        _photoUrls[key] = await _cloud.signedMediaUrl(key);
       } catch (_) {
         // The tile keeps its explicit broken-image state until a later refresh.
       }
@@ -467,7 +680,10 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     });
   }
 
-  Future<void> _loadCloudSpace({bool showMessage = true}) async {
+  Future<void> _loadCloudSpace({
+    bool showMessage = true,
+    bool skipIfUnchanged = false,
+  }) async {
     var snapshot = await _cloud.loadSpace();
     if (snapshot != null) {
       final pendingKey = 'coupleSpace.cloud.pending.${snapshot.spaceId}';
@@ -490,6 +706,13 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       } else if (pendingRevision != null) {
         _showMessage('云端已有新内容，本机未同步副本已保留但没有覆盖 TA 的更新');
       }
+      final current = _snapshot;
+      if (skipIfUnchanged &&
+          pendingRevision == null &&
+          current?.spaceId == snapshot.spaceId &&
+          current?.revision == snapshot.revision) {
+        return;
+      }
       await _applySnapshot(snapshot);
     }
     if (mounted) setState(() {});
@@ -503,6 +726,29 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
       payload['memberNames'] = {_cloud.userId: _cloud.account};
       await _applySnapshot(await _cloud.createSpace(payload));
     });
+  }
+
+  Future<void> _confirmCreateSpace() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认由你创建小窝？'),
+        content: const Text(
+          '两个人只能共用一个小窝。只有第一个人需要创建；如果 TA 已经创建，请取消并在下方输入 TA 发来的邀请码，不能两个人各自创建。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('我要加入 TA 的小窝'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('我是第一个人，继续创建'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) await _createSpace();
   }
 
   Future<void> _joinSpace() async {
@@ -679,13 +925,24 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
 
   String _momentDateTime(DateTime date) => _formatMomentDateTime(date);
 
-  Future<void> _addDay() async {
+  Future<void> _addDay([Map<String, dynamic>? existing]) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => const _AnniversaryDialog(),
+      builder: (context) => _AnniversaryDialog(initialValue: existing),
     );
     if (result != null) {
-      final days = _list('days')..insert(0, result);
+      final days = _list('days');
+      result['id'] = result['id']?.toString().isNotEmpty == true
+          ? result['id']
+          : _uuid.v4();
+      final index = existing == null
+          ? -1
+          : days.indexWhere((item) => item['id'] == existing['id']);
+      if (index == -1) {
+        days.add(result);
+      } else {
+        days[index] = result;
+      }
       _data['days'] = days;
       await _save();
     }
@@ -693,14 +950,243 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
 
   String _date(dynamic raw) => _formatDate(raw);
 
-  int get _togetherDays => max(
-    0,
-    DateTime.now()
-        .difference(
-          DateTime.tryParse(_data['startDate'].toString()) ?? DateTime.now(),
-        )
-        .inDays,
+  int get _togetherDays => coupleTogetherDayNumber(
+    DateTime.tryParse(_data['startDate'].toString()) ?? DateTime.now(),
+    DateTime.now(),
   );
+
+  List<Map<String, dynamic>> get _sortedAnniversaries =>
+      sortCoupleAnniversaries(_list('days'), DateTime.now());
+
+  Future<void> _startVoiceRecording() async {
+    if (_recordingVoice || _uploadingVoice) return;
+    try {
+      await _voicePlayer?.pause();
+      final permitted = await _voiceRecorder.hasPermission();
+      if (!permitted) {
+        _showMessage('需要允许麦克风权限才能录制语音心语');
+        return;
+      }
+      final cache = await getTemporaryDirectory();
+      final path = p.join(
+        cache.path,
+        'couple-voice-${DateTime.now().millisecondsSinceEpoch}.m4a',
+      );
+      await _voiceRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+          numChannels: 1,
+          autoGain: true,
+          echoCancel: true,
+          noiseSuppress: true,
+        ),
+        path: path,
+      );
+      _voiceRecordStateSubscription ??= _voiceRecorder.onStateChanged().listen(
+        (state) {
+          if (!mounted) return;
+          switch (state) {
+            case RecordState.pause:
+              _recordingTimer?.cancel();
+              break;
+            case RecordState.record:
+              if (_recordingVoice) _startRecordingTimer();
+              break;
+            case RecordState.stop:
+              _recordingTimer?.cancel();
+              break;
+          }
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('CoupleSpace recorder state failed: $error\n$stackTrace');
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _recordingVoice = true;
+        _recordingSeconds = 0;
+        _recordingPath = path;
+      });
+      _startRecordingTimer();
+    } catch (error) {
+      _showMessage('无法开始录音：$error');
+    }
+  }
+
+  void _startRecordingTimer() {
+    _recordingTimer?.cancel();
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || !_recordingVoice) {
+        timer.cancel();
+        return;
+      }
+      setState(() => _recordingSeconds += 1);
+      if (_recordingSeconds >= 120) {
+        timer.cancel();
+        unawaited(_stopAndSendVoiceRecording());
+      }
+    });
+  }
+
+  Future<void> _cancelVoiceRecording({bool showMessage = true}) async {
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    try {
+      await _voiceRecorder.cancel();
+    } catch (_) {
+      final path = _recordingPath;
+      if (path != null) {
+        final file = File(path);
+        if (file.existsSync()) await file.delete();
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _recordingVoice = false;
+      _recordingSeconds = 0;
+      _recordingPath = null;
+    });
+    if (showMessage) _showMessage('已取消这次录音');
+  }
+
+  Future<void> _stopAndSendVoiceRecording() async {
+    if (!_recordingVoice || _uploadingVoice) return;
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
+    final durationMs = max(1000, _recordingSeconds * 1000);
+    setState(() {
+      _recordingVoice = false;
+      _uploadingVoice = true;
+    });
+    String? localPath;
+    String? uploadedKey;
+    try {
+      localPath = await _voiceRecorder.stop() ?? _recordingPath;
+      final snapshot = _snapshot;
+      if (snapshot == null || localPath == null) {
+        throw const CoupleSpaceCloudException('录音文件没有生成');
+      }
+      final file = File(localPath);
+      if (!file.existsSync() || file.lengthSync() == 0) {
+        throw const CoupleSpaceCloudException('录音文件为空，请重新录制');
+      }
+      uploadedKey = await _cloud.uploadMedia(
+        spaceId: snapshot.spaceId,
+        file: file,
+      );
+      final audioPath = '$_cloudPhotoPrefix$uploadedKey';
+      _photoUrls[uploadedKey] = await _cloud.signedMediaUrl(uploadedKey);
+      final messages = _list('messages')
+        ..insert(0, {
+          'id': _uuid.v4(),
+          'type': 'voice',
+          'text': '',
+          'audioPath': audioPath,
+          'audioDurationMs': durationMs,
+          'authorId': _cloud.userId,
+          'authorName': _data['nickname']?.toString() ?? _cloud.account,
+          'mood': _mood,
+          'date': DateTime.now().toIso8601String(),
+        });
+      _data['messages'] = messages;
+      if (!await _save()) {
+        final pending = GStorage.localCache.get(
+          'coupleSpace.cloud.pending.${snapshot.spaceId}',
+        );
+        if (pending != null) {
+          uploadedKey = null;
+          _showMessage('网络暂不可用，语音已保存在本机并会在恢复后同步');
+          return;
+        }
+        throw const CoupleSpaceCloudException('语音尚未写入共享小窝');
+      }
+      _showMessage('语音心语已发送');
+    } catch (error) {
+      if (uploadedKey != null) {
+        try {
+          await _cloud.deleteMedia(uploadedKey);
+          _photoUrls.remove(uploadedKey);
+        } catch (cleanupError, cleanupStackTrace) {
+          debugPrint(
+            'CoupleSpace voice rollback failed: $cleanupError\n$cleanupStackTrace',
+          );
+        }
+      }
+      _showMessage('语音发送失败：$error');
+    } finally {
+      final path = localPath ?? _recordingPath;
+      if (path != null) {
+        try {
+          final file = File(path);
+          if (file.existsSync()) await file.delete();
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          _uploadingVoice = false;
+          _recordingSeconds = 0;
+          _recordingPath = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleVoicePlayback(Map<String, dynamic> message) async {
+    final player = _voicePlayer ?? await _initializeVoicePlayer();
+    final path = message['audioPath']?.toString() ?? '';
+    if (player == null) {
+      _showMessage('语音播放器还在初始化，请稍后重试');
+      return;
+    }
+    if (!path.startsWith(_cloudPhotoPrefix)) {
+      _showMessage('这条语音缺少有效的云端文件');
+      return;
+    }
+    try {
+      if (_playingVoicePath == path) {
+        await player.playOrPause();
+        return;
+      }
+      final key = path.substring(_cloudPhotoPrefix.length);
+      final url = await _cloud.signedMediaUrl(key);
+      _photoUrls[key] = url;
+      setState(() => _playingVoicePath = path);
+      await player.open(Media(url), play: true);
+    } catch (error) {
+      _showMessage('语音播放失败：$error');
+    }
+  }
+
+  Future<void> _deleteMessage(Map<String, dynamic> message) async {
+    final id = message['id']?.toString();
+    final messages = _list('messages')
+      ..removeWhere((item) => item['id']?.toString() == id);
+    _data['messages'] = messages;
+    if (!await _save()) return;
+    final audioPath = message['audioPath']?.toString() ?? '';
+    if (audioPath.startsWith(_cloudPhotoPrefix)) {
+      final key = audioPath.substring(_cloudPhotoPrefix.length);
+      try {
+        if (_playingVoicePath == audioPath) {
+          await _voicePlayer?.stop();
+          _playingVoicePath = null;
+        }
+        await _cloud.deleteMedia(key);
+        _photoUrls.remove(key);
+      } catch (error) {
+        _showMessage('心语已删除，但语音文件清理失败：$error');
+      }
+    }
+  }
+
+  String _voiceDuration(Object? raw) {
+    final totalSeconds = ((raw as num?)?.toInt() ?? 0) ~/ 1000;
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -880,7 +1366,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: _busy ? null : _createSpace,
+                onPressed: _busy ? null : _confirmCreateSpace,
                 icon: const Icon(Icons.home_outlined),
                 label: const Text('创建我们的小窝'),
               ),
@@ -1043,128 +1529,401 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     ),
   );
 
-  Widget _home() => _scroll([
-    _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _home() => LayoutBuilder(
+    builder: (context, constraints) {
+      final wide = constraints.maxWidth >= 720;
+      final anniversaries = _sortedAnniversaries;
+      final next = anniversaries.isEmpty ? null : anniversaries.first;
+      final recentMessages = _list('messages').take(3).toList();
+      final hero = _homeHero();
+      final nextDay = _nextAnniversaryCard(next);
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
         children: [
-          Text(
-            _data['spaceName'].toString(),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: _textColor,
+          if (wide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 6, child: hero),
+                const SizedBox(width: 16),
+                Expanded(flex: 4, child: nextDay),
+              ],
+            )
+          else ...[
+            hero,
+            nextDay,
+          ],
+          _heading('今天，想一起做什么？'),
+          LayoutBuilder(
+            builder: (context, actionConstraints) {
+              final columns = actionConstraints.maxWidth >= 560 ? 4 : 2;
+              final width =
+                  (actionConstraints.maxWidth - (columns - 1) * 10) / columns;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _quickAction(
+                    width,
+                    Icons.edit_note_rounded,
+                    '写心语',
+                    '把此刻说给 TA',
+                    () => setState(() {
+                      _heartMode = 0;
+                      _tab = 3;
+                    }),
+                  ),
+                  _quickAction(
+                    width,
+                    Icons.mic_rounded,
+                    '发语音',
+                    '听见真实的声音',
+                    () => setState(() {
+                      _heartMode = 1;
+                      _tab = 3;
+                    }),
+                  ),
+                  _quickAction(
+                    width,
+                    Icons.add_photo_alternate_outlined,
+                    '记照片',
+                    '收藏今天的瞬间',
+                    _addPhoto,
+                  ),
+                  _quickAction(
+                    width,
+                    Icons.event_available_outlined,
+                    '加纪念日',
+                    '给期待一个日期',
+                    _addDay,
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          _heading(
+            '最近的心意',
+            action: TextButton(
+              onPressed: () => setState(() => _tab = 3),
+              child: const Text('查看全部'),
             ),
           ),
-          const SizedBox(height: 8),
+          if (recentMessages.isEmpty)
+            _card(
+              child: Text(
+                '还没有心语。第一句话、第一段声音，都可以从今天开始。',
+                style: TextStyle(color: _mutedColor),
+              ),
+            )
+          else
+            ...recentMessages.map(_messageCard),
+          _heading(
+            '共同生活',
+            action: TextButton(
+              onPressed: () => setState(() => _tab = 1),
+              child: const Text('去相册'),
+            ),
+          ),
+          _card(
+            child: Row(
+              children: [
+                Expanded(child: _stat('📷', '照片', _photoCount)),
+                Expanded(child: _stat('💌', '心语', _list('messages').length)),
+                Expanded(child: _stat('✅', '清单', _list('tasks').length)),
+                Expanded(child: _stat('🎂', '纪念日', _list('days').length)),
+              ],
+            ),
+          ),
+        ],
+      );
+    },
+  );
+
+  Widget _homeHero() => Container(
+    margin: const EdgeInsets.only(bottom: 12),
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [_colors.primaryContainer, _colors.tertiaryContainer],
+      ),
+      borderRadius: BorderRadius.circular(30),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _data['spaceName'].toString(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: _colors.onPrimaryContainer,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.favorite_rounded,
+              color: _colors.onTertiaryContainer,
+              size: 20,
+            ),
+          ],
+        ),
+        const SizedBox(height: 26),
+        Text(
+          _togetherDays == 0 ? '我们的故事即将开始' : '和 ${_data['partner']} 在一起',
+          style: TextStyle(color: _colors.onPrimaryContainer),
+        ),
+        const SizedBox(height: 2),
+        if (_togetherDays > 0)
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Icon(Icons.favorite, color: _accent, size: 16),
-              const SizedBox(width: 6),
-              Text(
-                '我们已经相伴 $_togetherDays 天',
-                style: TextStyle(color: _textColor),
+              Flexible(
+                child: Text(
+                  '$_togetherDays',
+                  style: TextStyle(
+                    height: 1,
+                    fontSize: 54,
+                    fontWeight: FontWeight.w700,
+                    color: _colors.onPrimaryContainer,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 8, bottom: 5),
+                child: Text(
+                  '天',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: _colors.onPrimaryContainer,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Container(
-            height: 116,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                colors: [_colors.primaryContainer, _colors.tertiaryContainer],
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    '每一天，都值得纪念',
-                    style: TextStyle(
-                      fontSize: 17,
-                      color: _textColor,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '把喜欢的日子和心情留在这里',
-                    style: TextStyle(fontSize: 12, color: _mutedColor),
-                  ),
-                ],
-              ),
-            ),
+        const SizedBox(height: 18),
+        Text(
+          '从 ${_date(_data['startDate'])} 开始 · 起始日算第 1 天',
+          style: TextStyle(
+            fontSize: 12,
+            color: _colors.onPrimaryContainer.withValues(alpha: .76),
           ),
-        ],
+        ),
+      ],
+    ),
+  );
+
+  Widget _nextAnniversaryCard(Map<String, dynamic>? item) {
+    if (item == null) {
+      return _card(
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.calendar_month_outlined, color: _accent),
+          title: const Text('下一个值得期待的日子'),
+          subtitle: const Text('添加生日、周年或共同计划'),
+          trailing: const Icon(Icons.add_rounded),
+          onTap: _addDay,
+        ),
+      );
+    }
+    final status = coupleAnniversaryStatus(item, DateTime.now());
+    final type = CoupleAnniversaryType.fromValue(item['type']);
+    return _card(
+      child: InkWell(
+        onTap: () => setState(() => _tab = 2),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('下一纪念日', style: TextStyle(color: _mutedColor)),
+              const SizedBox(height: 12),
+              Text(
+                item['title'].toString(),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.w600,
+                  color: _textColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                status.label,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: _accent,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${type.label} · ${_date(status.occurrence)}',
+                style: TextStyle(fontSize: 12, color: _mutedColor),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quickAction(
+    double width,
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) => SizedBox(
+    width: width,
+    child: Material(
+      color: _colors.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(20),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: _accent),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                style: TextStyle(
+                  color: _textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: _mutedColor),
+              ),
+            ],
+          ),
+        ),
       ),
     ),
-    _heading(
-      '我们的日常',
-      action: TextButton(
-        onPressed: () => setState(() => _tab = 1),
-        child: const Text('查看全部'),
-      ),
-    ),
-    _card(
+  );
+
+  Widget _messageCard(Map<String, dynamic> message) {
+    final isVoice = message['type'] == 'voice';
+    final audioPath = message['audioPath']?.toString() ?? '';
+    final isCurrent = audioPath.isNotEmpty && _playingVoicePath == audioPath;
+    final author = message['authorName']?.toString().isNotEmpty == true
+        ? message['authorName'].toString()
+        : '我们';
+    final date = DateTime.tryParse(message['date']?.toString() ?? '');
+    return _card(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _stat('📷', '照片', _photoCount)),
-          Expanded(child: _stat('💌', '心语', _list('messages').length)),
-          Expanded(child: _stat('✅', '清单', _list('tasks').length)),
-          Expanded(child: _stat('🎂', '纪念日', _list('days').length)),
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _colors.secondaryContainer,
+            child: Text(message['mood']?.toString() ?? '🥰'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        author,
+                        style: TextStyle(
+                          color: _accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      date == null ? '' : _formatMomentDateTime(date),
+                      style: TextStyle(fontSize: 10, color: _mutedColor),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (isVoice)
+                  Semantics(
+                    button: true,
+                    label: isCurrent && _voicePlaying ? '暂停语音' : '播放语音',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(18),
+                      onTap: () => _toggleVoicePlayback(message),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _colors.secondaryContainer,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isCurrent && _voicePlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded,
+                              color: _colors.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.graphic_eq_rounded,
+                              color: _colors.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _voiceDuration(message['audioDurationMs']),
+                              style: TextStyle(
+                                color: _colors.onSecondaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    message['text']?.toString() ?? '',
+                    style: TextStyle(color: _textColor, height: 1.45),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: '删除心语',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _confirmDelete(
+              isVoice ? '删除这条语音心语？' : '删除这条心语？',
+              () => _deleteMessage(message),
+            ),
+            icon: Icon(Icons.more_horiz, color: _mutedColor),
+          ),
         ],
       ),
-    ),
-    _heading('最近的心意'),
-    if (_list('messages').isEmpty)
-      _card(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(
-              '还没有留下心语，写下今天想对 TA 说的话吧',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _mutedColor),
-            ),
-          ),
-        ),
-      )
-    else
-      ..._list('messages')
-          .take(3)
-          .map(
-            (m) => _card(
-              child: Text(
-                '${m['mood'] ?? '🥰'}  ${m['text'] ?? ''}',
-                style: TextStyle(color: _textColor),
-              ),
-            ),
-          ),
-    _heading('即将到来的日子'),
-    if (_list('days').isEmpty)
-      _card(
-        child: Text(
-          '添加一个特别的日子，让期待有个日期',
-          style: TextStyle(color: _mutedColor),
-        ),
-      )
-    else
-      ..._list('days')
-          .take(3)
-          .map(
-            (d) => _card(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.event, color: _accent),
-                title: Text(d['title'].toString()),
-                subtitle: Text(_date(d['date'])),
-              ),
-            ),
-          ),
-  ]);
+    );
+  }
 
   Widget _stat(String emoji, String label, int count) => Column(
     children: [
@@ -1517,7 +2276,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
   }
 
   Widget _anniversaries() {
-    final days = _list('days');
+    final days = _sortedAnniversaries;
     return Column(
       children: [
         Padding(
@@ -1527,8 +2286,8 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
               Expanded(child: _heading('我们的纪念日')),
               FilledButton.tonalIcon(
                 onPressed: _addDay,
-                icon: const Icon(Icons.add),
-                label: const Text('添加日子'),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('添加'),
               ),
             ],
           ),
@@ -1537,7 +2296,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
           child: days.isEmpty
               ? _empty(
                   '记录第一个重要日子',
-                  '相遇、生日、旅行，所有特别时刻都值得收藏',
+                  '生日、周年、旅行计划，都可以自动计算倒数或已经过去的天数',
                   Icons.calendar_month_outlined,
                   action: FilledButton.tonal(
                     onPressed: _addDay,
@@ -1549,27 +2308,98 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
                   itemCount: days.length,
                   itemBuilder: (context, i) {
                     final item = days[i];
+                    final type = CoupleAnniversaryType.fromValue(item['type']);
+                    final repeat = CoupleAnniversaryRepeat.fromValue(
+                      item['repeat'],
+                    );
+                    final status = coupleAnniversaryStatus(
+                      item,
+                      DateTime.now(),
+                    );
                     return _card(
-                      child: ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: _colors.secondaryContainer,
-                            borderRadius: BorderRadius.circular(15),
+                      padding: EdgeInsets.zero,
+                      child: InkWell(
+                        onTap: () => _addDay(item),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: _colors.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(17),
+                                ),
+                                child: Icon(
+                                  _anniversaryIcon(type),
+                                  color: _colors.onSecondaryContainer,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item['title'].toString(),
+                                      style: TextStyle(
+                                        color: _textColor,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      '${_date(status.occurrence)} · ${type.label}'
+                                      '${repeat == CoupleAnniversaryRepeat.yearly ? ' · 每年' : ''}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: _mutedColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                status.label,
+                                style: TextStyle(
+                                  color: status.isUpcoming
+                                      ? _accent
+                                      : _mutedColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              PopupMenuButton<String>(
+                                tooltip: '纪念日操作',
+                                onSelected: (action) {
+                                  if (action == 'edit') {
+                                    _addDay(item);
+                                  } else if (action == 'delete') {
+                                    _confirmDelete('删除这个纪念日？', () async {
+                                      final updated = _list('days')
+                                        ..removeWhere(
+                                          (day) => day['id'] == item['id'],
+                                        );
+                                      _data['days'] = updated;
+                                      await _save();
+                                    });
+                                  }
+                                },
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('编辑'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('删除'),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          child: Icon(Icons.favorite_border, color: _accent),
-                        ),
-                        title: Text(item['title'].toString()),
-                        subtitle: Text(_date(item['date'])),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _confirmDelete('删除这个纪念日？', () async {
-                            days.removeAt(i);
-                            _data['days'] = days;
-                            await _save();
-                          }),
                         ),
                       ),
                     );
@@ -1580,166 +2410,253 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
     );
   }
 
+  IconData _anniversaryIcon(CoupleAnniversaryType type) => switch (type) {
+    CoupleAnniversaryType.love => Icons.favorite_rounded,
+    CoupleAnniversaryType.birthday => Icons.cake_outlined,
+    CoupleAnniversaryType.festival => Icons.celebration_outlined,
+    CoupleAnniversaryType.custom => Icons.auto_awesome_outlined,
+  };
+
   Widget _heartTalk() => _scroll([
-    _card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '今天想说的话',
-            style: TextStyle(
-              fontSize: 22,
-              color: _textColor,
-              fontWeight: FontWeight.w600,
+    Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(
+              value: 0,
+              icon: Icon(Icons.edit_note),
+              label: Text('文字'),
+            ),
+            ButtonSegment(value: 1, icon: Icon(Icons.mic), label: Text('语音')),
+            ButtonSegment(
+              value: 2,
+              icon: Icon(Icons.checklist_rounded),
+              label: Text('一起做'),
+            ),
+          ],
+          selected: {_heartMode},
+          onSelectionChanged: (value) =>
+              setState(() => _heartMode = value.first),
+        ),
+      ),
+    ),
+    if (_heartMode == 0) _textHeartComposer(),
+    if (_heartMode == 1) _voiceHeartComposer(),
+    if (_heartMode == 2) ..._taskWidgets(),
+    if (_heartMode < 2) ...[
+      _heading('我们的心语时间线'),
+      if (_list('messages').isEmpty)
+        _card(
+          child: Text(
+            '这里会按时间保存两个人的文字和声音。先留下一句吧。',
+            style: TextStyle(color: _mutedColor),
+          ),
+        )
+      else
+        ..._list('messages').map(_messageCard),
+    ],
+  ]);
+
+  Widget _textHeartComposer() => _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '写给 ${_data['partner']}',
+          style: TextStyle(
+            color: _textColor,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text('不用正式，想到什么就说什么。', style: TextStyle(color: _mutedColor)),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          children: ['🥰', '😊', '😘', '🤗', '🌙']
+              .map(
+                (mood) => InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: () => setState(() => _mood = mood),
+                  child: CircleAvatar(
+                    radius: 22,
+                    backgroundColor: mood == _mood
+                        ? _colors.secondaryContainer
+                        : _colors.surfaceContainerHighest,
+                    child: Text(mood),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _message,
+          minLines: 3,
+          maxLines: 6,
+          maxLength: 240,
+          decoration: InputDecoration(
+            hintText: '今天有一句话想告诉 TA…',
+            filled: true,
+            fillColor: _colors.surfaceContainerLowest,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
             ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            children: List.generate(
-              3,
-              (i) => ChoiceChip(
-                label: Text(['留言', '语音', '清单'][i]),
-                selected: _heartMode == i,
-                onSelected: (_) => setState(() => _heartMode = i),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () async {
+              if (_message.text.trim().isEmpty) return;
+              final items = _list('messages')
+                ..insert(0, {
+                  'id': _uuid.v4(),
+                  'type': 'text',
+                  'text': _message.text.trim(),
+                  'authorId': _cloud.userId,
+                  'authorName': _data['nickname']?.toString() ?? _cloud.account,
+                  'mood': _mood,
+                  'date': DateTime.now().toIso8601String(),
+                });
+              _data['messages'] = items;
+              _message.clear();
+              await _save();
+            },
+            icon: const Icon(Icons.send_rounded),
+            label: const Text('发送'),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _voiceHeartComposer() => _card(
+    child: Column(
+      children: [
+        Text(
+          _uploadingVoice
+              ? '正在加密上传到你们的小窝…'
+              : _recordingVoice
+              ? '正在聆听你的声音'
+              : '录一段只属于你们的声音',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _textColor,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _recordingVoice ? _recordingClock : '最长 2 分钟，松弛一点，像平时说话就好',
+          style: TextStyle(color: _mutedColor),
+        ),
+        const SizedBox(height: 22),
+        if (_uploadingVoice)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: CircularProgressIndicator(),
+          )
+        else
+          Semantics(
+            button: true,
+            label: _recordingVoice ? '停止并发送录音' : '开始录音',
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _recordingVoice
+                  ? _stopAndSendVoiceRecording
+                  : _startVoiceRecording,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _recordingVoice
+                      ? _colors.errorContainer
+                      : _colors.primaryContainer,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_recordingVoice ? _colors.error : _accent)
+                          .withValues(alpha: .18),
+                      blurRadius: 24,
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  _recordingVoice ? Icons.stop_rounded : Icons.mic_rounded,
+                  size: 40,
+                  color: _recordingVoice
+                      ? _colors.onErrorContainer
+                      : _colors.onPrimaryContainer,
+                ),
               ),
             ),
+          ),
+        if (_recordingVoice) ...[
+          const SizedBox(height: 14),
+          TextButton.icon(
+            onPressed: _cancelVoiceRecording,
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('取消这次录音'),
+          ),
+        ],
+      ],
+    ),
+  );
+
+  String get _recordingClock {
+    final minutes = _recordingSeconds ~/ 60;
+    final seconds = _recordingSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')} / 2:00';
+  }
+
+  List<Widget> _taskWidgets() => [
+    _card(
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _task,
+              decoration: const InputDecoration(
+                hintText: '下次一起做什么？',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: '添加共同清单',
+            onPressed: () async {
+              if (_task.text.trim().isEmpty) return;
+              final tasks = _list('tasks')
+                ..insert(0, {
+                  'id': _uuid.v4(),
+                  'text': _task.text.trim(),
+                  'done': false,
+                  'createdAt': DateTime.now().toIso8601String(),
+                });
+              _data['tasks'] = tasks;
+              _task.clear();
+              await _save();
+            },
+            icon: Icon(Icons.add_circle, color: _accent),
           ),
         ],
       ),
     ),
-    if (_heartMode == 0) ...[
+    if (_list('tasks').isEmpty)
       _card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '此刻的心情',
-              style: TextStyle(color: _textColor, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              children: ['🥰', '😊', '😘', '🤗', '🌙']
-                  .map(
-                    (m) => InkWell(
-                      onTap: () => setState(() => _mood = m),
-                      child: CircleAvatar(
-                        radius: 22,
-                        backgroundColor: m == _mood
-                            ? _colors.secondaryContainer
-                            : _colors.surfaceContainerHighest,
-                        child: Text(m),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _message,
-              maxLines: 4,
-              maxLength: 240,
-              decoration: InputDecoration(
-                hintText: '写下今天想对 TA 说的话…',
-                filled: true,
-                fillColor: _colors.surfaceContainerLowest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-            Row(
-              children: [
-                TextButton(onPressed: _message.clear, child: const Text('清空')),
-                const Spacer(),
-                FilledButton.icon(
-                  onPressed: () async {
-                    if (_message.text.trim().isEmpty) return;
-                    final items = _list('messages')
-                      ..insert(0, {
-                        'text': _message.text.trim(),
-                        'mood': _mood,
-                        'date': DateTime.now().toIso8601String(),
-                      });
-                    _data['messages'] = items;
-                    _message.clear();
-                    await _save();
-                  },
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('发送心意'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-      _heading('留下的心语'),
-      if (_list('messages').isEmpty)
-        _card(
-          child: Center(
-            child: Text('还没有心语，写下第一句吧', style: TextStyle(color: _mutedColor)),
-          ),
-        )
-      else
-        ..._list('messages').map(
-          (m) => _card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${m['mood'] ?? '🥰'}  ${m['text']}',
-                  style: TextStyle(color: _textColor),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _date(m['date']),
-                  style: TextStyle(fontSize: 11, color: _mutedColor),
-                ),
-              ],
-            ),
-          ),
-        ),
-    ] else if (_heartMode == 1)
-      _card(
-        child: Column(
-          children: [
-            Icon(Icons.mic_none_rounded, size: 42, color: _accent),
-            const SizedBox(height: 8),
-            Text('语音心意', style: TextStyle(color: _textColor)),
-            const SizedBox(height: 6),
-            Text('此版本暂不支持语音录制', style: TextStyle(color: _mutedColor)),
-          ],
+        child: Text(
+          '一起完成的小事，会比宏大的目标更常被记住。',
+          style: TextStyle(color: _mutedColor),
         ),
       )
-    else ...[
-      _card(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _task,
-                decoration: const InputDecoration(
-                  hintText: '一起完成一件小事…',
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: () async {
-                if (_task.text.trim().isEmpty) return;
-                final tasks = _list('tasks')
-                  ..insert(0, {'text': _task.text.trim(), 'done': false});
-                _data['tasks'] = tasks;
-                _task.clear();
-                await _save();
-              },
-              icon: Icon(Icons.add_circle, color: _accent),
-            ),
-          ],
-        ),
-      ),
+    else
       ..._list('tasks').asMap().entries.map(
         (entry) => _card(
           child: CheckboxListTile(
@@ -1761,6 +2678,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
               await _save();
             },
             secondary: IconButton(
+              tooltip: '删除清单',
               onPressed: () async {
                 final tasks = _list('tasks')..removeAt(entry.key);
                 _data['tasks'] = tasks;
@@ -1771,8 +2689,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
           ),
         ),
       ),
-    ],
-  ]);
+  ];
 
   Widget _profile() => _scroll([
     _card(
@@ -1929,6 +2846,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage> {
         ),
         _cloud.userId: migrated['nickname']?.toString() ?? _cloud.account,
       };
+      _normalizePayload(migrated);
       _data = migrated;
       final saved = await _save();
       if (!saved) throw const CoupleSpaceCloudException('本机数据尚未写入云端');

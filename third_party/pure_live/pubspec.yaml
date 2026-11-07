@@ -42,7 +42,6 @@ dependencies:
   bonsoir: ^7.1.5
   cached_network_image: ^3.4.1
   charset_converter: ^2.3.0
-  cloud_firestore: ^6.5.0
   connectivity_plus: ^7.0.0
   cookie_jar: ^4.0.8
   crypto: ^3.0.7
@@ -55,8 +54,6 @@ dependencies:
   easy_localization: ^3.0.8
   equatable: ^2.0.7
   ffi: ^2.2.0
-  firebase_auth: ^6.5.2
-  firebase_core: ^4.10.0
   fixnum: ^1.1.0
   flame_barrage: ^0.0.4
   flex_color_picker: ^4.0.0

@@ -123,6 +123,8 @@ done
 
 ## 版本、签名与 GitHub Actions
 
+2026-11 的错工作区构建、Firebase 客户端 key 公开、Pub 归档哈希不一致、Runner 磁盘耗尽和更新通道耦合事件，统一记录在 [迁移、安全与 Android 发布稳定化复盘](docs/retrospectives/2026-11-release-stabilization.md)。本节保留稳定执行规则，事件时间线、根因、证据和遗留风险以该复盘为准。
+
 - `pubspec.yaml` 保留上游三段版本；`tool/release.json` 的 `upstreamVersion` 必须与之对应，`revision` 为本分支修订号。
 - 第一个 flavor 版本为 `2.1.3.0`，后续为 `2.1.3.1` 等；升级上游时同步 upstreamVersion，并将 revision 重置为 0。不要未经要求为一次本机测试自动增加发布版本。
 - 正式发布后不覆盖已有标签；发布修复版需要递增 revision。具体 versionCode 编码、范围检查以 `scripts/release_metadata.py` 为准。

@@ -151,17 +151,20 @@ void main() {
             response.write(
               jsonEncode({'revision': 3, 'payload': body['p_payload']}),
             );
-          } else if (request.uri.path.contains('/object/couple-space/')) {
-            expect(request.headers.contentType?.mimeType, 'image/jpeg');
-            expect(
-              await request.fold<int>(0, (sum, bytes) => sum + bytes.length),
-              4,
-            );
-            response.write(jsonEncode({'Key': request.uri.path}));
           } else if (request.uri.path.contains('/object/sign/couple-space/')) {
             response.write(
               jsonEncode({'fullSignedURL': 'https://example.test/photo'}),
             );
+          } else if (request.uri.path.contains('/object/couple-space/')) {
+            if (request.method == 'POST') {
+              final mimeType = request.headers.contentType?.mimeType;
+              expect(mimeType, anyOf('image/jpeg', 'audio/mp4'));
+              expect(
+                await request.fold<int>(0, (sum, bytes) => sum + bytes.length),
+                4,
+              );
+            }
+            response.write(jsonEncode({'Key': request.uri.path}));
           } else {
             response
               ..statusCode = HttpStatus.notFound
@@ -218,12 +221,40 @@ void main() {
         await repository.signedPhotoUrl(key),
         'https://example.test/photo',
       );
+      final voice = File('${tempDirectory.path}/voice.m4a')
+        ..writeAsBytesSync([5, 6, 7, 8]);
+      final voiceKey = await repository.uploadMedia(
+        spaceId: 'space-a',
+        file: voice,
+      );
+      expect(voiceKey, startsWith('space-a/uid-a/'));
+      expect(
+        await repository.signedMediaUrl(voiceKey),
+        'https://example.test/photo',
+      );
+      await repository.deleteMedia(voiceKey);
 
       expect(requests, contains('POST /auth/v1/signin'));
       expect(requests, contains('GET /v1/rdb/rest/couple_spaces'));
       expect(
         requests,
         contains('POST /v1/rdb/rest/rpc/save_couple_space_state'),
+      );
+      expect(
+        requests.where(
+          (request) =>
+              request.startsWith('POST /v1/storages/object/couple-space/') &&
+              request.endsWith('.m4a'),
+        ),
+        hasLength(1),
+      );
+      expect(
+        requests.where(
+          (request) =>
+              request.startsWith('DELETE /v1/storages/object/couple-space/') &&
+              request.endsWith('.m4a'),
+        ),
+        hasLength(1),
       );
     },
   );

@@ -5,12 +5,12 @@
 `pubspec.yaml` 保持三段语义版本（现在是 `2.3.0+1`），不要改成四段，以免破坏 Pub / 其他平台构建。
 `tool/release.json` 记录对应的 `upstreamVersion` 和本分支 `revision`：
 
-- 当前配置版本：`2.3.0.0`；同一版本后续修复继续递增 revision。历史标签不覆盖。
+- 当前配置版本：`2.3.0.3`；同一版本后续修复继续递增 revision。历史标签不覆盖。
 - 升级上游版本时，同步修改 `pubspec.yaml` 与 `upstreamVersion`，并将 `revision` 重置为 `0`。
 - Android `versionName` 与应用内版本均为四段，不再附加提交哈希；哈希单独保存到 `pili.hash`。
-- `versionCode = major × 10000000 + minor × 100000 + patch × 100 + revision`；当前配置版本对应 `20300000`。
+- `versionCode = major × 10000000 + minor × 100000 + patch × 100 + revision`；当前配置版本对应 `20300003`。
 - 范围：major 0–199，minor 0–99，patch 0–999，revision 0–99。脚本拒绝超界，以保证升级顺序和 Android 整数限制。
-- Release 标签严格为 `v上游版本.修订号`，例如当前配置版本为 `v2.3.0.0`。正式发布后不可覆盖同一标签；发布修复版必须递增 revision。
+- Release 标签严格为 `v上游版本.修订号`，例如当前配置版本为 `v2.3.0.3`。正式发布后不可覆盖同一标签；发布修复版必须递增 revision。
 
 ## 配置签名 Secrets
 
@@ -24,8 +24,6 @@
 | `KEY_ALIAS` | 签名密钥别名 |
 | `KEY_PASSWORD` | 密钥密码 |
 | `DEEPSEEK_API_KEY` | 可选；用于以 `deepseek-v4-flash` 生成中文 Release Notes |
-| `HYPER_FIREBASE_ANDROID_API_KEY` | 必填；主应用 Android Firebase 客户端 key，需轮换并限制到包名与签名证书 |
-| `PURE_LIVE_FIREBASE_ANDROID_API_KEY` | 必填；Pure Live Android Firebase 客户端 key，需轮换并限制到 Android 应用 |
 
 **必须使用此前本机 Release 的同一把签名密钥**，否则无法覆盖安装并保留现有应用数据。不要重新生成密钥替代旧密钥。
 Base64 不是加密；不要将编码内容、密码、`key.properties` 或 keystore 提交到 Git。
@@ -85,10 +83,8 @@ Flutter 按固定 SHA 检出后还必须获取官方 `3.47.4` 标签：仅有提
 ```sh
 python3 scripts/release_metadata.py
 ./scripts/flutterw build apk --release --split-per-abi --no-pub \
-  --build-name=2.3.0.2 --build-number=20300002 \
+  --build-name=2.3.0.3 --build-number=20300003 \
   --dart-define-from-file=pili_release.json \
-  --dart-define=HYPER_FIREBASE_ANDROID_API_KEY="$HYPER_FIREBASE_ANDROID_API_KEY" \
-  --dart-define=PURE_LIVE_FIREBASE_ANDROID_API_KEY="$PURE_LIVE_FIREBASE_ANDROID_API_KEY" \
   --android-project-arg requireReleaseSigning=true
 ```
 
