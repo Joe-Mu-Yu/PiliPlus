@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pure_live/core/interface/live_site.dart';
 import 'package:pure_live/core/site/bilibili/bilibili_site.dart';
+import 'package:pure_live/core/site/douyin/douyin_site.dart';
 import 'package:pure_live/core/site/douyu/douyu_site.dart';
 import 'package:pure_live/core/site/huya/huya_site.dart';
 import 'package:pure_live/plugins/locale_helper.dart';
@@ -34,6 +35,7 @@ class PureLiveLinkResolver {
         sites ??
             <String, LiveSite>{
               'bilibili': BiliBiliSite(),
+              'douyin': DouyinSite(),
               'huya': HuyaSite(),
               'douyu': DouyuSite(),
             },
@@ -51,13 +53,18 @@ https://b23.tv/xxxxx
 https://www.huya.com/xxxxx
 
 斗鱼直播：
-https://www.douyu.com/xxxxx''';
+https://www.douyu.com/xxxxx
+
+抖音直播：
+https://live.douyin.com/xxxxx
+https://www.douyin.com/root/live/xxxxx''';
 
   static final _urlPattern = RegExp(
     r'(?:https?://|www\.)[^\s<>]+',
     caseSensitive: false,
   );
   static final _bilibiliRoomId = RegExp(r'^[1-9][0-9]{0,12}$');
+  static final _douyinRoomId = RegExp(r'^[1-9][0-9]{0,19}$');
   static final _roomSlug = RegExp(r'^[a-zA-Z0-9_-]+$');
   static const _reservedSlugs = {
     'search',
@@ -126,6 +133,9 @@ https://www.douyu.com/xxxxx''';
     'www.huya.com',
     'douyu.com',
     'www.douyu.com',
+    'douyin.com',
+    'www.douyin.com',
+    'live.douyin.com',
   }.contains(host);
 
   PureLiveLinkTarget? _targetFromUri(Uri uri) {
@@ -159,6 +169,22 @@ https://www.douyu.com/xxxxx''';
         platform: 'douyu',
         roomId: roomId,
         roomUrl: 'https://www.douyu.com/$roomId',
+      );
+    }
+    final douyinRoomId = switch (host) {
+      'live.douyin.com' when segments.length == 1 => segments.first,
+      'douyin.com' || 'www.douyin.com'
+          when segments.length == 3 &&
+              segments[0] == 'root' &&
+              segments[1] == 'live' =>
+        segments[2],
+      _ => null,
+    };
+    if (douyinRoomId != null && _douyinRoomId.hasMatch(douyinRoomId)) {
+      return PureLiveLinkTarget(
+        platform: 'douyin',
+        roomId: douyinRoomId,
+        roomUrl: 'https://live.douyin.com/$douyinRoomId',
       );
     }
     return null;

@@ -171,7 +171,7 @@ void main() {
   });
 
   test(
-    'link parser recognizes only the three supported platform hosts',
+    'link parser recognizes the supported platform hosts including Douyin',
     () async {
       final resolver = PureLiveLinkResolver(
         sites: {'bilibili': _LinkParserFakeSite()},
@@ -189,8 +189,30 @@ void main() {
         (await resolver.resolve('https://www.douyu.com/123'))?.platform,
         'douyu',
       );
+      final douyin = await resolver.resolve(
+        'https://live.douyin.com/107722215216?anchor_id=2960339525436948',
+      );
+      expect(douyin?.platform, 'douyin');
+      expect(douyin?.roomId, '107722215216');
+      expect(douyin?.roomUrl, 'https://live.douyin.com/107722215216');
+      expect(
+        (await resolver.resolve(
+          'https://www.douyin.com/root/live/107722215216?anchor_id=2960339525436948',
+        ))?.roomId,
+        '107722215216',
+      );
       expect(
         await resolver.resolve('https://www.huya.com.evil.test/abc'),
+        isNull,
+      );
+      expect(
+        await resolver.resolve(
+          'https://live.douyin.com.evil.test/107722215216',
+        ),
+        isNull,
+      );
+      expect(
+        await resolver.resolve('https://live.douyin.com/room/107722215216'),
         isNull,
       );
       expect(await resolver.resolve('https://www.douyu.com/search'), isNull);
