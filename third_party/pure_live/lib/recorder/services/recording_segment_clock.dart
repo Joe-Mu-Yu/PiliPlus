@@ -52,15 +52,37 @@ class RecordingSegmentClock {
 
   factory RecordingSegmentClock.parse(String csv, {required String prefix, required List<String> segments}) {
     _prefix(prefix);
-    if (csv.length > maxBytes || segments.isEmpty || segments.length > maxSegments || !csv.endsWith('\n')) {
-      throw const FormatException('Recording clock journal shape or unfinished row');
+    if (csv.length > maxBytes || segments.isEmpty || segments.length > maxSegments) {
+      throw const FormatException('Recording clock journal shape');
     }
     final rows = const LineSplitter().convert(csv);
-    if (rows.length != segments.length) throw const FormatException('Recording clock missing or extra segment');
+    final hasUnfinishedRow = csv.isNotEmpty && !csv.endsWith('\n');
+    // FFmpeg closes a CSV row only after closing its TS segment. An interrupted
+    // final row is therefore an unclocked tail, not evidence that the previous
+    // completed segments are unusable.
+    if (rows.length < segments.length - 1 || rows.length > segments.length) {
+      throw const FormatException('Recording clock missing or extra segment');
+    }
+    final completedRows = <String>[];
+    for (final row in rows) {
+      final fields = row.split(',');
+      if (fields.length != 3) break;
+      try {
+        _time(fields[1]);
+        _time(fields[2]);
+      } on FormatException {
+        break;
+      }
+      completedRows.add(row);
+    }
+    if (completedRows.length < segments.length - 1 ||
+        (!hasUnfinishedRow && rows.length == segments.length && completedRows.length != segments.length)) {
+      throw const FormatException('Recording clock completed rows do not match segments');
+    }
     final starts = <int>[];
     final paths = <String>[];
-    for (var i = 0; i < rows.length; i++) {
-      final fields = rows[i].split(',');
+    for (var i = 0; i < completedRows.length; i++) {
+      final fields = completedRows[i].split(',');
       final expected = segmentName(prefix, i);
       if (fields.length != 3 || fields[0] != expected || p.basename(segments[i]) != expected) {
         throw const FormatException('Recording clock segment identity or order');
@@ -70,13 +92,12 @@ class RecordingSegmentClock {
       if ((i == 0 && start != 0) || (i > 0 && start <= starts.last) || end <= start) {
         throw const FormatException('Recording clock timestamp order');
       }
-      // End is not used to guess the next boundary. VFR/reordered frames may
-      // end before/after a following segment's reference-stream start.
       starts.add(start);
       final path = p.absolute(segments[i]);
       if (RegExp(r'[\x00-\x1f\x7f]').hasMatch(path)) throw const FormatException('Recording clock path controls');
       paths.add(path);
     }
+    if (paths.isEmpty) throw const FormatException('Recording clock has no completed segment');
     if (paths.map(p.dirname).toSet().length != 1) throw const FormatException('Recording clock mixed directories');
     return RecordingSegmentClock._(List.unmodifiable(paths), List.unmodifiable(starts));
   }
@@ -130,8 +151,6 @@ class RecordingClockReservation {
       if (await FileSystemEntity.type(journal, followLinks: false) != FileSystemEntityType.notFound) {
         throw const FileSystemException('Recording clock output already exists');
       }
-      // Partial cleanup/recovery may leave only a non-zero segment. Check both
-      // profiles before FFmpeg can create/truncate the auxiliary CSV.
       final matcher = RegExp('^${RegExp.escape(prefix)}_\\d{6,}(?:\\.clock-v1)?\\.ts\$', caseSensitive: false);
       await for (final entity in Directory(p.dirname(output)).list(followLinks: false)) {
         if (matcher.hasMatch(p.basename(entity.path))) {

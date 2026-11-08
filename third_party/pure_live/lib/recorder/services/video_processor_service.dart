@@ -176,10 +176,7 @@ class VideoProcessorService extends GetxService {
         filePrefix: resolvedFilePrefix,
         allowLegacySegments: allowLegacySegments,
       );
-      segments.sort(
-        (left, right) =>
-            p.basename(left.path).compareTo(p.basename(right.path)),
-      );
+      segments.sort(compareSegments);
       if (segments.isEmpty) {
         _emitFailed(taskId, i18n('video_ts_empty'));
         return false;
@@ -211,6 +208,21 @@ class VideoProcessorService extends GetxService {
             prefix: resolvedFilePrefix,
             segments: segments,
           );
+          if (clock.paths.length < segments.length) {
+            // Keep an interrupted/unclosed last TS as source material. The
+            // journal cannot establish its timestamps, so merge only the
+            // closed prefix and never silently delete the unclocked tail.
+            for (final segment in segments.skip(clock.paths.length)) {
+              if (await segment.length() <= 0) continue;
+              final tail = File('${segment.path}.unclocked');
+              if (await tail.exists()) {
+                throw const FormatException(
+                  'Recording clock tail preservation collision',
+                );
+              }
+              await segment.rename(tail.path);
+            }
+          }
           manifest = clock.toConcatManifest();
           clockJournal = journal;
         } on FileSystemException {
@@ -436,6 +448,18 @@ class VideoProcessorService extends GetxService {
               )
               .toList()
         : const <File>[];
+  }
+
+  static int compareSegments(File left, File right) {
+    int indexOf(File file) {
+      final match = RegExp(
+        r'_(\d{6,})(?:\.clock-v1)?\.ts$',
+        caseSensitive: false,
+      ).firstMatch(p.basename(file.path));
+      return int.tryParse(match?.group(1) ?? '') ?? 1 << 62;
+    }
+
+    return indexOf(left).compareTo(indexOf(right));
   }
 
   static String buildConcatManifest(Iterable<String> paths) {
