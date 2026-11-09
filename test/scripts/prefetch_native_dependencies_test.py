@@ -7,8 +7,8 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / 'scripts/prefetch_media_kit_android.py'
-SPEC = importlib.util.spec_from_file_location('prefetch_media_kit_android', SCRIPT)
+SCRIPT = ROOT / 'scripts/prefetch_native_dependencies.py'
+SPEC = importlib.util.spec_from_file_location('prefetch_native_dependencies', SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
@@ -30,7 +30,7 @@ class _Response:
         return chunk
 
 
-class PrefetchMediaKitAndroidTest(unittest.TestCase):
+class PrefetchNativeDependenciesTest(unittest.TestCase):
     def test_parse_dependencies_uses_upstream_urls_and_checksums(self):
         checksum = 'a' * 64
         with tempfile.TemporaryDirectory() as directory:
@@ -82,6 +82,17 @@ class PrefetchMediaKitAndroidTest(unittest.TestCase):
                     'https://example.test/default.jar', checksum, destination
                 )
             opener.assert_not_called()
+
+    def test_ffmpeg_dependency_pins_the_android_hash(self):
+        destinations = {
+            str(destination): checksum
+            for _url, checksum, destination in MODULE.FFMPEG_DEPENDENCIES
+        }
+        self.assertEqual(
+            set(destinations),
+            {'android/bundle-base-shared-lgpl-release.aar'},
+        )
+        self.assertTrue(all(len(checksum) == 64 for checksum in destinations.values()))
 
 
 if __name__ == '__main__':

@@ -157,12 +157,14 @@ jobs:
         run: |
           ./scripts/flutterw pub get --enforce-lockfile
           python3 scripts/prepare_android_ci.py
+      - name: Prefetch verified native dependencies
+        run: python3 scripts/prefetch_native_dependencies.py
       - name: Test release metadata and app
         run: |
           python3 -m unittest discover -s test/scripts -p '*_test.py'
-          ./scripts/flutterw test --no-pub
-      - name: Prefetch verified media_kit Android binaries
-        run: python3 scripts/prefetch_media_kit_android.py
+          # Unit/widget tests do not exercise native codecs. Avoid downloading
+          # an unrelated Linux FFmpeg bundle in this Android-only workflow.
+          ./scripts/flutterw test --no-pub --no-test-assets
       - name: Decode signing keystore
         env:
           SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
