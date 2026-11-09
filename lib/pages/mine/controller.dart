@@ -75,11 +75,6 @@ class MineController extends CommonDataController<Object, Object>
           }
         },
       ),
-      (
-        icon: Icons.family_restroom_outlined,
-        title: '家庭安全',
-        onTap: () => Get.toNamed('/familySafety'),
-      ),
     ];
   }
 

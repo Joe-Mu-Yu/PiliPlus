@@ -113,6 +113,162 @@ Map<String, dynamic> createCoupleComment({
   'createdAt': createdAt.toUtc().toIso8601String(),
 };
 
+class CoupleSpaceActivityNotification {
+  const CoupleSpaceActivityNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.count,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final int count;
+}
+
+CoupleSpaceActivityNotification? coupleSpaceNotificationForChanges({
+  required Map<String, dynamic> previousPayload,
+  required Map<String, dynamic> currentPayload,
+  required String currentUserId,
+}) {
+  final changes = <({String id, String body})>[];
+  final previousMoments = _coupleEntriesById(previousPayload['albums']);
+  final currentMoments = _coupleEntries(currentPayload['albums']);
+  for (final moment in currentMoments) {
+    final momentId = _coupleEntryId(moment);
+    final previous = previousMoments[momentId];
+    if (previous == null) {
+      if (_isOtherCoupleMember(moment, currentUserId)) {
+        final author = coupleEntryAuthorName(
+          payload: currentPayload,
+          entry: moment,
+          fallback: 'TA',
+        );
+        final photoCount = (moment['photos'] as List?)?.length ?? 0;
+        changes.add((
+          id: 'moment:$momentId',
+          body: '$author 发布了${photoCount > 0 ? '$photoCount 张照片' : '一条相册动态'}',
+        ));
+      }
+      continue;
+    }
+    _collectNewCoupleComments(
+      changes: changes,
+      previousEntry: previous,
+      currentEntry: moment,
+      currentPayload: currentPayload,
+      currentUserId: currentUserId,
+      entryLabel: '相册动态',
+    );
+  }
+
+  final previousMessages = _coupleEntriesById(previousPayload['messages']);
+  final currentMessages = _coupleEntries(currentPayload['messages']);
+  for (final message in currentMessages) {
+    final messageId = _coupleEntryId(message);
+    final previous = previousMessages[messageId];
+    if (previous == null) {
+      if (_isOtherCoupleMember(message, currentUserId)) {
+        final author = coupleEntryAuthorName(
+          payload: currentPayload,
+          entry: message,
+          fallback: 'TA',
+        );
+        final isVoice = message['type'] == 'voice';
+        final text = message['text']?.toString().trim() ?? '';
+        changes.add((
+          id: 'message:$messageId',
+          body: isVoice
+              ? '$author 发来一条语音心语'
+              : text.isEmpty
+              ? '$author 发来一条心语'
+              : '$author：${_coupleNotificationExcerpt(text)}',
+        ));
+      }
+      continue;
+    }
+    _collectNewCoupleComments(
+      changes: changes,
+      previousEntry: previous,
+      currentEntry: message,
+      currentPayload: currentPayload,
+      currentUserId: currentUserId,
+      entryLabel: '心语',
+    );
+  }
+
+  if (changes.isEmpty) return null;
+  final latest = changes.first;
+  return CoupleSpaceActivityNotification(
+    id: latest.id,
+    title: changes.length == 1 ? '小窝有新消息' : '小窝有 ${changes.length} 条新消息',
+    body: latest.body,
+    count: changes.length,
+  );
+}
+
+List<Map<String, dynamic>> _coupleEntries(Object? raw) => raw is List
+    ? raw.whereType<Map>().map(Map<String, dynamic>.from).toList()
+    : const [];
+
+Map<String, Map<String, dynamic>> _coupleEntriesById(Object? raw) => {
+  for (final entry in _coupleEntries(raw)) _coupleEntryId(entry): entry,
+};
+
+String _coupleEntryId(Map<String, dynamic> entry) {
+  final id = entry['id']?.toString();
+  if (id != null && id.isNotEmpty) return id;
+  return '${entry['authorId']}:${entry['date'] ?? entry['publishedAt']}:${entry['text'] ?? entry['caption']}';
+}
+
+bool _isOtherCoupleMember(
+  Map<String, dynamic> entry,
+  String currentUserId,
+) {
+  final authorId = entry['authorId']?.toString() ?? '';
+  return authorId.isNotEmpty && authorId != currentUserId;
+}
+
+void _collectNewCoupleComments({
+  required List<({String id, String body})> changes,
+  required Map<String, dynamic> previousEntry,
+  required Map<String, dynamic> currentEntry,
+  required Map<String, dynamic> currentPayload,
+  required String currentUserId,
+  required String entryLabel,
+}) {
+  final previousIds = _coupleEntries(previousEntry['comments'])
+      .map(_coupleEntryId)
+      .toSet();
+  for (final comment in _coupleEntries(currentEntry['comments'])) {
+    final commentId = _coupleEntryId(comment);
+    if (previousIds.contains(commentId) ||
+        !_isOtherCoupleMember(comment, currentUserId)) {
+      continue;
+    }
+    final author = coupleEntryAuthorName(
+      payload: currentPayload,
+      entry: comment,
+      fallback: 'TA',
+    );
+    final text = comment['text']?.toString().trim() ?? '';
+    changes.add((
+      id: 'comment:$commentId',
+      body: text.isEmpty
+          ? '$author 评论了你的$entryLabel'
+          : '$author 评论$entryLabel：${_coupleNotificationExcerpt(text)}',
+    ));
+  }
+}
+
+String _coupleNotificationExcerpt(String text) {
+  const maxCharacters = 48;
+  final characters = text.runes.toList();
+  if (characters.length <= maxCharacters) return text;
+  return '${String.fromCharCodes(characters.take(maxCharacters))}…';
+}
+
 enum CoupleAnniversaryType {
   love('恋爱', 'love'),
   birthday('生日', 'birthday'),

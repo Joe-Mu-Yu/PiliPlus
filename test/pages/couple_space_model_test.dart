@@ -1,7 +1,12 @@
 import 'package:PiliPlus/pages/couple_space/couple_space_model.dart';
+import 'package:PiliPlus/pages/couple_space/notification_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('小窝成员身份', () {
     test('成员映射缺失时不会继承另一成员的共享昵称', () {
       final payload = <String, dynamic>{
@@ -75,6 +80,143 @@ void main() {
       expect(comment['authorName'], '小瑶');
       expect(comment['text'], '我也想你');
       expect(comment['createdAt'], '2026-11-09T12:30:00.000Z');
+    });
+  });
+
+  group('小窝新消息通知', () {
+    test('汇总对方新发布的相册动态、心语和评论', () {
+      final previous = <String, dynamic>{
+        'memberNames': {'uid-me': '我', 'uid-ta': 'TA'},
+        'albums': [
+          {
+            'id': 'moment-old',
+            'authorId': 'uid-me',
+            'comments': <Map<String, dynamic>>[],
+          },
+        ],
+        'messages': <Map<String, dynamic>>[],
+      };
+      final current = <String, dynamic>{
+        'memberNames': {'uid-me': '我', 'uid-ta': 'TA'},
+        'albums': [
+          {
+            'id': 'moment-new',
+            'authorId': 'uid-ta',
+            'photos': ['cloud:space/uid-ta/a.jpg', 'cloud:space/uid-ta/b.jpg'],
+            'comments': <Map<String, dynamic>>[],
+          },
+          {
+            'id': 'moment-old',
+            'authorId': 'uid-me',
+            'comments': [
+              {
+                'id': 'comment-new',
+                'authorId': 'uid-ta',
+                'text': '真好看',
+              },
+            ],
+          },
+        ],
+        'messages': [
+          {
+            'id': 'message-new',
+            'authorId': 'uid-ta',
+            'authorName': 'TA',
+            'type': 'text',
+            'text': '晚上一起散步吧',
+            'comments': <Map<String, dynamic>>[],
+          },
+        ],
+      };
+
+      final notification = coupleSpaceNotificationForChanges(
+        previousPayload: previous,
+        currentPayload: current,
+        currentUserId: 'uid-me',
+      );
+
+      expect(notification, isNotNull);
+      expect(notification!.count, 3);
+      expect(notification.title, '小窝有 3 条新消息');
+      expect(notification.body, 'TA 发布了2 张照片');
+    });
+
+    test('忽略自己新增的内容和没有新增内容的修订', () {
+      final previous = <String, dynamic>{
+        'albums': <Map<String, dynamic>>[],
+        'messages': <Map<String, dynamic>>[],
+      };
+      final current = <String, dynamic>{
+        'albums': [
+          {
+            'id': 'mine',
+            'authorId': 'uid-me',
+            'photos': ['local.jpg'],
+          },
+        ],
+        'messages': <Map<String, dynamic>>[],
+      };
+
+      expect(
+        coupleSpaceNotificationForChanges(
+          previousPayload: previous,
+          currentPayload: current,
+          currentUserId: 'uid-me',
+        ),
+        isNull,
+      );
+      expect(
+        coupleSpaceNotificationForChanges(
+          previousPayload: current,
+          currentPayload: current,
+          currentUserId: 'uid-me',
+        ),
+        isNull,
+      );
+    });
+
+    test('获得通知权限后把新消息交给 Android 系统通知桥接', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      const channel = MethodChannel('test/couple-space-notifications');
+      MethodCall? received;
+      var permissionRequests = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            received = call;
+            return true;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final service = CoupleSpaceNotificationService(
+        channel: channel,
+        requestPermission: () async {
+          permissionRequests += 1;
+          return true;
+        },
+      );
+
+      expect(await service.prepare(), isTrue);
+      final shown = await service.show(
+        const CoupleSpaceActivityNotification(
+          id: 'message:one',
+          title: '小窝有新消息',
+          body: 'TA：想你了',
+          count: 1,
+        ),
+      );
+
+      expect(shown, isTrue);
+      expect(permissionRequests, 1);
+      expect(received?.method, 'show');
+      expect(received?.arguments, {
+        'id': 'message:one',
+        'title': '小窝有新消息',
+        'body': 'TA：想你了',
+        'count': 1,
+      });
     });
   });
 

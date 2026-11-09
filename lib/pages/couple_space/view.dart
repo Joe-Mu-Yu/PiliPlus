@@ -4,9 +4,12 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:PiliPlus/models/common/image_preview_type.dart';
 import 'package:PiliPlus/pages/couple_space/cloudbase_repository.dart';
 import 'package:PiliPlus/pages/couple_space/cloud_sync_coordinator.dart';
 import 'package:PiliPlus/pages/couple_space/couple_space_model.dart';
+import 'package:PiliPlus/pages/couple_space/notification_service.dart';
+import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -17,13 +20,15 @@ import 'package:record/record.dart';
 import 'package:uuid/uuid.dart';
 
 const _storeKey = 'coupleSpace.data.v1';
+const _cachedSpaceIdKey = 'coupleSpace.cachedSpaceId.v1';
 const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
 const _cloudPhotoPrefix = coupleSpaceCloudMediaPrefix;
 
 class CoupleSpacePage extends StatefulWidget {
-  const CoupleSpacePage({super.key, this.cloudRepository});
+  const CoupleSpacePage({super.key, this.cloudRepository, this.notifier});
 
   final CoupleSpaceCloudRepository? cloudRepository;
+  final CoupleSpaceNotifier? notifier;
 
   @override
   State<CoupleSpacePage> createState() => _CoupleSpacePageState();
@@ -340,7 +345,7 @@ String _formatDate(dynamic raw) {
 }
 
 class _CoupleSpacePageState extends State<CoupleSpacePage>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   static const _cloudSyncInterval = Duration(seconds: 15);
 
   ColorScheme get _colors => ColorScheme.of(context);
@@ -350,6 +355,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   late Map<String, dynamic> _data;
   late final Map<String, dynamic> _legacyData;
   late final CoupleSpaceCloudRepository _cloud;
+  late final CoupleSpaceNotifier _notifier;
   final _account = TextEditingController();
   final _password = TextEditingController();
   final _inviteCode = TextEditingController();
@@ -375,6 +381,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   String? _recordingPath;
   String? _playingVoicePath;
   String? _cloudError;
+  String? _cachedSpaceId;
   int _tab = 0;
   int _heartMode = 0;
   String _mood = '🥰';
@@ -385,10 +392,12 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   void initState() {
     super.initState();
     _cloud = widget.cloudRepository ?? CoupleSpaceCloudRepository.appSession;
+    _notifier = widget.notifier ?? CoupleSpaceNotificationService();
     final raw = GStorage.localCache.get(_storeKey);
     _data = raw is String
         ? Map<String, dynamic>.from(jsonDecode(raw))
         : _initialData();
+    _cachedSpaceId = GStorage.localCache.get(_cachedSpaceIdKey)?.toString();
     _normalizePayload(_data);
     _legacyData = Map<String, dynamic>.from(jsonDecode(jsonEncode(_data)));
     _restoringSession = _cloud.isSignedIn;
@@ -652,6 +661,9 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     _snapshot = snapshot;
     _data = payload;
     await GStorage.localCache.put(_storeKey, jsonEncode(_data));
+    _cachedSpaceId = snapshot.spaceId;
+    await GStorage.localCache.put(_cachedSpaceIdKey, snapshot.spaceId);
+    unawaited(_notifier.prepare());
     unawaited(_resolveMediaUrls());
   }
 
@@ -693,9 +705,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
 
   Future<void> _restoreCloudSession() async {
     try {
-      final snapshot = await _cloud.loadSpace();
-      if (!mounted) return;
-      if (snapshot != null) await _applySnapshot(snapshot);
+      await _loadCloudSpace(showMessage: false);
     } catch (error) {
       if (!mounted) return;
       _cloudError = error.toString();
@@ -746,7 +756,22 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
           current?.revision == snapshot.revision) {
         return;
       }
+      final previousPayload = current?.spaceId == snapshot.spaceId
+          ? current!.payload
+          : _cachedSpaceId == snapshot.spaceId
+          ? _data
+          : null;
+      final notification = previousPayload == null
+          ? null
+          : coupleSpaceNotificationForChanges(
+              previousPayload: previousPayload,
+              currentPayload: snapshot.payload,
+              currentUserId: _cloud.userId,
+            );
       await _applySnapshot(snapshot);
+      if (notification != null) {
+        unawaited(_notifier.show(notification));
+      }
     }
     if (mounted) setState(() {});
     if (showMessage) _showMessage('已同步 CloudBase 最新内容');
@@ -1289,6 +1314,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     if (_restoringSession) return _sessionRestorePage();
     if (!_cloud.isSignedIn) return _loginPage();
     if (_snapshot == null) return _spaceSetupPage();
@@ -1332,6 +1358,9 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       ),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   Widget _sessionRestorePage() => SimpleScaffold(
     appBar: AppBar(title: const Text('小窝')),
@@ -2370,7 +2399,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
           mainAxisSpacing: spacing,
         ),
         itemBuilder: (context, index) => GestureDetector(
-          onTap: () => _showMomentPhoto(paths[index]),
+          onTap: () => _showMomentPhotos(paths, index),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(5),
             child: _photo(paths[index], fit: BoxFit.cover),
@@ -2380,19 +2409,40 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     );
   }
 
-  Future<void> _showMomentPhoto(String path) => showDialog<void>(
-    context: context,
-    builder: (context) => Dialog(
-      backgroundColor: Colors.black,
-      insetPadding: EdgeInsets.zero,
-      child: GestureDetector(
-        onTap: () => Navigator.pop(context),
-        child: InteractiveViewer(
-          child: _photo(path, fit: BoxFit.contain, darkFallback: true),
-        ),
-      ),
-    ),
-  );
+  Future<void> _showMomentPhotos(List<String> paths, int initialIndex) async {
+    final sources = <SourceModel>[];
+    var previewIndex = 0;
+    for (var index = 0; index < paths.length; index++) {
+      final path = paths[index];
+      SourceModel? source;
+      if (path.startsWith(_cloudPhotoPrefix)) {
+        final key = path.substring(_cloudPhotoPrefix.length);
+        var url = _photoUrls[key];
+        if (url == null) {
+          try {
+            url = await _cloud.signedPhotoUrl(key);
+            _photoUrls[key] = url;
+          } catch (_) {
+            url = null;
+          }
+        }
+        if (url != null) source = SourceModel(url: url);
+      } else {
+        source = SourceModel(sourceType: SourceType.fileImage, url: path);
+      }
+      if (source == null) {
+        if (index == initialIndex) {
+          _showMessage('这张照片暂时无法加载，请稍后重试');
+          return;
+        }
+        continue;
+      }
+      if (index < initialIndex) previewIndex += 1;
+      sources.add(source);
+    }
+    if (!mounted || sources.isEmpty) return;
+    await PageUtils.imageView(initialPage: previewIndex, imgList: sources);
+  }
 
   Widget _photo(
     String path, {

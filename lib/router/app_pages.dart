@@ -13,7 +13,6 @@ import 'package:PiliPlus/pages/dynamics_detail/view.dart';
 import 'package:PiliPlus/pages/dynamics_topic/view.dart';
 import 'package:PiliPlus/pages/dynamics_topic_rcmd/view.dart';
 import 'package:PiliPlus/pages/fan/view.dart';
-import 'package:PiliPlus/pages/family_safety/view.dart';
 import 'package:PiliPlus/pages/fav/view.dart';
 import 'package:PiliPlus/pages/fav_create/view.dart';
 import 'package:PiliPlus/pages/fav_detail/view.dart';
@@ -182,7 +181,6 @@ class Routes {
     GetPage(name: '/popularPrecious', page: () => const PopularPreciousPage()),
     GetPage(name: '/audio', page: () => const AudioPage()),
     GetPage(name: '/coupleSpace', page: () => const CoupleSpacePage()),
-    GetPage(name: '/familySafety', page: () => const FamilySafetyPage()),
     GetPage(name: '/mainReply', page: () => const MainReplyPage()),
     GetPage(name: '/followed', page: () => const FollowedPage()),
     GetPage(name: '/sameFollowing', page: () => const FollowSamePage()),
