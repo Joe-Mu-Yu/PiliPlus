@@ -83,14 +83,17 @@ class PrefetchNativeDependenciesTest(unittest.TestCase):
                 )
             opener.assert_not_called()
 
-    def test_ffmpeg_dependency_pins_the_android_hash(self):
+    def test_ffmpeg_dependencies_pin_linux_and_android_hashes(self):
         destinations = {
             str(destination): checksum
             for _url, checksum, destination in MODULE.FFMPEG_DEPENDENCIES
         }
         self.assertEqual(
             set(destinations),
-            {'android/bundle-base-shared-lgpl-release.aar'},
+            {
+                'linux/bundle-base-linux-x86_64-shared-lgpl.zip',
+                'android/bundle-base-shared-lgpl-release.aar',
+            },
         )
         self.assertTrue(all(len(checksum) == 64 for checksum in destinations.values()))
 

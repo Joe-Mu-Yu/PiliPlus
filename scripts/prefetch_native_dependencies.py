@@ -22,6 +22,12 @@ DEPENDENCY_PATTERN = re.compile(
 )
 FFMPEG_DEPENDENCIES = (
     (
+        'https://api.github.com/repos/akashskypatel/ffmpeg-kit-builders/'
+        'releases/assets/537133408',
+        '08e005ef66d4f934dbd956a11b11caf34341fd2c717b67b7d84d70181894023c',
+        Path('linux/bundle-base-linux-x86_64-shared-lgpl.zip'),
+    ),
+    (
         'https://github.com/akashskypatel/ffmpeg-kit-builders/releases/download/'
         'v0.11.1-android/bundle-base-shared-lgpl-release.aar',
         'b214c2aafb20af5416989600826b2b7cb59c8f1572fb78547cc4a222b65134fc',
@@ -76,7 +82,13 @@ def download_verified(
     for attempt in range(1, attempts + 1):
         temporary.unlink(missing_ok=True)
         try:
-            request = Request(url, headers={'User-Agent': 'Hyper-PiliPlus-Android-CI'})
+            request = Request(
+                url,
+                headers={
+                    'Accept': 'application/octet-stream',
+                    'User-Agent': 'Hyper-PiliPlus-Android-CI',
+                },
+            )
             with urlopen(request, timeout=timeout) as response, temporary.open('wb') as output:
                 while chunk := response.read(1024 * 1024):
                     output.write(chunk)

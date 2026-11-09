@@ -162,9 +162,7 @@ jobs:
       - name: Test release metadata and app
         run: |
           python3 -m unittest discover -s test/scripts -p '*_test.py'
-          # Unit/widget tests do not exercise native codecs. Avoid downloading
-          # an unrelated Linux FFmpeg bundle in this Android-only workflow.
-          ./scripts/flutterw test --no-pub --no-test-assets
+          ./scripts/flutterw test --no-pub
       - name: Decode signing keystore
         env:
           SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
