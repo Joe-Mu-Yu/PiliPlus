@@ -18,7 +18,7 @@ import 'package:uuid/uuid.dart';
 
 const _storeKey = 'coupleSpace.data.v1';
 const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
-const _cloudPhotoPrefix = 'cloud:';
+const _cloudPhotoPrefix = coupleSpaceCloudMediaPrefix;
 
 class CoupleSpacePage extends StatefulWidget {
   const CoupleSpacePage({super.key, this.cloudRepository});
@@ -29,19 +29,17 @@ class CoupleSpacePage extends StatefulWidget {
   State<CoupleSpacePage> createState() => _CoupleSpacePageState();
 }
 
-class _MomentCommentDialog extends StatefulWidget {
-  const _MomentCommentDialog({required this.initialValue});
-
-  final String initialValue;
+class CoupleSpaceCommentInputDialog extends StatefulWidget {
+  const CoupleSpaceCommentInputDialog({super.key});
 
   @override
-  State<_MomentCommentDialog> createState() => _MomentCommentDialogState();
+  State<CoupleSpaceCommentInputDialog> createState() =>
+      _CoupleSpaceCommentInputDialogState();
 }
 
-class _MomentCommentDialogState extends State<_MomentCommentDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialValue,
-  );
+class _CoupleSpaceCommentInputDialogState
+    extends State<CoupleSpaceCommentInputDialog> {
+  final TextEditingController _controller = TextEditingController();
 
   @override
   void dispose() {
@@ -56,6 +54,7 @@ class _MomentCommentDialogState extends State<_MomentCommentDialog> {
       controller: _controller,
       autofocus: true,
       maxLength: 300,
+      onChanged: (_) => setState(() {}),
       decoration: const InputDecoration(hintText: '说点什么…'),
     ),
     actions: [
@@ -64,7 +63,9 @@ class _MomentCommentDialogState extends State<_MomentCommentDialog> {
         child: const Text('取消'),
       ),
       FilledButton(
-        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        onPressed: _controller.text.trim().isEmpty
+            ? null
+            : () => Navigator.pop(context, _controller.text.trim()),
         child: const Text('发送'),
       ),
     ],
@@ -461,6 +462,22 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   };
 
   void _normalizePayload(Map<String, dynamic> payload) {
+    final albums = List<Map<String, dynamic>>.from(
+      (payload['albums'] as List? ?? const []).map(
+        (item) => normalizeCoupleMoment(
+          Map<String, dynamic>.from(item as Map),
+          payload,
+        ),
+      ),
+    );
+    for (var index = 0; index < albums.length; index++) {
+      if (albums[index]['id']?.toString().isEmpty ?? true) {
+        albums[index]['id'] =
+            'legacy-moment-$index-${albums[index]['publishedAt'] ?? albums[index]['date'] ?? ''}';
+      }
+    }
+    payload['albums'] = albums;
+
     final messages = List<Map<String, dynamic>>.from(
       (payload['messages'] as List? ?? const []).map(
         (item) => Map<String, dynamic>.from(item as Map),
@@ -473,7 +490,14 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
             ? item['id']
             : 'legacy-message-$index-${item['date'] ?? ''}'
         ..['type'] = item['type'] == 'voice' ? 'voice' : 'text'
-        ..['text'] = item['text']?.toString() ?? '';
+        ..['text'] = item['text']?.toString() ?? ''
+        ..['comments'] = (item['comments'] as List? ?? const [])
+            .map(
+              (comment) => normalizeCoupleComment(
+                Map<String, dynamic>.from(comment as Map),
+              ),
+            )
+            .toList();
     }
     payload['messages'] = messages;
 
@@ -596,9 +620,18 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     final names = Map<String, dynamic>.from(
       _data['memberNames'] as Map? ?? const <String, dynamic>{},
     );
-    names[_cloud.userId] = _data['nickname']?.toString() ?? _cloud.account;
+    names[_cloud.userId] = _currentMemberName;
     _data['memberNames'] = names;
   }
+
+  String get _currentMemberName => coupleCurrentMemberName(
+    payload: _data,
+    userId: _cloud.userId,
+    account: _cloud.account,
+  );
+
+  String _entryAuthorName(Map<String, dynamic> entry) =>
+      coupleEntryAuthorName(payload: _data, entry: entry);
 
   Future<void> _applySnapshot(CoupleSpaceCloudSnapshot snapshot) async {
     final payload = snapshot.payload.isEmpty
@@ -810,9 +843,13 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     Map<String, dynamic> moment,
     Map<String, dynamic> updates,
   ) async {
+    final id = moment['id']?.toString();
     final paths = _momentPhotos(moment);
     final albums = _list('albums');
     final index = albums.indexWhere((entry) {
+      if (id != null && id.isNotEmpty && entry['id']?.toString() == id) {
+        return true;
+      }
       final entryPaths = _momentPhotos(entry);
       return paths.isNotEmpty &&
           entryPaths.isNotEmpty &&
@@ -827,21 +864,59 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   Future<void> _addMomentComment(Map<String, dynamic> moment) async {
     final comment = await showDialog<String>(
       context: context,
-      builder: (context) => const _MomentCommentDialog(
-        initialValue: '',
-      ),
+      builder: (context) => const CoupleSpaceCommentInputDialog(),
     );
     if (comment == null || comment.isEmpty) return;
     final comments =
         (moment['comments'] as List? ?? [])
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList()
-          ..add({
-            'author': _data['nickname']?.toString() ?? '我',
-            'text': comment,
-            'createdAt': DateTime.now().toIso8601String(),
-          });
+          ..add(
+            createCoupleComment(
+              id: _uuid.v4(),
+              authorId: _cloud.userId,
+              authorName: _currentMemberName,
+              text: comment,
+              createdAt: DateTime.now(),
+            ),
+          );
     await _updateMoment(moment, {'comments': comments});
+  }
+
+  Future<void> _updateMessage(
+    Map<String, dynamic> message,
+    Map<String, dynamic> updates,
+  ) async {
+    final id = message['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final messages = _list('messages');
+    final index = messages.indexWhere((entry) => entry['id']?.toString() == id);
+    if (index < 0) return;
+    messages[index].addAll(updates);
+    _data['messages'] = messages;
+    await _save();
+  }
+
+  Future<void> _addMessageComment(Map<String, dynamic> message) async {
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => const CoupleSpaceCommentInputDialog(),
+    );
+    if (text == null || text.isEmpty) return;
+    final comments =
+        (message['comments'] as List? ?? const [])
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList()
+          ..add(
+            createCoupleComment(
+              id: _uuid.v4(),
+              authorId: _cloud.userId,
+              authorName: _currentMemberName,
+              text: text,
+              createdAt: DateTime.now(),
+            ),
+          );
+    await _updateMessage(message, {'comments': comments});
   }
 
   Future<void> _editText(String title, String key, {String? hint}) async {
@@ -857,6 +932,25 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       _data[key] = value;
       await _save();
     }
+  }
+
+  Future<void> _editNickname() async {
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => CoupleSpaceTextInputDialog(
+        title: '修改昵称',
+        initialValue: _currentMemberName,
+      ),
+    );
+    if (value == null || value.isEmpty) return;
+    final names = Map<String, dynamic>.from(
+      _data['memberNames'] as Map? ?? const <String, dynamic>{},
+    );
+    names[_cloud.userId] = value;
+    _data
+      ..['nickname'] = value
+      ..['memberNames'] = names;
+    await _save();
   }
 
   Future<void> _addPhoto() async {
@@ -912,11 +1006,15 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     if (paths.isEmpty) return;
     albums
       ..add({
+        'id': _uuid.v4(),
         'photos': paths,
         'caption': draft['caption'],
         'publishedAt': draft['publishedAt'],
         'date': draft['publishedAt'],
         'type': '日常',
+        'authorId': _cloud.userId,
+        'authorName': _currentMemberName,
+        'comments': <Map<String, dynamic>>[],
       })
       ..sort((a, b) => _momentTime(b).compareTo(_momentTime(a)));
     _data['albums'] = albums;
@@ -1086,9 +1184,10 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
           'audioPath': audioPath,
           'audioDurationMs': durationMs,
           'authorId': _cloud.userId,
-          'authorName': _data['nickname']?.toString() ?? _cloud.account,
+          'authorName': _currentMemberName,
           'mood': _mood,
           'date': DateTime.now().toIso8601String(),
+          'comments': <Map<String, dynamic>>[],
         });
       _data['messages'] = messages;
       if (!await _save()) {
@@ -1836,10 +1935,11 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     final isVoice = message['type'] == 'voice';
     final audioPath = message['audioPath']?.toString() ?? '';
     final isCurrent = audioPath.isNotEmpty && _playingVoicePath == audioPath;
-    final author = message['authorName']?.toString().isNotEmpty == true
-        ? message['authorName'].toString()
-        : '我们';
+    final author = _entryAuthorName(message);
     final date = DateTime.tryParse(message['date']?.toString() ?? '');
+    final comments = (message['comments'] as List? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
     return _card(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1921,6 +2021,26 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                     message['text']?.toString() ?? '',
                     style: TextStyle(color: _textColor, height: 1.45),
                   ),
+                if (comments.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _commentsPanel(comments, showTime: true),
+                ],
+                const SizedBox(height: 2),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _addMessageComment(message),
+                    icon: Icon(
+                      Icons.mode_comment_outlined,
+                      size: 17,
+                      color: _mutedColor,
+                    ),
+                    label: Text(
+                      comments.isEmpty ? '评论' : '评论 ${comments.length}',
+                      style: TextStyle(color: _mutedColor),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1937,6 +2057,56 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       ),
     );
   }
+
+  Widget _commentsPanel(
+    List<Map<String, dynamic>> comments, {
+    bool showTime = false,
+  }) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: _colors.surfaceContainerLowest,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: comments.map((comment) {
+        final createdAt = DateTime.tryParse(
+          comment['createdAt']?.toString() ?? '',
+        );
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                TextSpan(
+                  style: TextStyle(fontSize: 12, color: _textColor),
+                  children: [
+                    TextSpan(
+                      text: '${_entryAuthorName(comment)}: ',
+                      style: TextStyle(
+                        color: _accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    TextSpan(text: comment['text']?.toString() ?? ''),
+                  ],
+                ),
+              ),
+              if (showTime && createdAt != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  _momentDateTime(createdAt.toLocal()),
+                  style: TextStyle(fontSize: 10, color: _mutedColor),
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+    ),
+  );
 
   Widget _stat(String emoji, String label, int count) => Column(
     children: [
@@ -2037,7 +2207,10 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   Widget _momentTile(Map<String, dynamic> moment, DateTime date) {
     final photos = _momentPhotos(moment);
     final caption = moment['caption']?.toString() ?? '';
-    final nickname = _data['nickname']?.toString() ?? '我';
+    final nickname = _entryAuthorName(moment);
+    final comments = (moment['comments'] as List? ?? const [])
+        .map((item) => Map<String, dynamic>.from(item as Map))
+        .toList();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(
@@ -2165,50 +2338,13 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                         color: _mutedColor,
                       ),
                       label: Text(
-                        '评论',
+                        comments.isEmpty ? '评论' : '评论 ${comments.length}',
                         style: TextStyle(color: _mutedColor),
                       ),
                     ),
                   ],
                 ),
-                if ((moment['comments'] as List? ?? []).isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(9),
-                    decoration: BoxDecoration(
-                      color: _colors.surfaceContainerLowest,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: (moment['comments'] as List).map((item) {
-                        final comment = Map<String, dynamic>.from(
-                          item as Map,
-                        );
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _textColor,
-                              ),
-                              children: [
-                                TextSpan(
-                                  text: '${comment['author']}: ',
-                                  style: TextStyle(
-                                    color: _accent,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                TextSpan(text: comment['text'].toString()),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
+                if (comments.isNotEmpty) _commentsPanel(comments),
               ],
             ),
           ),
@@ -2532,9 +2668,10 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                   'type': 'text',
                   'text': _message.text.trim(),
                   'authorId': _cloud.userId,
-                  'authorName': _data['nickname']?.toString() ?? _cloud.account,
+                  'authorName': _currentMemberName,
                   'mood': _mood,
                   'date': DateTime.now().toIso8601String(),
+                  'comments': <Map<String, dynamic>>[],
                 });
               _data['messages'] = items;
               _message.clear();
@@ -2735,7 +2872,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
             ),
           ),
           IconButton(
-            onPressed: () => _editText('修改昵称', 'nickname'),
+            onPressed: _editNickname,
             icon: Icon(Icons.edit_outlined, color: _accent),
           ),
         ],

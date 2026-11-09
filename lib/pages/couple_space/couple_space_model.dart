@@ -1,5 +1,118 @@
 import 'dart:math';
 
+const coupleSpaceCloudMediaPrefix = 'cloud:';
+
+Map<String, String> coupleMemberNames(Map<String, dynamic> payload) =>
+    Map<String, dynamic>.from(
+      payload['memberNames'] as Map? ?? const <String, dynamic>{},
+    ).map((key, value) => MapEntry(key, value.toString().trim()));
+
+String coupleCurrentMemberName({
+  required Map<String, dynamic> payload,
+  required String userId,
+  required String account,
+}) {
+  final stored = coupleMemberNames(payload)[userId];
+  if (stored != null && stored.isNotEmpty) return stored;
+  final normalizedAccount = account.trim();
+  return normalizedAccount.isEmpty ? '我' : normalizedAccount;
+}
+
+String coupleEntryAuthorName({
+  required Map<String, dynamic> payload,
+  required Map<String, dynamic> entry,
+  String fallback = '我们',
+}) {
+  final embedded = entry['authorName']?.toString().trim();
+  if (embedded != null && embedded.isNotEmpty) return embedded;
+  final authorId = entry['authorId']?.toString();
+  final memberName = authorId == null
+      ? null
+      : coupleMemberNames(payload)[authorId];
+  if (memberName != null && memberName.isNotEmpty) return memberName;
+  final legacy = entry['author']?.toString().trim();
+  if (legacy != null && legacy.isNotEmpty) return legacy;
+  return fallback;
+}
+
+String? coupleCloudMediaOwnerId(Object? rawPath) {
+  final path = rawPath?.toString() ?? '';
+  if (!path.startsWith(coupleSpaceCloudMediaPrefix)) return null;
+  final segments = path
+      .substring(coupleSpaceCloudMediaPrefix.length)
+      .split('/');
+  if (segments.length < 3 || segments[1].isEmpty) return null;
+  return segments[1];
+}
+
+Map<String, dynamic> normalizeCoupleComment(Map<String, dynamic> source) {
+  final normalized = Map<String, dynamic>.from(source);
+  final authorName = source['authorName']?.toString().trim();
+  final legacyAuthor = source['author']?.toString().trim();
+  normalized
+    ..['id'] = source['id']?.toString() ?? ''
+    ..['authorId'] = source['authorId']?.toString() ?? ''
+    ..['authorName'] = authorName?.isNotEmpty == true
+        ? authorName
+        : legacyAuthor ?? ''
+    ..['text'] = source['text']?.toString().trim() ?? ''
+    ..['createdAt'] = source['createdAt']?.toString() ?? '';
+  return normalized;
+}
+
+Map<String, dynamic> normalizeCoupleMoment(
+  Map<String, dynamic> source,
+  Map<String, dynamic> payload,
+) {
+  final normalized = Map<String, dynamic>.from(source);
+  final rawPhotos = source['photos'];
+  final photos = rawPhotos is List
+      ? rawPhotos.map((path) => path.toString()).toList()
+      : <String>[
+          if (source['path']?.toString().isNotEmpty == true)
+            source['path'].toString(),
+        ];
+  final embeddedAuthorId = source['authorId']?.toString().trim();
+  final inferredAuthorId = photos
+      .map(coupleCloudMediaOwnerId)
+      .whereType<String>()
+      .firstOrNull;
+  final authorId = embeddedAuthorId?.isNotEmpty == true
+      ? embeddedAuthorId!
+      : inferredAuthorId ?? '';
+  final embeddedAuthorName = source['authorName']?.toString().trim();
+  final memberName = coupleMemberNames(payload)[authorId];
+  normalized
+    ..['photos'] = photos
+    ..remove('path')
+    ..['authorId'] = authorId
+    ..['authorName'] = embeddedAuthorName?.isNotEmpty == true
+        ? embeddedAuthorName
+        : memberName ?? ''
+    ..['comments'] = (source['comments'] as List? ?? const [])
+        .map(
+          (comment) => normalizeCoupleComment(
+            Map<String, dynamic>.from(comment as Map),
+          ),
+        )
+        .toList();
+  return normalized;
+}
+
+Map<String, dynamic> createCoupleComment({
+  required String id,
+  required String authorId,
+  required String authorName,
+  required String text,
+  required DateTime createdAt,
+}) => {
+  'id': id,
+  'authorId': authorId,
+  'authorName': authorName,
+  'text': text.trim(),
+  'createdAt': createdAt.toUtc().toIso8601String(),
+};
+
 enum CoupleAnniversaryType {
   love('恋爱', 'love'),
   birthday('生日', 'birthday'),

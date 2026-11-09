@@ -68,6 +68,17 @@
   `audio/x-m4a` 加入 MIME 白名单；对象路径继续使用
   `<spaceId>/<userId>/<uuid>.<ext>`，由成员 RLS 限制读写。
 
+## 2026-11 心语评论与成员署名修复
+
+### 用户故事与验收标准
+
+- 两位成员都能在文字或语音心语下添加不超过 300 字的评论；空白评论不能提交，保存后另一成员刷新即可看到评论者、内容与时间。
+- 新心语评论固定保存 `id`、`authorId`、`authorName`、`text` 和 UTC `createdAt`，不依赖查看页面时的当前昵称。
+- 新相册动态固定保存 `authorId` 与 `authorName`，卡片按动态自身作者显示，不再使用共享 payload 的单值 `nickname`。
+- 旧相册动态缺少作者字段时，从私有对象键 `<spaceId>/<userId>/<uuid>.<ext>` 恢复上传者 UID，再通过 `memberNames` 得到昵称；本地旧照片无法确定作者时保持中性署名，不猜测归属。
+- 当前 UID 在 `memberNames` 中缺失时以登录账号初始化，禁止复制另一成员遗留的共享 `nickname`；修改昵称时只更新当前 UID 的映射。
+- 评论和作者字段继续存放在 `couple_space_state.payload`，沿用 revision 乐观并发与成员 RLS，不重新启用已停用的细粒度旧表，也不新增数据库迁移。
+
 ### 废弃 Firebase
 
 - 主应用公告、位置共享以及 Pure Live 的 Firebase 登录/Firestore 配置同步已经移除；
