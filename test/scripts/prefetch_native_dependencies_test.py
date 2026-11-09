@@ -110,6 +110,22 @@ class PrefetchNativeDependenciesTest(unittest.TestCase):
             all('/releases/assets/' in url for url in MODULE.MEDIA_KIT_ASSET_URLS.values())
         )
 
+    def test_sqlite_dependencies_pin_test_host_and_android_abis(self):
+        destinations = {
+            str(destination): checksum
+            for _url, checksum, destination in MODULE.SQLITE_DEPENDENCIES
+        }
+        self.assertEqual(
+            set(destinations),
+            {
+                'download-3a800a4d/libsqlite3.so',
+                'download-b372f69d/libsqlite3.so',
+                'download-d9cd44fa/libsqlite3.so',
+                'download-1ff25026/libsqlite3.so',
+            },
+        )
+        self.assertTrue(all(len(checksum) == 64 for checksum in destinations.values()))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -48,6 +48,32 @@ FFMPEG_DEPENDENCIES = (
         Path('android/bundle-base-shared-lgpl-release.aar'),
     ),
 )
+SQLITE_DEPENDENCIES = (
+    (
+        'https://api.github.com/repos/simolus3/sqlite3.dart/'
+        'releases/assets/637354587',
+        '3a800a4da3def29f85cef1e40f27c463f2842206593a8a60cfeb6d0a52435e70',
+        Path('download-3a800a4d/libsqlite3.so'),
+    ),
+    (
+        'https://api.github.com/repos/simolus3/sqlite3.dart/'
+        'releases/assets/637354621',
+        'b372f69dd455ad4c1b26015eb848acce7017cc7a95f8fb37b4962ddda70528ec',
+        Path('download-b372f69d/libsqlite3.so'),
+    ),
+    (
+        'https://api.github.com/repos/simolus3/sqlite3.dart/'
+        'releases/assets/637354686',
+        'd9cd44fadd4f856ee5e0980811364e651f69b93c418cb02ccfc433eb6df1b65d',
+        Path('download-d9cd44fa/libsqlite3.so'),
+    ),
+    (
+        'https://api.github.com/repos/simolus3/sqlite3.dart/'
+        'releases/assets/637354701',
+        '1ff25026f7bcd7e740f98d5b852ae6e79d2400c076f046096295f91a5b60aeb8',
+        Path('download-1ff25026/libsqlite3.so'),
+    ),
+)
 
 
 def resolved_package_directory(package_config: Path, package_name: str) -> Path:
@@ -166,9 +192,26 @@ def prefetch_media_kit() -> None:
         download_verified(asset_url, expected_sha256, destination)
 
 
+def prefetch_sqlite() -> None:
+    package_config = ROOT / '.dart_tool/package_config.json'
+    package_directory = resolved_package_directory(package_config, 'sqlite3')
+    hashes_source = (package_directory / 'lib/src/hook/asset_hashes.dart').read_text()
+    if "const String? releaseTag = 'sqlite3-3.7.1';" not in hashes_source:
+        raise ValueError('Update pinned SQLite asset URLs and SHA-256 hashes')
+
+    cache_directory = ROOT / '.dart_tool/hooks_runner/shared/sqlite3/build'
+    for url, expected_sha256, relative_destination in SQLITE_DEPENDENCIES:
+        download_verified(
+            url,
+            expected_sha256,
+            cache_directory / relative_destination,
+        )
+
+
 def main() -> None:
     prefetch_ffmpeg()
     prefetch_media_kit()
+    prefetch_sqlite()
 
 
 if __name__ == '__main__':
