@@ -161,6 +161,8 @@ jobs:
         run: |
           python3 -m unittest discover -s test/scripts -p '*_test.py'
           ./scripts/flutterw test --no-pub
+      - name: Prefetch verified media_kit Android binaries
+        run: python3 scripts/prefetch_media_kit_android.py
       - name: Decode signing keystore
         env:
           SIGN_KEYSTORE_BASE64: ${{ secrets.SIGN_KEYSTORE_BASE64 }}
