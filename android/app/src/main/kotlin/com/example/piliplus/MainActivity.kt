@@ -13,6 +13,7 @@ class MainActivity : AudioServiceActivity() {
     private var nativeFeedback: NativeFeedback? = null
     private var nativeSelectionToolbar: NativeSelectionToolbar? = null
     private var miuixNavigationOverlay: MiuixNavigationOverlay? = null
+    private var familyLocation: FamilyLocation? = null
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -44,6 +45,7 @@ class MainActivity : AudioServiceActivity() {
         nativeFeedback = NativeFeedback(this, flutterEngine)
         nativeSelectionToolbar = NativeSelectionToolbar(this, flutterEngine)
         miuixNavigationOverlay = MiuixNavigationOverlay(this, flutterEngine)
+        familyLocation = FamilyLocation(this, flutterEngine)
         window.decorView.post { miuixNavigationOverlay?.attach() }
     }
 
@@ -54,6 +56,8 @@ class MainActivity : AudioServiceActivity() {
         nativeFeedback = null
         miuixNavigationOverlay?.dispose()
         miuixNavigationOverlay = null
+        familyLocation?.dispose()
+        familyLocation = null
         stopService(Intent(this, com.ryanheise.audioservice.AudioService::class.java))
         super.onDestroy()
     }

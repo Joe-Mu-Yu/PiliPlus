@@ -265,6 +265,16 @@ class CoupleSpaceCloudRepository {
     );
   }
 
+  /// Calls an authenticated CloudBase PG RPC with the reusable app session.
+  ///
+  /// Feature repositories keep their parsing and business rules separate, but
+  /// share this transport so users never need to log in twice or expose a
+  /// privileged CloudBase key in the client.
+  Future<dynamic> authenticatedRpc(
+    String function,
+    Map<String, dynamic> body,
+  ) => _rpc(function, body);
+
   Future<dynamic> _rpc(String function, Map<String, dynamic> body) =>
       _requestJson('POST', '/v1/rdb/rest/rpc/$function', body: body);
 
@@ -426,6 +436,15 @@ class CoupleSpaceCloudRepository {
     if (message.contains('INVITE_INVALID_OR_EXPIRED')) return '邀请码无效或已过期';
     if (message.contains('SPACE_ALREADY_PAIRED')) return '这个小窝已经绑定了两位成员';
     if (message.contains('SPACE_ACCESS_DENIED')) return '你没有访问这个小窝的权限';
+    if (message.contains('USER_ALREADY_IN_FAMILY')) return '这个账号已经加入一个家庭安全组';
+    if (message.contains('INVITE_ACCESS_DENIED')) return '只有被照护端可以生成邀请码';
+    if (message.contains('FAMILY_ALREADY_PAIRED')) return '这个家庭已经完成绑定';
+    if (message.contains('CAREGIVER_ACCESS_REQUIRED')) return '只有照护端可以发起报平安请求';
+    if (message.contains('RECIPIENT_ACCESS_REQUIRED')) return '只有被照护端可以回应报平安请求';
+    if (message.contains('CHECK_IN_ALREADY_PENDING')) return '已有一条待回应的报平安请求';
+    if (message.contains('CHECK_IN_NOT_PENDING')) return '这条请求已处理或已失效';
+    if (message.contains('CHECK_IN_EXPIRED')) return '这条报平安请求已过期';
+    if (message.contains('FAMILY_ACCESS_DENIED')) return '你没有访问这个家庭安全组的权限';
     return message;
   }
 

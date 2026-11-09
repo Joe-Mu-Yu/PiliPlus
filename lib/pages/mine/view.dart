@@ -144,9 +144,15 @@ class _MediaPageState extends CommonPageState<MinePage>
                 onTap: e.onTap,
                 borderRadius: Style.mdRadius,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 80),
-                  child: AspectRatio(
-                    aspectRatio: 1,
+                  constraints: const BoxConstraints(
+                    minHeight: 72,
+                    maxWidth: 80,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 10,
+                    ),
                     child: Column(
                       spacing: 6,
                       mainAxisSize: .min,
@@ -155,6 +161,9 @@ class _MediaPageState extends CommonPageState<MinePage>
                         Icon(e.icon, color: primary),
                         Text(
                           e.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 13),
                         ),
                       ],
