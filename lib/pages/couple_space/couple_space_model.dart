@@ -1,6 +1,86 @@
 import 'dart:math';
 
 const coupleSpaceCloudMediaPrefix = 'cloud:';
+const coupleSpaceLivePhotoType = 'livePhoto';
+
+class CoupleSpacePhoto {
+  const CoupleSpacePhoto({
+    required this.imagePath,
+    this.videoPath,
+    this.width,
+    this.height,
+  });
+
+  final String imagePath;
+  final String? videoPath;
+  final int? width;
+  final int? height;
+
+  bool get isLivePhoto => videoPath?.isNotEmpty == true;
+
+  Iterable<String> get mediaPaths sync* {
+    yield imagePath;
+    if (isLivePhoto) yield videoPath!;
+  }
+
+  Object toJson() {
+    if (!isLivePhoto) return imagePath;
+    return <String, dynamic>{
+      'type': coupleSpaceLivePhotoType,
+      'imagePath': imagePath,
+      'videoPath': videoPath,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
+    };
+  }
+
+  static CoupleSpacePhoto? tryParse(Object? raw) {
+    if (raw is Map) {
+      final imagePath = (raw['imagePath'] ?? raw['path'])?.toString() ?? '';
+      if (imagePath.isEmpty) return null;
+      final videoPath = raw['videoPath']?.toString();
+      return CoupleSpacePhoto(
+        imagePath: imagePath,
+        videoPath: videoPath?.isNotEmpty == true ? videoPath : null,
+        width: _safeDimension(raw['width']),
+        height: _safeDimension(raw['height']),
+      );
+    }
+    final imagePath = raw?.toString() ?? '';
+    return imagePath.isEmpty ? null : CoupleSpacePhoto(imagePath: imagePath);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CoupleSpacePhoto &&
+      imagePath == other.imagePath &&
+      videoPath == other.videoPath;
+
+  @override
+  int get hashCode => Object.hash(imagePath, videoPath);
+}
+
+int? _safeDimension(Object? value) {
+  final dimension = switch (value) {
+    int value => value,
+    num value => value.toInt(),
+    String value => int.tryParse(value),
+    _ => null,
+  };
+  return dimension != null && dimension > 0 ? dimension : null;
+}
+
+List<CoupleSpacePhoto> coupleMomentPhotos(Map<String, dynamic> moment) {
+  final rawPhotos = moment['photos'];
+  if (rawPhotos is List) {
+    return rawPhotos
+        .map(CoupleSpacePhoto.tryParse)
+        .whereType<CoupleSpacePhoto>()
+        .toList();
+  }
+  final legacy = CoupleSpacePhoto.tryParse(moment['path']);
+  return legacy == null ? const [] : [legacy];
+}
 
 Map<String, String> coupleMemberNames(Map<String, dynamic> payload) =>
     Map<String, dynamic>.from(
@@ -65,16 +145,10 @@ Map<String, dynamic> normalizeCoupleMoment(
   Map<String, dynamic> payload,
 ) {
   final normalized = Map<String, dynamic>.from(source);
-  final rawPhotos = source['photos'];
-  final photos = rawPhotos is List
-      ? rawPhotos.map((path) => path.toString()).toList()
-      : <String>[
-          if (source['path']?.toString().isNotEmpty == true)
-            source['path'].toString(),
-        ];
+  final photos = coupleMomentPhotos(source);
   final embeddedAuthorId = source['authorId']?.toString().trim();
   final inferredAuthorId = photos
-      .map(coupleCloudMediaOwnerId)
+      .map((photo) => coupleCloudMediaOwnerId(photo.imagePath))
       .whereType<String>()
       .firstOrNull;
   final authorId = embeddedAuthorId?.isNotEmpty == true
@@ -83,7 +157,7 @@ Map<String, dynamic> normalizeCoupleMoment(
   final embeddedAuthorName = source['authorName']?.toString().trim();
   final memberName = coupleMemberNames(payload)[authorId];
   normalized
-    ..['photos'] = photos
+    ..['photos'] = photos.map((photo) => photo.toJson()).toList()
     ..remove('path')
     ..['authorId'] = authorId
     ..['authorName'] = embeddedAuthorName?.isNotEmpty == true

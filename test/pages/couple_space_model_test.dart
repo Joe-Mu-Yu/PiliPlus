@@ -106,6 +106,72 @@ void main() {
     });
   });
 
+  group('小窝动态照片模型', () {
+    test('旧字符串照片保持兼容', () {
+      final photos = coupleMomentPhotos({
+        'photos': ['cloud:space-a/uid-yao/photo.jpg'],
+      });
+
+      expect(photos, [
+        const CoupleSpacePhoto(
+          imagePath: 'cloud:space-a/uid-yao/photo.jpg',
+        ),
+      ]);
+      expect(photos.single.isLivePhoto, isFalse);
+      expect(photos.single.toJson(), 'cloud:space-a/uid-yao/photo.jpg');
+    });
+
+    test('动态照片保留封面、伴随视频和尺寸', () {
+      final photos = coupleMomentPhotos({
+        'photos': [
+          {
+            'type': coupleSpaceLivePhotoType,
+            'imagePath': 'cloud:space-a/uid-yao/photo.jpg',
+            'videoPath': 'cloud:space-a/uid-yao/photo.mp4',
+            'width': '1440',
+            'height': 1080.0,
+          },
+        ],
+      });
+
+      expect(photos.single.isLivePhoto, isTrue);
+      expect(photos.single.width, 1440);
+      expect(photos.single.height, 1080);
+      expect(photos.single.mediaPaths, [
+        'cloud:space-a/uid-yao/photo.jpg',
+        'cloud:space-a/uid-yao/photo.mp4',
+      ]);
+      expect(photos.single.toJson(), {
+        'type': coupleSpaceLivePhotoType,
+        'imagePath': 'cloud:space-a/uid-yao/photo.jpg',
+        'videoPath': 'cloud:space-a/uid-yao/photo.mp4',
+        'width': 1440,
+        'height': 1080,
+      });
+    });
+
+    test('动态照片封面路径可以恢复真实发布者', () {
+      final moment = normalizeCoupleMoment(
+        {
+          'photos': [
+            {
+              'type': coupleSpaceLivePhotoType,
+              'imagePath': 'cloud:space-a/uid-yao/photo.jpg',
+              'videoPath': 'cloud:space-a/uid-yao/photo.mp4',
+            },
+          ],
+        },
+        {
+          'memberNames': {'uid-yao': '小瑶'},
+        },
+      );
+
+      expect(moment['authorId'], 'uid-yao');
+      expect(moment['authorName'], '小瑶');
+      expect((moment['photos'] as List).single, isA<Map>());
+    });
+  });
+
   group('小窝新消息通知', () {
     test('汇总对方新发布的相册动态、心语和评论', () {
       final previous = <String, dynamic>{

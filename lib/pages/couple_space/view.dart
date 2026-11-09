@@ -7,11 +7,11 @@ import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/image_preview_type.dart';
 import 'package:PiliPlus/pages/couple_space/cloudbase_repository.dart';
 import 'package:PiliPlus/pages/couple_space/cloud_sync_coordinator.dart';
+import 'package:PiliPlus/pages/couple_space/couple_space_media_picker.dart';
 import 'package:PiliPlus/pages/couple_space/couple_space_model.dart';
 import 'package:PiliPlus/pages/couple_space/notification_service.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path/path.dart' as p;
@@ -25,10 +25,16 @@ const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
 const _cloudPhotoPrefix = coupleSpaceCloudMediaPrefix;
 
 class CoupleSpacePage extends StatefulWidget {
-  const CoupleSpacePage({super.key, this.cloudRepository, this.notifier});
+  const CoupleSpacePage({
+    super.key,
+    this.cloudRepository,
+    this.notifier,
+    this.mediaPicker,
+  });
 
   final CoupleSpaceCloudRepository? cloudRepository;
   final CoupleSpaceNotifier? notifier;
+  final CoupleSpaceMediaPicker? mediaPicker;
 
   @override
   State<CoupleSpacePage> createState() => _CoupleSpacePageState();
@@ -356,6 +362,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   late final Map<String, dynamic> _legacyData;
   late final CoupleSpaceCloudRepository _cloud;
   late final CoupleSpaceNotifier _notifier;
+  late final CoupleSpaceMediaPicker _mediaPicker;
   final _account = TextEditingController();
   final _password = TextEditingController();
   final _inviteCode = TextEditingController();
@@ -393,6 +400,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     super.initState();
     _cloud = widget.cloudRepository ?? CoupleSpaceCloudRepository.appSession;
     _notifier = widget.notifier ?? CoupleSpaceNotificationService();
+    _mediaPicker = widget.mediaPicker ?? CoupleSpaceMediaPicker();
     final raw = GStorage.localCache.get(_storeKey);
     _data = raw is String
         ? Map<String, dynamic>.from(jsonDecode(raw))
@@ -670,6 +678,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   Future<void> _resolveMediaUrls() async {
     final photoKeys = _list('albums')
         .expand(_momentPhotos)
+        .expand((photo) => photo.mediaPaths)
         .where((path) => path.startsWith(_cloudPhotoPrefix))
         .map((path) => path.substring(_cloudPhotoPrefix.length));
     final audioKeys = _list('messages')
@@ -844,14 +853,8 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
         (_data[key] as List? ?? []).map((e) => Map<String, dynamic>.from(e)),
       );
 
-  List<String> _momentPhotos(Map<String, dynamic> moment) {
-    final photos = moment['photos'];
-    if (photos is List) {
-      return photos.map((path) => path.toString()).toList();
-    }
-    final legacyPath = moment['path']?.toString();
-    return legacyPath == null ? const [] : [legacyPath];
-  }
+  List<CoupleSpacePhoto> _momentPhotos(Map<String, dynamic> moment) =>
+      coupleMomentPhotos(moment);
 
   DateTime _momentTime(Map<String, dynamic> moment) =>
       DateTime.tryParse(
@@ -878,7 +881,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       final entryPaths = _momentPhotos(entry);
       return paths.isNotEmpty &&
           entryPaths.isNotEmpty &&
-          entryPaths.first == paths.first;
+          entryPaths.first.imagePath == paths.first.imagePath;
     });
     if (index < 0) return;
     albums[index].addAll(updates);
@@ -979,71 +982,102 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   }
 
   Future<void> _addPhoto() async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.image,
-    );
-    if (picked.isEmpty) return;
-    if (!mounted) return;
-
-    final selected = picked.take(9).toList();
-    if (picked.length > 9 && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('每条朋友圈最多选择 9 张照片')));
-    }
-    final draft = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _MomentDraftDialog(photoCount: selected.length),
-    );
-    if (draft == null) return;
-
-    final snapshot = _snapshot;
-    if (snapshot == null) return;
-    final albums = _list('albums');
-    final paths = <String>[];
-    setState(() => _busy = true);
+    late final List<CoupleSpacePickedMedia> selected;
     try {
-      for (final file in selected) {
-        if (file.path == null) continue;
-        final key = await _cloud.uploadPhoto(
-          spaceId: snapshot.spaceId,
-          file: File(file.path!),
-        );
-        paths.add('$_cloudPhotoPrefix$key');
-        _photoUrls[key] = await _cloud.signedPhotoUrl(key);
-      }
+      selected = await _mediaPicker.pick(limit: 9);
     } catch (error) {
-      _showMessage('照片上传失败：$error');
-      for (final path in paths) {
-        try {
-          await _cloud.deletePhoto(path.substring(_cloudPhotoPrefix.length));
-        } catch (cleanupError, cleanupStackTrace) {
-          debugPrint(
-            'CoupleSpace photo rollback failed for $path: $cleanupError\n'
-            '$cleanupStackTrace',
-          );
+      _showMessage('照片选择失败：$error');
+      return;
+    }
+    if (selected.isEmpty || !mounted) return;
+
+    try {
+      final draft = await showDialog<Map<String, dynamic>>(
+        context: context,
+        builder: (context) => _MomentDraftDialog(photoCount: selected.length),
+      );
+      if (draft == null) return;
+
+      final snapshot = _snapshot;
+      if (snapshot == null) return;
+      final albums = _list('albums');
+      final photos = <CoupleSpacePhoto>[];
+      final uploadedKeys = <String>[];
+      Future<void> rollbackUploadedMedia() async {
+        for (final key in uploadedKeys) {
+          try {
+            await _cloud.deleteMedia(key);
+            _photoUrls.remove(key);
+          } catch (cleanupError, cleanupStackTrace) {
+            debugPrint(
+              'CoupleSpace photo rollback failed for $key: $cleanupError\n'
+              '$cleanupStackTrace',
+            );
+          }
         }
       }
-      return;
+
+      setState(() => _busy = true);
+      try {
+        for (final media in selected) {
+          final imageKey = await _cloud.uploadPhoto(
+            spaceId: snapshot.spaceId,
+            file: File(media.imagePath),
+          );
+          uploadedKeys.add(imageKey);
+          String? videoKey;
+          if (media.isLivePhoto) {
+            videoKey = await _cloud.uploadMedia(
+              spaceId: snapshot.spaceId,
+              file: File(media.videoPath!),
+            );
+            uploadedKeys.add(videoKey);
+          }
+          final photo = CoupleSpacePhoto(
+            imagePath: '$_cloudPhotoPrefix$imageKey',
+            videoPath: videoKey == null ? null : '$_cloudPhotoPrefix$videoKey',
+            width: media.width,
+            height: media.height,
+          );
+          photos.add(photo);
+          _photoUrls[imageKey] = await _cloud.signedPhotoUrl(imageKey);
+          if (videoKey != null) {
+            _photoUrls[videoKey] = await _cloud.signedMediaUrl(videoKey);
+          }
+        }
+      } catch (error) {
+        _showMessage('照片上传失败：$error');
+        await rollbackUploadedMedia();
+        return;
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      if (photos.isEmpty) return;
+      final momentId = _uuid.v4();
+      albums
+        ..add({
+          'id': momentId,
+          'photos': photos.map((photo) => photo.toJson()).toList(),
+          'caption': draft['caption'],
+          'publishedAt': draft['publishedAt'],
+          'date': draft['publishedAt'],
+          'type': '日常',
+          'authorId': _cloud.userId,
+          'authorName': _currentMemberName,
+          'comments': <Map<String, dynamic>>[],
+        })
+        ..sort((a, b) => _momentTime(b).compareTo(_momentTime(a)));
+      _data['albums'] = albums;
+      final saved = await _save();
+      final retainedLocally = _list(
+        'albums',
+      ).any((moment) => moment['id'] == momentId);
+      if (!saved && !retainedLocally) await rollbackUploadedMedia();
     } finally {
-      if (mounted) setState(() => _busy = false);
+      for (final media in selected) {
+        await media.cleanup();
+      }
     }
-    if (paths.isEmpty) return;
-    albums
-      ..add({
-        'id': _uuid.v4(),
-        'photos': paths,
-        'caption': draft['caption'],
-        'publishedAt': draft['publishedAt'],
-        'date': draft['publishedAt'],
-        'type': '日常',
-        'authorId': _cloud.userId,
-        'authorName': _currentMemberName,
-        'comments': <Map<String, dynamic>>[],
-      })
-      ..sort((a, b) => _momentTime(b).compareTo(_momentTime(a)));
-    _data['albums'] = albums;
-    await _save();
   }
 
   String _momentDateTime(DateTime date) => _formatMomentDateTime(date);
@@ -2304,20 +2338,22 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                           );
                         _data['albums'] = albums;
                         if (!await _save()) return;
-                        for (final path in photos) {
-                          try {
-                            if (path.startsWith(_cloudPhotoPrefix)) {
-                              final key = path.substring(
-                                _cloudPhotoPrefix.length,
-                              );
-                              await _cloud.deletePhoto(key);
-                              _photoUrls.remove(key);
-                            } else {
-                              final file = File(path);
-                              if (file.existsSync()) await file.delete();
+                        for (final photo in photos) {
+                          for (final path in photo.mediaPaths) {
+                            try {
+                              if (path.startsWith(_cloudPhotoPrefix)) {
+                                final key = path.substring(
+                                  _cloudPhotoPrefix.length,
+                                );
+                                await _cloud.deleteMedia(key);
+                                _photoUrls.remove(key);
+                              } else {
+                                final file = File(path);
+                                if (file.existsSync()) await file.delete();
+                              }
+                            } catch (error) {
+                              _showMessage('动态已删除，但照片清理失败：$error');
                             }
-                          } catch (error) {
-                            _showMessage('动态已删除，但照片清理失败：$error');
                           }
                         }
                       }),
@@ -2382,8 +2418,8 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     );
   }
 
-  Widget _momentPhotoGrid(List<String> paths) {
-    final count = min(paths.length, 9);
+  Widget _momentPhotoGrid(List<CoupleSpacePhoto> photos) {
+    final count = min(photos.length, 9);
     final columns = count == 1 ? 1 : (count == 4 ? 2 : 3);
     final tileSize = count == 1 ? 156.0 : 94.0;
     const spacing = 4.0;
@@ -2399,36 +2435,68 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
           mainAxisSpacing: spacing,
         ),
         itemBuilder: (context, index) => GestureDetector(
-          onTap: () => _showMomentPhotos(paths, index),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(5),
-            child: _photo(paths[index], fit: BoxFit.cover),
+          onTap: () => _showMomentPhotos(photos, index),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(5),
+                child: _photo(photos[index].imagePath, fit: BoxFit.cover),
+              ),
+              if (photos[index].isLivePhoto)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.motion_photos_on_outlined,
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Future<void> _showMomentPhotos(List<String> paths, int initialIndex) async {
+  Future<void> _showMomentPhotos(
+    List<CoupleSpacePhoto> photos,
+    int initialIndex,
+  ) async {
     final sources = <SourceModel>[];
     var previewIndex = 0;
-    for (var index = 0; index < paths.length; index++) {
-      final path = paths[index];
-      SourceModel? source;
-      if (path.startsWith(_cloudPhotoPrefix)) {
-        final key = path.substring(_cloudPhotoPrefix.length);
-        var url = _photoUrls[key];
-        if (url == null) {
-          try {
-            url = await _cloud.signedPhotoUrl(key);
-            _photoUrls[key] = url;
-          } catch (_) {
-            url = null;
-          }
+    for (var index = 0; index < photos.length; index++) {
+      final photo = photos[index];
+      final imageUrl = await _mediaUrl(photo.imagePath);
+      SourceModel? source = imageUrl == null
+          ? null
+          : SourceModel(
+              sourceType: photo.imagePath.startsWith(_cloudPhotoPrefix)
+                  ? SourceType.networkImage
+                  : SourceType.fileImage,
+              url: imageUrl,
+            );
+      if (imageUrl != null && photo.isLivePhoto) {
+        final videoUrl = await _mediaUrl(photo.videoPath!);
+        if (videoUrl != null) {
+          source = SourceModel(
+            sourceType: SourceType.livePhoto,
+            url: imageUrl,
+            liveUrl: videoUrl,
+            width: photo.width ?? 1,
+            height: photo.height ?? 1,
+          );
         }
-        if (url != null) source = SourceModel(url: url);
-      } else {
-        source = SourceModel(sourceType: SourceType.fileImage, url: path);
       }
       if (source == null) {
         if (index == initialIndex) {
@@ -2442,6 +2510,20 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     }
     if (!mounted || sources.isEmpty) return;
     await PageUtils.imageView(initialPage: previewIndex, imgList: sources);
+  }
+
+  Future<String?> _mediaUrl(String path) async {
+    if (!path.startsWith(_cloudPhotoPrefix)) return path;
+    final key = path.substring(_cloudPhotoPrefix.length);
+    var url = _photoUrls[key];
+    if (url != null) return url;
+    try {
+      url = await _cloud.signedMediaUrl(key);
+      _photoUrls[key] = url;
+      return url;
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _photo(
@@ -3021,20 +3103,38 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
         ),
       );
       for (final moment in albums) {
-        final uploaded = <String>[];
-        for (final path in _momentPhotos(moment)) {
-          if (path.startsWith(_cloudPhotoPrefix)) {
-            uploaded.add(path);
-            continue;
+        final uploaded = <Object>[];
+        for (final photo in _momentPhotos(moment)) {
+          Future<String?> uploadPath(String path, {required bool photo}) async {
+            if (path.startsWith(_cloudPhotoPrefix)) return path;
+            final file = File(path);
+            if (!file.existsSync()) return null;
+            final key = photo
+                ? await _cloud.uploadPhoto(
+                    spaceId: snapshot.spaceId,
+                    file: file,
+                  )
+                : await _cloud.uploadMedia(
+                    spaceId: snapshot.spaceId,
+                    file: file,
+                  );
+            _photoUrls[key] = await _cloud.signedMediaUrl(key);
+            return '$_cloudPhotoPrefix$key';
           }
-          final file = File(path);
-          if (!file.existsSync()) continue;
-          final key = await _cloud.uploadPhoto(
-            spaceId: snapshot.spaceId,
-            file: file,
+
+          final imagePath = await uploadPath(photo.imagePath, photo: true);
+          if (imagePath == null) continue;
+          final videoPath = photo.videoPath == null
+              ? null
+              : await uploadPath(photo.videoPath!, photo: false);
+          uploaded.add(
+            CoupleSpacePhoto(
+              imagePath: imagePath,
+              videoPath: videoPath,
+              width: photo.width,
+              height: photo.height,
+            ).toJson(),
           );
-          uploaded.add('$_cloudPhotoPrefix$key');
-          _photoUrls[key] = await _cloud.signedPhotoUrl(key);
         }
         moment['photos'] = uploaded;
         moment.remove('path');

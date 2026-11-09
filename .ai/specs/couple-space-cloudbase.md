@@ -94,6 +94,36 @@
 - 通知依赖 Android 运行时通知权限，正文只来自已通过成员鉴权读取的共享 payload，不写入设备令牌、CloudBase 会话令牌或私有对象键。
 - 当前仓库没有 Firebase/厂商推送注册和服务端投递链路；因此通知在应用进程存活时按 15 秒同步触发，或在应用恢复/重新登录后比较上次本机快照触发。应用被系统彻底终止期间不承诺实时云推送。
 
+## 2026-11 小窝动态照片
+
+### 用户故事与验收标准
+
+- 当成员从小窝相册选择普通照片或系统动态照片时，客户端应在同一选择流程中识别媒体类型，每条动态合计最多保留 9 项。
+- 当所选媒体为 iOS Live Photo 时，客户端应提取其静态封面与配对视频；当所选媒体为 Android Motion Photo 时，客户端应从 JPEG 容器中提取内嵌 MP4。无法完整提取配对资源时，不得把该项伪装成可播放的动态照片。
+- 当成员发布动态照片时，客户端应把封面与伴随视频分别上传到现有私有 `couple-space` bucket，再把两者 object key、尺寸和媒体类型写入共享 payload；任一上传失败时应回滚本次已经上传的对象。
+- 当另一位成员查看动态照片时，客户端应分别获取封面与视频的短期签名 URL，在原有全屏预览中播放，并继续支持组内左右滑动和页码。
+- 当成员删除含动态照片的相册动态时，客户端应同时删除封面与伴随视频；普通照片及旧版字符串 `photos` 数据应继续展示、迁移和删除，无需服务端数据迁移。
+- 当动态照片显示在九宫格中时，客户端应使用现有颜色与布局，仅叠加 Material 动态照片标识，不改变普通照片触摸区域、评论、点赞或删除入口。
+- 所有媒体继续使用成员会话、私有 bucket、短期签名 URL 与现有 RLS；不得新增公开 URL、客户端 API Key 或绕过成员鉴权的读取路径。
+
+### 技术设计
+
+- `photos` 保持 JSON 数组。普通照片继续保存字符串；动态照片保存对象：
+  `{"type":"livePhoto","imagePath":"cloud:...","videoPath":"cloud:...","width":W,"height":H}`。
+  读取层统一转换为 `CoupleSpacePhoto`，写入时仅动态照片使用对象，保证旧客户端数据无需迁移。
+- iOS 14+ 使用原生 `PHPickerViewController`；Live Photo 从系统提供的 `.pvt` 包复制封面与配对视频到应用临时目录。Android/桌面继续使用文件选择器，Android 对 JPEG 尾部的 MP4 `ftyp` 容器做验证后提取临时视频。
+- CloudBase HTTP 上传、签名和删除仍复用 `CoupleSpaceCloudRepository.uploadMedia`、`signedMediaUrl` 与 `deleteMedia`，不新增数据库表、RPC 或存储桶。
+- 预览复用 `GalleryViewer` 的 `SourceType.livePhoto`；若伴随视频签名暂时失败，则该项退化为静态封面，避免整组照片不可查看。
+- 选择产生的临时资源在取消、上传完成或失败后清理；CloudBase 对象在 payload 落盘前发生失败时按本次上传清单回滚。
+
+### 实施任务
+
+- [x] 定义兼容普通照片与动态照片的共享模型、规范化与对象路径枚举。
+- [x] 增加 iOS Live Photo 选择桥接及 Android Motion Photo 提取服务。
+- [x] 改造小窝选择、双文件上传、回滚、签名 URL、预览标识与双文件删除。
+- [x] 补充模型、Motion Photo 提取、CloudBase 媒体上传和预览映射回归测试。
+- [ ] 完成 Flutter/脚本测试、Android 签名 Release 构建与验签，并发布下一四段版本到 GitHub Releases。
+
 ## 验收
 
 - Dart 格式化、定向 analyze 与仓库回归测试通过。

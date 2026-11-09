@@ -71,7 +71,7 @@
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>请允许APP保存图片到相册</string>
+		<string>用于在小窝选择普通照片和 Live Photo，并保存你主动下载的媒体</string>
 		<key>NSCameraUsageDescription</key>
 		<string>App需要您的同意,才能访问相册</string>
 		<key>NSAppleMusicUsageDescription</key>
