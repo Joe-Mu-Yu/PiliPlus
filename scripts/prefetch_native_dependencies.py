@@ -15,6 +15,20 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 MEDIA_KIT_PACKAGE = 'media_kit_libs_android_video'
+MEDIA_KIT_ASSET_URLS = {
+    'default-arm64-v8a.jar': (
+        'https://api.github.com/repos/My-Responsitories/'
+        'libmpv-android-video-build/releases/assets/547100357'
+    ),
+    'default-armeabi-v7a.jar': (
+        'https://api.github.com/repos/My-Responsitories/'
+        'libmpv-android-video-build/releases/assets/547100358'
+    ),
+    'default-x86_64.jar': (
+        'https://api.github.com/repos/My-Responsitories/'
+        'libmpv-android-video-build/releases/assets/547100356'
+    ),
+}
 DEPENDENCY_PATTERN = re.compile(
     r'\["url": "(?P<url>https://[^"]+)", '
     r'"sha256": "(?P<sha256>[0-9a-f]{64})", '
@@ -142,11 +156,14 @@ def prefetch_media_kit() -> None:
     dependencies = parse_dependencies(package_directory / 'android/build.gradle')
     build_directory = ROOT / 'build' / MEDIA_KIT_PACKAGE
 
-    for url, expected_sha256, relative_destination in dependencies:
+    for _url, expected_sha256, relative_destination in dependencies:
         destination = (build_directory / relative_destination).resolve()
         if not destination.is_relative_to(build_directory.resolve()):
             raise ValueError(f'Invalid media_kit destination: {relative_destination}')
-        download_verified(url, expected_sha256, destination)
+        asset_url = MEDIA_KIT_ASSET_URLS.get(destination.name)
+        if asset_url is None:
+            raise ValueError(f'Update the media_kit asset URL for {destination.name}')
+        download_verified(asset_url, expected_sha256, destination)
 
 
 def main() -> None:

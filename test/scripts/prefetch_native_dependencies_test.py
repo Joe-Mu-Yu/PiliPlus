@@ -97,6 +97,19 @@ class PrefetchNativeDependenciesTest(unittest.TestCase):
         )
         self.assertTrue(all(len(checksum) == 64 for checksum in destinations.values()))
 
+    def test_media_kit_asset_api_covers_all_android_abis(self):
+        self.assertEqual(
+            set(MODULE.MEDIA_KIT_ASSET_URLS),
+            {
+                'default-arm64-v8a.jar',
+                'default-armeabi-v7a.jar',
+                'default-x86_64.jar',
+            },
+        )
+        self.assertTrue(
+            all('/releases/assets/' in url for url in MODULE.MEDIA_KIT_ASSET_URLS.values())
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
