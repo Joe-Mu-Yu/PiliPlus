@@ -1,11 +1,34 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:PiliPlus/common/widgets/image_viewer/gallery_viewer.dart';
+import 'package:PiliPlus/models/common/image_preview_type.dart';
 import 'package:PiliPlus/pages/couple_space/couple_space_model.dart';
 import 'package:PiliPlus/pages/couple_space/notification_service.dart';
+import 'package:PiliPlus/utils/storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
+import 'package:hive_ce/hive.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory testDirectory;
+
+  setUpAll(() async {
+    testDirectory = Directory.systemTemp.createTempSync(
+      'couple-space-gallery-test-',
+    );
+    Hive.init(testDirectory.path);
+    GStorage.setting = await Hive.openBox<dynamic>('setting');
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    testDirectory.deleteSync(recursive: true);
+  });
 
   group('小窝成员身份', () {
     test('成员映射缺失时不会继承另一成员的共享昵称', () {
@@ -218,6 +241,43 @@ void main() {
         'count': 1,
       });
     });
+  });
+
+  testWidgets('相册预览可以左右滑动整组照片并更新页码', (tester) async {
+    final imageBytes = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    );
+    final first = File('${testDirectory.path}/first.png')
+      ..writeAsBytesSync(imageBytes);
+    final second = File('${testDirectory.path}/second.png')
+      ..writeAsBytesSync(imageBytes);
+
+    await tester.pumpWidget(
+      GetMaterialApp(
+        home: Scaffold(
+          body: GalleryViewer(
+            quality: 100,
+            sources: [
+              SourceModel(sourceType: SourceType.fileImage, url: first.path),
+              SourceModel(sourceType: SourceType.fileImage, url: second.path),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1/2'), findsOneWidget);
+    await tester.flingFrom(
+      tester.getCenter(find.byType(GalleryViewer)),
+      const Offset(-500, 0),
+      1200,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2/2'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 250));
   });
 
   group('coupleTogetherDayNumber', () {
