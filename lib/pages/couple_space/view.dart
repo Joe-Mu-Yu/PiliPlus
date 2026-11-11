@@ -1081,6 +1081,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
 
       final snapshot = _snapshot;
       if (snapshot == null) return;
+      final albums = _list('albums');
       final photos = <CoupleSpacePhoto>[];
       final uploadedKeys = <String>[];
       Future<void> rollbackUploadedMedia() async {
@@ -1134,80 +1135,25 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       }
       if (photos.isEmpty) return;
       final momentId = _uuid.v4();
-      final moment = <String, dynamic>{
-        'id': momentId,
-        'photos': photos.map((photo) => photo.toJson()).toList(),
-        'caption': draft['caption'],
-        'publishedAt': draft['publishedAt'],
-        'date': draft['publishedAt'],
-        'type': '日常',
-        'authorId': _cloud.userId,
-        'authorName': _currentMemberName,
-        'comments': <Map<String, dynamic>>[],
-      };
-      final originalData = Map<String, dynamic>.from(
-        jsonDecode(jsonEncode(_data)) as Map,
-      );
-      var payload = mergeCoupleMomentIntoPayload(
-        latestPayload: _data,
-        moment: moment,
-      );
-      var saved = false;
-      var conflicted = false;
-      try {
-        for (var attempt = 0; attempt < 2; attempt++) {
-          final currentSnapshot = _snapshot;
-          if (currentSnapshot == null ||
-              currentSnapshot.spaceId != snapshot.spaceId) {
-            throw const CoupleSpaceCloudException('小窝状态已变化，请重新登录后重试');
-          }
-          try {
-            final revision = await _cloud.saveState(
-              spaceId: currentSnapshot.spaceId,
-              expectedRevision: currentSnapshot.revision,
-              payload: payload,
-            );
-            _data = payload;
-            _snapshot = CoupleSpaceCloudSnapshot(
-              spaceId: currentSnapshot.spaceId,
-              name: currentSnapshot.name,
-              memberA: currentSnapshot.memberA,
-              memberB: currentSnapshot.memberB,
-              revision: revision,
-              payload: payload,
-            );
-            await GStorage.localCache.put(_storeKey, jsonEncode(_data));
-            await GStorage.localCache.delete(
-              'coupleSpace.cloud.pending.${currentSnapshot.spaceId}',
-            );
-            if (mounted) setState(() {});
-            saved = true;
-            break;
-          } on CoupleSpaceConflictException {
-            if (attempt != 0) rethrow;
-            conflicted = true;
-            await _loadCloudSpace(showMessage: false);
-            final latestSnapshot = _snapshot;
-            if (latestSnapshot == null ||
-                latestSnapshot.spaceId != snapshot.spaceId) {
-              rethrow;
-            }
-            payload = mergeCoupleMomentIntoPayload(
-              latestPayload: _data,
-              moment: moment,
-            );
-          }
-        }
-      } catch (error) {
-        _data = originalData;
-        await GStorage.localCache.put(_storeKey, jsonEncode(_data));
-        if (mounted) setState(() {});
-        await rollbackUploadedMedia();
-        _showMessage('朋友圈发布失败，照片未发布到云端：$error');
-      }
-      if (saved) {
-        _showMessage(conflicted ? '朋友圈已发布，已合并 TA 的最新更新' : '朋友圈已发布');
-      }
+      albums
+        ..add({
+          'id': momentId,
+          'photos': photos.map((photo) => photo.toJson()).toList(),
+          'caption': draft['caption'],
+          'publishedAt': draft['publishedAt'],
+          'date': draft['publishedAt'],
+          'type': '日常',
+          'authorId': _cloud.userId,
+          'authorName': _currentMemberName,
+          'comments': <Map<String, dynamic>>[],
+        })
+        ..sort((a, b) => _momentTime(b).compareTo(_momentTime(a)));
+      _data['albums'] = albums;
+      final saved = await _save();
+      final retainedLocally = _list(
+        'albums',
+      ).any((moment) => moment['id'] == momentId);
+      if (!saved && !retainedLocally) await rollbackUploadedMedia();
     } finally {
       for (final media in selected) {
         await media.cleanup();

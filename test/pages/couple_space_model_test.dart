@@ -107,51 +107,6 @@ void main() {
   });
 
   group('小窝动态照片模型', () {
-    test('并发发布时合并本机动态并保留另一成员的最新动态', () {
-      final merged = mergeCoupleMomentIntoPayload(
-        latestPayload: {
-          'albums': [
-            {
-              'id': 'moment-from-partner',
-              'authorId': 'uid-partner',
-              'photos': ['cloud:space/uid-partner/one.jpg'],
-              'publishedAt': '2026-11-11T10:01:00Z',
-            },
-          ],
-          'messages': [
-            {'id': 'message-from-partner', 'text': '保留这条心语'},
-          ],
-        },
-        moment: {
-          'id': 'moment-from-me',
-          'authorId': 'uid-me',
-          'photos': ['cloud:space/uid-me/two.jpg'],
-          'publishedAt': '2026-11-11T10:02:00Z',
-        },
-      );
-
-      expect(
-        (merged['albums'] as List).map((moment) => moment['id']),
-        ['moment-from-me', 'moment-from-partner'],
-      );
-      expect((merged['messages'] as List).single['id'], 'message-from-partner');
-    });
-
-    test('重试合并相同动态不会重复添加', () {
-      final moment = {
-        'id': 'moment-same',
-        'photos': ['cloud:space/uid-me/photo.jpg'],
-      };
-      final merged = mergeCoupleMomentIntoPayload(
-        latestPayload: {
-          'albums': [moment],
-        },
-        moment: moment,
-      );
-
-      expect((merged['albums'] as List), hasLength(1));
-    });
-
     test('旧字符串照片保持兼容', () {
       final photos = coupleMomentPhotos({
         'photos': ['cloud:space-a/uid-yao/photo.jpg'],

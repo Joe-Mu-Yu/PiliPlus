@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math';
 
 const coupleSpaceCloudMediaPrefix = 'cloud:';
@@ -81,39 +80,6 @@ List<CoupleSpacePhoto> coupleMomentPhotos(Map<String, dynamic> moment) {
   }
   final legacy = CoupleSpacePhoto.tryParse(moment['path']);
   return legacy == null ? const [] : [legacy];
-}
-
-Map<String, dynamic> mergeCoupleMomentIntoPayload({
-  required Map<String, dynamic> latestPayload,
-  required Map<String, dynamic> moment,
-}) {
-  final merged = Map<String, dynamic>.from(
-    jsonDecode(jsonEncode(latestPayload)) as Map,
-  );
-  final albums = List<Map<String, dynamic>>.from(
-    (merged['albums'] as List? ?? const []).map(
-      (item) => Map<String, dynamic>.from(item as Map),
-    ),
-  );
-  final momentId = moment['id']?.toString();
-  if (!albums.any((album) => album['id']?.toString() == momentId)) {
-    albums.add(
-      Map<String, dynamic>.from(jsonDecode(jsonEncode(moment)) as Map),
-    );
-  }
-  albums.sort((a, b) {
-    final aDate = DateTime.tryParse(
-      (a['publishedAt'] ?? a['date']).toString(),
-    );
-    final bDate = DateTime.tryParse(
-      (b['publishedAt'] ?? b['date']).toString(),
-    );
-    if (aDate == null) return bDate == null ? 0 : 1;
-    if (bDate == null) return -1;
-    return bDate.compareTo(aDate);
-  });
-  merged['albums'] = albums;
-  return merged;
 }
 
 Map<String, String> coupleMemberNames(Map<String, dynamic> payload) =>
