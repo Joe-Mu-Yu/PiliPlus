@@ -5,7 +5,7 @@
 ## 项目与工作边界
 
 - 本项目是 PiliPlus 的定制分支，主要使用 Flutter/Dart，Android 侧包含 Kotlin/Compose 原生柔光玻璃底栏及交互桥接。
-- `origin`：`AritxOnly/Hyper-PiliPlus`；`upstream`：`bggRGjQaUbCoE/PiliPlus`。操作前以 `git remote -v` 核实，禁止误推到上游。
+- `origin`：`Joe-Mu-Yu/PiliPlus`，是本项目默认 fetch/push 仓库；`hyper`：`AritxOnly/Hyper-PiliPlus`，仅作为历史仓库入口。操作前以 `git remote -v` 核实，除非用户明确指定，否则推送到 `origin`。
 - 修改前运行 `git status --short`、查看相关 diff。保留用户和并行任务的修改，不回滚、不覆盖、不顺手格式化无关文件。
 - 合并上游时尽量保留本分支已有功能。逐处理解冲突，不整文件选用上游版本；遇到无法兼容的行为差异向用户说明。
 - 排查、解释和审查不自动扩展为大范围重构。提交、推送、触发 Actions、发布 Release 是不同操作，按用户授权执行；不要把一次推送视为永久自动发布授权。
