@@ -23,6 +23,87 @@ const _storeKey = 'coupleSpace.data.v1';
 const _cachedSpaceIdKey = 'coupleSpace.cachedSpaceId.v1';
 const _tabs = ['首页', '相册', '纪念日', '心语', '我的'];
 const _cloudPhotoPrefix = coupleSpaceCloudMediaPrefix;
+const _signedMediaUrlTtl = Duration(hours: 1);
+const _signedMediaUrlRefreshSkew = Duration(minutes: 5);
+
+class _CachedMediaUrl {
+  const _CachedMediaUrl(this.url, this.expiresAt);
+
+  final String url;
+  final DateTime expiresAt;
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
+class _CoupleSpaceCloudPhoto extends StatefulWidget {
+  const _CoupleSpaceCloudPhoto({
+    required this.path,
+    required this.fit,
+    required this.fallback,
+    required this.loadUrl,
+    required this.onUrlExpired,
+  });
+
+  final String path;
+  final BoxFit fit;
+  final Widget fallback;
+  final Future<String?> Function(String path) loadUrl;
+  final Future<String?> Function(String path, String failedUrl) onUrlExpired;
+
+  @override
+  State<_CoupleSpaceCloudPhoto> createState() => _CoupleSpaceCloudPhotoState();
+}
+
+class _CoupleSpaceCloudPhotoState extends State<_CoupleSpaceCloudPhoto> {
+  String? _url;
+  bool _loading = false;
+  bool _retried = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUrl();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CoupleSpaceCloudPhoto oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) {
+      _url = null;
+      _retried = false;
+      _loadUrl();
+    }
+  }
+
+  Future<void> _loadUrl() async {
+    if (_loading) return;
+    _loading = true;
+    final url = await widget.loadUrl(widget.path);
+    if (mounted) setState(() => _url = url);
+    _loading = false;
+  }
+
+  Future<void> _retryExpiredUrl(String failedUrl) async {
+    if (_retried) return;
+    _retried = true;
+    final url = await widget.onUrlExpired(widget.path, failedUrl);
+    if (mounted && url != null) setState(() => _url = url);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _url;
+    if (url == null) return widget.fallback;
+    return Image.network(
+      url,
+      fit: widget.fit,
+      errorBuilder: (context, error, stackTrace) {
+        unawaited(_retryExpiredUrl(url));
+        return widget.fallback;
+      },
+    );
+  }
+}
 
 class CoupleSpacePage extends StatefulWidget {
   const CoupleSpacePage({
@@ -366,7 +447,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   final _account = TextEditingController();
   final _password = TextEditingController();
   final _inviteCode = TextEditingController();
-  final Map<String, String> _photoUrls = {};
+  final Map<String, _CachedMediaUrl> _photoUrls = {};
   final AudioRecorder _voiceRecorder = AudioRecorder();
   final Uuid _uuid = const Uuid();
   CoupleSpaceCloudSnapshot? _snapshot;
@@ -689,7 +770,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     final keys = {...photoKeys, ...audioKeys};
     for (final key in keys) {
       try {
-        _photoUrls[key] = await _cloud.signedMediaUrl(key);
+        _cachePhotoUrl(key, await _cloud.signedMediaUrl(key));
       } catch (_) {
         // The tile keeps its explicit broken-image state until a later refresh.
       }
@@ -1040,9 +1121,9 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
             height: media.height,
           );
           photos.add(photo);
-          _photoUrls[imageKey] = await _cloud.signedPhotoUrl(imageKey);
+          _cachePhotoUrl(imageKey, await _cloud.signedPhotoUrl(imageKey));
           if (videoKey != null) {
-            _photoUrls[videoKey] = await _cloud.signedMediaUrl(videoKey);
+            _cachePhotoUrl(videoKey, await _cloud.signedMediaUrl(videoKey));
           }
         }
       } catch (error) {
@@ -1234,7 +1315,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
         file: file,
       );
       final audioPath = '$_cloudPhotoPrefix$uploadedKey';
-      _photoUrls[uploadedKey] = await _cloud.signedMediaUrl(uploadedKey);
+      _cachePhotoUrl(uploadedKey, await _cloud.signedMediaUrl(uploadedKey));
       final messages = _list('messages')
         ..insert(0, {
           'id': _uuid.v4(),
@@ -1309,7 +1390,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       }
       final key = path.substring(_cloudPhotoPrefix.length);
       final url = await _cloud.signedMediaUrl(key);
-      _photoUrls[key] = url;
+      _cachePhotoUrl(key, url);
       setState(() => _playingVoicePath = path);
       await player.open(Media(url), play: true);
     } catch (error) {
@@ -2515,15 +2596,29 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   Future<String?> _mediaUrl(String path) async {
     if (!path.startsWith(_cloudPhotoPrefix)) return path;
     final key = path.substring(_cloudPhotoPrefix.length);
-    var url = _photoUrls[key];
-    if (url != null) return url;
+    final cached = _photoUrls[key];
+    if (cached != null && !cached.isExpired) return cached.url;
     try {
-      url = await _cloud.signedMediaUrl(key);
-      _photoUrls[key] = url;
+      final url = await _cloud.signedMediaUrl(key);
+      _cachePhotoUrl(key, url);
       return url;
     } catch (_) {
       return null;
     }
+  }
+
+  void _cachePhotoUrl(String key, String url) {
+    _photoUrls[key] = _CachedMediaUrl(
+      url,
+      DateTime.now().add(_signedMediaUrlTtl - _signedMediaUrlRefreshSkew),
+    );
+  }
+
+  Future<String?> _refreshFailedMediaUrl(String path, String failedUrl) async {
+    if (!path.startsWith(_cloudPhotoPrefix)) return null;
+    final key = path.substring(_cloudPhotoPrefix.length);
+    if (_photoUrls[key]?.url == failedUrl) _photoUrls.remove(key);
+    return _mediaUrl(path);
   }
 
   Widget _photo(
@@ -2546,13 +2641,12 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
         errorBuilder: (_, _, _) => fallback,
       );
     }
-    final key = path.substring(_cloudPhotoPrefix.length);
-    final url = _photoUrls[key];
-    if (url == null) return fallback;
-    return Image.network(
-      url,
+    return _CoupleSpaceCloudPhoto(
+      path: path,
       fit: fit,
-      errorBuilder: (_, _, _) => fallback,
+      fallback: fallback,
+      loadUrl: _mediaUrl,
+      onUrlExpired: _refreshFailedMediaUrl,
     );
   }
 
@@ -3118,7 +3212,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                     spaceId: snapshot.spaceId,
                     file: file,
                   );
-            _photoUrls[key] = await _cloud.signedMediaUrl(key);
+            _cachePhotoUrl(key, await _cloud.signedMediaUrl(key));
             return '$_cloudPhotoPrefix$key';
           }
 
