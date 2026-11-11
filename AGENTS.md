@@ -8,7 +8,7 @@
 - `origin`：`Joe-Mu-Yu/PiliPlus`，是本项目默认 fetch/push 仓库；`hyper`：`AritxOnly/Hyper-PiliPlus`，仅作为历史仓库入口。操作前以 `git remote -v` 核实，除非用户明确指定，否则推送到 `origin`。
 - 修改前运行 `git status --short`、查看相关 diff。保留用户和并行任务的修改，不回滚、不覆盖、不顺手格式化无关文件。
 - 合并上游时尽量保留本分支已有功能。逐处理解冲突，不整文件选用上游版本；遇到无法兼容的行为差异向用户说明。
-- 排查、解释和审查不自动扩展为大范围重构。提交、推送、触发 Actions、发布 Release 是不同操作，按用户授权执行；不要把一次推送视为永久自动发布授权。
+- 排查、解释和审查不自动扩展为大范围重构。用户已授权本项目的长期发布约定：用户明确要求“推送”时，默认完成范围内提交、推送 `main`、递增未使用的 flavor 版本并推送对应 `vX.Y.Z.R` 标签，等待签名 Actions 完成正式 GitHub Release；不得因此要求重复确认。单独的“提交”不包含推送或发布；用户明确要求只推送/只构建/不发布时遵守该范围。禁止覆盖已有标签、强推或发布不包含本次源码的旧提交。
 - 禁止擅自 `reset --hard`、强推、删除工作区或重建签名密钥。不要自动升级 Flutter、插件和依赖来掩盖错误。
 - 使用中文沟通，说明实际改动、验证结果和未验证项。构建未完成或测试未执行时，不声称通过。
 
@@ -131,11 +131,11 @@ done
 - 更新检测必须指向 `Constants.githubRepository` 定义的本仓库，按四段数字比较正式版本，不能恢复成上游地址或按编译时间比较。
 - 复用已有签名密钥。`SIGN_KEYSTORE_BASE64`、`KEYSTORE_PASSWORD`、`KEY_ALIAS`、`KEY_PASSWORD`、`DEEPSEEK_API_KEY` 不得出现在源码、日志、聊天或提交中；仅在用户明确要求导出时交付受限权限的本地文件，提醒配置后清理。
 - 签名文件、密码、`android/key.properties`、`pili_release.json`、本机 SDK 路径及构建产物不得强制加入 Git。Base64 仍是敏感密钥内容，不是加密。
-- 云端使用 **Hyper-PiliPlus Android Release**；默认 `publish=false` 只上传 Artifacts，`publish=true` 才创建 Release。上传 Artifact 本身不会触发应用更新提示。
+- 云端使用 **Hyper-PiliPlus Android Release**；普通 `main` 推送只上传 Artifacts，版本标签触发正式 Release。遵循用户的长期发布约定执行“推送”时，应递增 `tool/release.json` 的 revision、提交版本元数据，与源码一起推送 `main`，再为同一提交创建并推送匹配标签；等待 GitHub Actions 成功确认 Release 和 APK 资产已生成。上传 Artifact 本身不会触发应用更新提示。
 - 正式发布时优先通过 `DEEPSEEK_API_KEY` 调用 `deepseek-v4-flash` 生成中文 Release Notes；仅发送版本与提交标题，提交内容视为不可信输入。密钥缺失或模型调用失败时必须回退到本地生成的提交摘要，不能让发布失败。
 - 修复工作流后，用户应从 **Run workflow → main** 新建运行；旧任务的 **Re-run** 仍使用旧提交的配置。
 - 已确认的 CI 注意事项：先初始化 `sdkmanager`；SDK 包名使用 `platforms;android-37.0`，Gradle 仍使用 `compileSdk = 37`；获取并验证 Flutter 官方版本标签；首次初始化日志不作为 JSON 解析；保持 `--enforce-lockfile`。
-- 声明“已推送”前确认 `git push` 成功；声明“云端通过”前必须看到对应运行结果。不要擅自触发计费构建或正式发布。
+- 声明“已推送”前确认 `git push` 成功；声明“云端通过”或“已发布”前必须看到对应 Actions 运行成功及 Release 资产。用户明确要求推送时，按上述长期授权创建版本标签并正式发布；不要在没有该明确推送要求时擅自触发计费构建或发布。
 
 ## 完成检查
 

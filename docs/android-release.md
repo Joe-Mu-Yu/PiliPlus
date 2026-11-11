@@ -38,9 +38,11 @@ Base64 不是加密；不要将编码内容、密码、`key.properties` 或 keys
 
 ## 推送后自动构建与版本标签自动发布
 
-将包含本工作流的源码推送到 `main` 后，会自动运行 **Hyper-PiliPlus Android Release**，使用已有签名 Secrets 完成测试、生成三种 ABI 的签名 APK、验签并上传 Artifact。普通 `main` 推送只编译，不创建 GitHub Release，也不会触发应用内更新提示。
+将包含本工作流的源码推送到 `main` 后，会自动运行 **Hyper-PiliPlus Android Release**，使用已有签名 Secrets 完成测试、生成三种 ABI 的签名 APK、验签并上传 Artifact。普通 `main` 推送只构建，不创建 GitHub Release，也不会触发应用内更新提示。
 
 推送 `v上游版本.修订号` 格式的标签时，同一工作流构建标签指向的提交；验签成功后才创建正式 Release，并上传 APK、`SHA256SUMS` 和 `release-metadata.json`。其他分支推送不自动使用签名 Secrets，仍可从 Actions 页面手动运行。
+
+**本项目长期协作约定：**用户明确说“推送”时，默认目标是完成正式发布，而不止推送 `main`。应先将本次源码提交到 `main`，确认 `tool/release.json` 的版本高于所有已发布标签；必要时递增 revision 并提交版本元数据，然后把匹配的版本标签指向包含本次源码的提交并推送。持续跟踪 Actions，直到构建成功且 GitHub Release 与 APK 资产可见后才报告发布完成。若凭据、签名 Secrets、版本冲突或工作流失败阻断发布，保留提交并明确报告具体阶段；不移动/覆盖既有标签，也不以 Artifact 冒充正式 Release。用户明确说“只推送”“只构建”或“不发布”时按其限定范围执行。单独说“提交”只表示创建 Git commit，不隐含推送或发布。
 
 发布前先查看仓库现有 Releases，选择尚未使用且比已发布版本更高的四段版本，并修改 `tool/release.json` 的 `revision`。例如当前版本为 `2.3.0.0`，后续修复版将 `revision` 递增为 `1`，生成 `2.3.0.1`。以下命令需在包含所有待发布源码和工作流的本地分支执行：
 
