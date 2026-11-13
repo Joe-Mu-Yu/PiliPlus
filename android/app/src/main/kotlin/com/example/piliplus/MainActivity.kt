@@ -14,6 +14,7 @@ class MainActivity : AudioServiceActivity() {
     private var nativeSelectionToolbar: NativeSelectionToolbar? = null
     private var miuixNavigationOverlay: MiuixNavigationOverlay? = null
     private var coupleSpaceNotifications: CoupleSpaceNotifications? = null
+    private var avboxBridge: AvboxBridge? = null
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -45,11 +46,27 @@ class MainActivity : AudioServiceActivity() {
         nativeFeedback = NativeFeedback(this, flutterEngine)
         nativeSelectionToolbar = NativeSelectionToolbar(this, flutterEngine)
         miuixNavigationOverlay = MiuixNavigationOverlay(this, flutterEngine)
+        avboxBridge = AvboxBridge(this, flutterEngine)
         coupleSpaceNotifications = CoupleSpaceNotifications(this, flutterEngine)
         window.decorView.post { miuixNavigationOverlay?.attach() }
     }
 
+    override fun onResume() {
+        super.onResume()
+        miuixNavigationOverlay?.setHostActivityCovered(false)
+    }
+
+    override fun onPause() {
+        // AVBox configuration/detail activities share this process but own a
+        // different window. Stop sampling and hide the Flutter navigation
+        // overlay before that window takes over, then restore it on resume.
+        miuixNavigationOverlay?.setHostActivityCovered(true)
+        super.onPause()
+    }
+
     override fun onDestroy() {
+        avboxBridge?.dispose()
+        avboxBridge = null
         nativeSelectionToolbar?.dispose()
         nativeSelectionToolbar = null
         nativeFeedback?.dispose()
@@ -69,6 +86,10 @@ class MainActivity : AudioServiceActivity() {
         val handled = super.dispatchTouchEvent(event)
         miuixNavigationOverlay?.onTouchEvent(event)
         return handled
+    }
+
+    internal fun setMiuixNavigationOccluded(occluded: Boolean) {
+        miuixNavigationOverlay?.setOverlayOccluded(occluded)
     }
 
     override fun onUserLeaveHint() {

@@ -7,19 +7,24 @@ import 'package:PiliPlus/utils/android/backdrop_frame_notifier.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter/services.dart' show MethodChannel;
+import 'package:flutter/services.dart' show MethodCall, MethodChannel;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:jni/jni.dart';
+
+typedef AvboxExitHandler = void Function();
 
 abstract final class PiliAndroidHelper {
   static const _miuixNavigationChannel = MethodChannel(
     'com.aritxonly.hyperpiliplus/miuix_navigation',
   );
+  static const _avboxChannel = MethodChannel(
+    'com.aritxonly.hyperpiliplus/avbox',
+  );
   static void Function(int index)? _onMiuixDestinationSelected;
+  static AvboxExitHandler? _onAvboxExit;
   static final _backdropFrames = BackdropFrameNotifier(
-    onFrameReady:
-        () =>
-            _miuixNavigationChannel.invokeMethod<void>('flutterFrameRendered'),
+    onFrameReady: () =>
+        _miuixNavigationChannel.invokeMethod<void>('flutterFrameRendered'),
   );
 
   static void setMiuixDestinationHandler(void Function(int index)? handler) {
@@ -93,6 +98,27 @@ abstract final class PiliAndroidHelper {
     return update;
   }
 
+  static void setAvboxExitHandler(AvboxExitHandler? handler) {
+    _onAvboxExit = handler;
+    _syncAvboxMethodHandler();
+  }
+
+  static void _syncAvboxMethodHandler() {
+    _avboxChannel.setMethodCallHandler(
+      _onAvboxExit == null ? null : _handleAvboxCall,
+    );
+  }
+
+  static Future<Object?> _handleAvboxCall(MethodCall call) async {
+    switch (call.method) {
+      case 'exitEmbedded':
+        _onAvboxExit?.call();
+        return null;
+      default:
+        return null;
+    }
+  }
+
   @pragma('vm:prefer-inline')
   static void back() => AndroidHelper.back();
 
@@ -113,8 +139,9 @@ abstract final class PiliAndroidHelper {
     final jCommentText = commentText.toJString();
     final jSourceId = sourceId.toJString();
     final jCookie = cookie.toJString();
-    final jPictures =
-        pictures.isEmpty ? null : jsonEncode(pictures).toJString();
+    final jPictures = pictures.isEmpty
+        ? null
+        : jsonEncode(pictures).toJString();
 
     try {
       AndroidHelper.biliSendCommAntifraud(

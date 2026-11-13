@@ -25,6 +25,7 @@ android {
     ndkVersion = "28.2.13676358"
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -39,7 +40,10 @@ android {
         versionName = flutter.versionName
     }
 
-    packagingOptions.jniLibs.useLegacyPackaging = true
+    packagingOptions {
+        jniLibs.useLegacyPackaging = true
+        resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/beans.xml")
+    }
 
     val keyProperties = Properties().also {
         val properties = rootProject.file("key.properties")
@@ -116,6 +120,11 @@ flutter {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
+    implementation(
+        files("../../third_party/avbox/app/libs/LibRtmp-Client-for-Android-v3.2.0.m2.aar"),
+    )
+    implementation(project(":avbox"))
     implementation("androidx.compose.material3:material3:1.5.0-alpha22")
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
     implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.4")

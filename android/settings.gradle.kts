@@ -14,6 +14,17 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven("https://jitpack.io")
+        maven("https://maven.aliyun.com/repository/public")
+        maven("https://maven.aliyun.com/repository/releases")
+    }
+
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.chaquo.python") {
+                useModule("com.chaquo.python:gradle:${requested.version}")
+            }
+        }
     }
 }
 
@@ -21,8 +32,19 @@ plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     // Matches the AGP baseline used by the copied Deadliner Compose sources.
     id("com.android.application") version "9.1.1" apply false
+    id("com.android.library") version "9.1.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
+    id("com.google.devtools.ksp") version "2.3.13" apply false
+    id("com.chaquo.python") version "17.2.0" apply false
 }
 
 include(":app")
+include(":avbox")
+project(":avbox").projectDir = file("../third_party/avbox/app")
+include(":avboxQuickjs")
+project(":avboxQuickjs").projectDir = file("../third_party/avbox/quickjs")
+include(":avboxPyramid")
+project(":avboxPyramid").projectDir = file("../third_party/avbox/pyramid")
+include(":avboxBackdrop")
+project(":avboxBackdrop").projectDir = file("../third_party/avbox/libs/backdrop")

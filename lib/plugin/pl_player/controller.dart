@@ -758,11 +758,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
-    player.setMediaHeader(
-      userAgent: mediaHeaders == null ? BrowserUa.pc : null,
-      referer: mediaHeaders == null ? HttpString.baseUrl : null,
-      headers: mediaHeaders,
-    );
+    _applyMediaHeaders(player, mediaHeaders);
 
     _startListeners(player);
 
@@ -798,6 +794,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       if (isAnim && superResolutionType.value != .disable) {
         await setShader();
       }
+    } else {
+      _applyMediaHeaders(player, mediaHeaders);
     }
 
     final Map<String, String> extras = {
@@ -838,6 +836,37 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     );
   }
 
+  void _applyMediaHeaders(
+    Player player,
+    Map<String, String>? mediaHeaders,
+  ) {
+    if (mediaHeaders == null) {
+      player.setMediaHeader(
+        userAgent: BrowserUa.pc,
+        referer: HttpString.baseUrl,
+        headers: const {},
+      );
+      return;
+    }
+    final headers = Map<String, String>.from(mediaHeaders);
+    String? take(String name) {
+      final normalized = name.toLowerCase();
+      final key = headers.keys.cast<String?>().firstWhere(
+        (key) => key?.toLowerCase() == normalized,
+        orElse: () => null,
+      );
+      return key == null ? null : headers.remove(key);
+    }
+
+    player.setMediaHeader(
+      userAgent: take('User-Agent') ?? BrowserUa.pc,
+      // mpv cannot clear referrer with null; an empty value prevents a reused
+      // player from leaking the previous stream's Referer into the next one.
+      referer: take('Referer') ?? '',
+      headers: headers,
+    );
+  }
+
   Future<void>? refreshPlayer() {
     if (dataSource is FileSource) {
       return null;
@@ -873,7 +902,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     // 自动播放
     if (_autoPlay) {
-      playIfExists();
+      await playIfExists();
       // await play(duration: duration);
     }
   }

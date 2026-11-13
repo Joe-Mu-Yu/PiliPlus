@@ -4,6 +4,17 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("http://4thline.org/m2")
+            isAllowInsecureProtocol = true
+            content {
+                includeGroup("org.fourthline.cling")
+                includeGroup("org.seamless")
+            }
+        }
+        maven("https://jitpack.io")
+        maven("https://maven.aliyun.com/repository/public")
+        maven("https://maven.aliyun.com/repository/releases")
     }
 }
 

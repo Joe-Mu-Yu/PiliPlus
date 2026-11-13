@@ -60,6 +60,7 @@ class _MainAppState extends PopScopeState<MainApp>
     super.initState();
     if (Platform.isAndroid) {
       PiliAndroidHelper.setMiuixDestinationHandler(_mainController.setIndex);
+      PiliAndroidHelper.setAvboxExitHandler(_exitAvboxTab);
     }
     addObserverMobile(this);
     if (Platform.isMacOS) {
@@ -129,6 +130,7 @@ class _MainAppState extends PopScopeState<MainApp>
         ..checkUnreadDynamic()
         ..checkDefaultSearch(true)
         ..checkUnread(_mainController.useBottomNav);
+      if (Platform.isAndroid && mounted) setState(() {});
     }
   }
 
@@ -136,6 +138,7 @@ class _MainAppState extends PopScopeState<MainApp>
   void dispose() {
     if (Platform.isAndroid) {
       PiliAndroidHelper.setMiuixDestinationHandler(null);
+      PiliAndroidHelper.setAvboxExitHandler(null);
       PiliAndroidHelper.hideMiuixNavigation();
     }
     if (Platform.isMacOS) {
@@ -149,6 +152,11 @@ class _MainAppState extends PopScopeState<MainApp>
     PiliScheme.listener?.cancel();
     GStorage.close();
     super.dispose();
+  }
+
+  void _exitAvboxTab() {
+    if (!mounted || _mainController.selectedIndex.value == 0) return;
+    _mainController.setIndex(0);
   }
 
   bool _handleKeyEvent(KeyEvent event) {

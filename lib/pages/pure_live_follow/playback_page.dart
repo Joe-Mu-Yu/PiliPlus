@@ -1,17 +1,22 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
+import 'package:PiliPlus/pages/video/widgets/header_control.dart';
+import 'package:PiliPlus/plugin/pl_player/controller.dart';
+import 'package:PiliPlus/plugin/pl_player/external_player_controls.dart';
+import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
+import 'package:PiliPlus/plugin/pl_player/models/data_status.dart';
+import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/live_platform_adapter.dart'
     show PureLiveDirectLinkSite;
 import 'package:PiliPlus/services/pure_live_playback_source.dart';
 import 'package:PiliPlus/services/service_locator.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pure_live/common/models/live_message.dart';
 import 'package:pure_live/common/models/live_room.dart';
 import 'package:pure_live/core/interface/live_danmaku.dart';
@@ -44,22 +49,20 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     'pure_live': PureLiveDirectLinkSite(),
     'iptv': IptvSite(),
   };
-  Player? _player;
-  VideoController? _videoController;
+  late final PlPlayerController _playerController =
+      PlPlayerController.getInstance(isLive: true);
+  final _headerKey = GlobalKey<TimeBatteryMixin>();
   LivePlaybackCatalog? _catalog;
   ResolvedLivePlaybackSource? _activeSource;
   LiveDanmaku? _danmaku;
-  StreamSubscription<bool>? _playingSubscription;
   StreamSubscription<dynamic>? _videoParamsSubscription;
   Timer? _sleepTimer;
   String? _error;
   String? _danmakuError;
   bool _loading = true;
-  bool _showControls = true;
   bool _audioOnly = false;
-  bool _fullscreen = false;
   bool? _portraitSource;
-  bool _fullscreenOrientationLocked = false;
+  bool _autoOrientationApplied = false;
   bool _danmakuEnabled = true;
   bool _similarFilterEnabled = false;
   bool _loadingSuperChats = false;
@@ -88,6 +91,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   @override
   void initState() {
     super.initState();
+    PlPlayerController.setPlayCallBack(_playerController.play);
     unawaited(_resolveAndPlay());
   }
 
@@ -117,40 +121,41 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       if (!mounted) return;
       _catalog = catalog;
       _activeSource = source;
-      var player = _player;
-      if (player == null) {
-        player = await Player.create();
-        final videoController = await VideoController.create(player);
-        _player = player;
-        _videoController = videoController;
-        _playingSubscription = player.stream.playing.listen((_) {
-          if (mounted) setState(() {});
-        });
-        _videoParamsSubscription = player.stream.videoParams.listen((params) {
-          final width = params.dw ?? params.w ?? 0;
-          final height = params.dh ?? params.h ?? 0;
-          if (width <= 0 || height <= 0) return;
-          final portrait = height > width;
-          if (mounted && _portraitSource != portrait) {
-            setState(() => _portraitSource = portrait);
-            if (_fullscreen) unawaited(_applyFullscreenOrientation());
-          }
-        });
-      }
       final headers = _mediaHeaders(source);
-      final userAgent = _removeHeader(headers, 'user-agent');
-      final referer = _removeHeader(headers, 'referer');
-      player.setMediaHeader(
-        userAgent: userAgent ?? _defaultUserAgent,
-        referer:
-            referer ??
-            (widget.favorite.platformId == 'iptv'
-                ? null
-                : _refererForPlatform(widget.favorite.platformId)),
-        headers: headers,
+      await _playerController.setDataSource(
+        NetworkSource(videoSource: source.url, audioSource: null),
+        isLive: true,
+        mediaHeaders: headers,
       );
+      if (_playerController.dataStatus.value == DataStatus.error) {
+        throw StateError('播放器无法打开当前直播流');
+      }
+      final player = _playerController.videoPlayerController;
+      _videoParamsSubscription ??= player?.stream.videoParams.listen((params) {
+        final width = params.dw ?? params.w ?? 0;
+        final height = params.dh ?? params.h ?? 0;
+        if (width <= 0 || height <= 0) return;
+        final portrait = height > width;
+        final orientationChanged = _portraitSource != portrait;
+        _playerController
+          ..width = width
+          ..height = height
+          ..isVertical = portrait;
+        if (mounted && _portraitSource != portrait) {
+          setState(() => _portraitSource = portrait);
+        }
+        if (!_autoOrientationApplied) {
+          _autoOrientationApplied = true;
+          if (_playerController.autoEnterFullScreen) {
+            unawaited(_playerController.triggerFullScreen(status: true));
+          }
+        } else if (orientationChanged && _playerController.isFullScreen.value) {
+          unawaited(
+            _playerController.changeOrientation(isVertical: portrait),
+          );
+        }
+      });
       setState(() => _loading = false);
-      await player.open(Media(source.url), play: true);
       if (_danmaku == null) await _connectDanmaku(site, source.room);
     } catch (error) {
       if (mounted) {
@@ -204,18 +209,6 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     return null;
   }
 
-  String? _removeHeader(Map<String, String> headers, String name) {
-    final normalized = name.toLowerCase();
-    String? matchedKey;
-    for (final key in headers.keys) {
-      if (key.toLowerCase() == normalized) {
-        matchedKey = key;
-        break;
-      }
-    }
-    return matchedKey == null ? null : headers.remove(matchedKey);
-  }
-
   void _putHeaderIfAbsent(
     Map<String, String> headers,
     String name,
@@ -227,28 +220,31 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   Future<void> _connectDanmaku(dynamic site, LiveRoom room) async {
     final engine = (site as LiveSite).getDanmaku();
     _danmaku = engine;
-    engine.onMessage = (message) {
-      if (!mounted) return;
-      if (_similarFilterEnabled && _isSimilarDuplicate(message)) return;
-      setState(() {
-        _messages.add(message);
-        if (_messages.length > 500)
-          _messages.removeRange(0, _messages.length - 500);
-        if (message.type == LiveMessageType.online) {
-          room.onlineViewers = message.message;
-          room.watching = message.message;
-        }
-      });
-    };
-    engine.onReconnect = (message) {
-      if (mounted) setState(() => _danmakuError = message);
-    };
-    engine.onClose = (message) {
-      if (mounted) setState(() => _danmakuError = message);
-    };
-    engine.onReady = () {
-      if (mounted) setState(() => _danmakuError = null);
-    };
+    engine
+      ..onMessage = (message) {
+        if (!mounted) return;
+        if (_similarFilterEnabled && _isSimilarDuplicate(message)) return;
+        setState(() {
+          _messages.add(message);
+          if (_messages.length > 500) {
+            _messages.removeRange(0, _messages.length - 500);
+          }
+          if (message.type == LiveMessageType.online) {
+            room
+              ..onlineViewers = message.message
+              ..watching = message.message;
+          }
+        });
+      }
+      ..onReconnect = (message) {
+        if (mounted) setState(() => _danmakuError = message);
+      }
+      ..onClose = (message) {
+        if (mounted) setState(() => _danmakuError = message);
+      }
+      ..onReady = () {
+        if (mounted) setState(() => _danmakuError = null);
+      };
     try {
       if (room.danmakuData != null) await engine.start(room.danmakuData);
     } catch (error) {
@@ -259,20 +255,11 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   @override
   void dispose() {
     _sleepTimer?.cancel();
-    _playingSubscription?.cancel();
     _videoParamsSubscription?.cancel();
-    if (_fullscreenOrientationLocked) {
-      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-      unawaited(
-        SystemChrome.setPreferredOrientations(const [
-          DeviceOrientation.portraitUp,
-        ]),
-      );
-    }
+    PlPlayerController.setPlayCallBack(null);
     final engine = _danmaku;
     if (engine != null) unawaited(engine.stop());
-    final player = _player;
-    if (player != null) unawaited(player.dispose());
+    _playerController.dispose();
     _captionController.dispose();
     _blockWordController.dispose();
     _nicknameController.dispose();
@@ -503,7 +490,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   }
 
   Future<void> _setRoomVolume() async {
-    final player = _player;
+    final player = _playerController.videoPlayerController;
     if (player == null) return;
     var volume = player.state.volume.clamp(0, 100).toDouble();
     final result = await showDialog<double>(
@@ -589,7 +576,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       return;
     }
     _sleepTimer = Timer(Duration(minutes: selected), () async {
-      await _player?.pause();
+      await _playerController.pause();
       if (mounted) {
         setState(() => _sleepTimer = null);
         _notice('播放定时结束');
@@ -782,125 +769,6 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     _notice('已在本机模拟赠送$name');
   }
 
-  Widget _buildFullscreen() {
-    final videoController = _videoController;
-    final player = _player;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (_audioOnly)
-            const Center(
-              child: Icon(Icons.headphones, size: 64, color: Colors.white54),
-            )
-          else if (videoController != null)
-            Video(
-              controller: videoController,
-              controls: NoVideoControls,
-              fit: BoxFit.contain,
-            )
-          else
-            const ColoredBox(color: Colors.black),
-          if (_showControls)
-            Positioned.fill(
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: .28),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      left: 12,
-                      top: 28,
-                      child: IconButton(
-                        tooltip: '退出全屏',
-                        onPressed: _toggleFullscreen,
-                        color: Colors.white,
-                        icon: const Icon(Icons.fullscreen_exit),
-                      ),
-                    ),
-                    Positioned(
-                      right: 8,
-                      top: 28,
-                      child: IconButton(
-                        tooltip: '更多',
-                        onPressed: _showPlayerMenu,
-                        color: Colors.white,
-                        icon: const Icon(Icons.more_vert),
-                      ),
-                    ),
-                    Center(
-                      child: IconButton.filledTonal(
-                        onPressed: player == null
-                            ? null
-                            : () => player.state.playing
-                                  ? player.pause()
-                                  : player.play(),
-                        iconSize: 40,
-                        icon: Icon(
-                          player?.state.playing == true
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: 8,
-                      right: 8,
-                      bottom: 18,
-                      child: Row(
-                        children: [
-                          IconButton(
-                            tooltip: _danmakuEnabled ? '关闭弹幕' : '开启弹幕',
-                            onPressed: () => setState(
-                              () => _danmakuEnabled = !_danmakuEnabled,
-                            ),
-                            color: Colors.white,
-                            icon: Icon(
-                              _danmakuEnabled
-                                  ? Icons.subtitles
-                                  : Icons.subtitles_off,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                setState(() => _audioOnly = !_audioOnly),
-                            color: Colors.white,
-                            icon: const Icon(Icons.headphones),
-                          ),
-                          const Spacer(),
-                          TextButton(
-                            onPressed: _chooseQuality,
-                            child: Text(
-                              _activeSource?.quality.quality ?? '画质',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _chooseLine,
-                            child: Text(
-                              '线路 ${(_activeSource?.lineIndex ?? 0) + 1}',
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (!_showControls)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () => setState(() => _showControls = true),
-                behavior: HitTestBehavior.opaque,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _loadSuperChats() async {
     final source = _activeSource;
     if (source == null || _loadingSuperChats) return;
@@ -909,12 +777,13 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       final items = await _siteForPlatform.getSuperChatMessage(
         roomId: source.room.roomId ?? widget.favorite.roomId,
       );
-      if (mounted)
+      if (mounted) {
         setState(
           () => _superChats
             ..clear()
             ..addAll(items),
         );
+      }
     } catch (error) {
       if (mounted) _notice('醒目留言暂不可用：$error');
     } finally {
@@ -947,10 +816,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_fullscreen) return _buildFullscreen();
     final pageBackground = ColorScheme.of(context).surfaceContainerLowest;
-    final player = _player;
-    final controller = _videoController;
     final room = _activeSource?.room;
     final title = room?.title?.isNotEmpty == true
         ? room!.title!
@@ -958,261 +824,213 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     final anchor = room?.nick?.isNotEmpty == true
         ? room!.nick!
         : (widget.favorite.anchorName ?? widget.favorite.platformId);
-    return SimpleScaffold(
-      backgroundColor: pageBackground,
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(
-              '$anchor · ${widget.favorite.platformId.toUpperCase()}',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: '录制与监控',
-            onPressed: _showRecordActions,
-            icon: const Icon(Icons.fiber_manual_record_outlined),
-          ),
-          IconButton(
-            tooltip: '更多播放选项',
-            onPressed: _showPlayerMenu,
-            icon: const Icon(Icons.more_vert),
-          ),
-        ],
-      ),
-      body: Material(
-        color: pageBackground,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final naturalHeight = width / _videoAspectRatio;
-            final heightLimit =
-                constraints.maxHeight * (_portraitSource == true ? .56 : .52);
-            final viewportHeight = naturalHeight.clamp(
-              120.0,
-              heightLimit,
-            );
-            return Column(
-              children: [
-                SizedBox(
-                  width: width,
-                  height: viewportHeight,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _showControls = !_showControls),
-                    onDoubleTap: () =>
-                        player?.stream.playing.first.then((playing) {
-                          if (playing) {
-                            player.pause();
-                          } else {
-                            player.play();
-                          }
-                        }),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (_audioOnly)
-                          const ColoredBox(
-                            color: Color(0xFF101114),
-                            child: Center(
-                              child: Icon(
-                                Icons.headphones,
-                                color: Colors.white54,
-                                size: 54,
-                              ),
-                            ),
-                          )
-                        else if (controller != null)
-                          Video(
-                            controller: controller,
-                            controls: NoVideoControls,
-                            fit: BoxFit.contain,
-                          )
-                        else
-                          const ColoredBox(color: Color(0xFF101114)),
-                        if (_loading)
-                          const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 12),
-                                Text(
-                                  '正在获取直播流…',
-                                  style: TextStyle(color: Colors.white70),
-                                ),
-                              ],
-                            ),
-                          )
-                        else if (_error case final error?)
-                          Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    error,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    onPressed: _resolveAndPlay,
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('重新连接'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        else if (_showControls)
-                          _buildVideoControls(player)
-                        else if (_danmakuEnabled && _visibleMessages.isNotEmpty)
-                          _buildDanmakuOverlay(),
-                      ],
-                    ),
-                  ),
+    final size = MediaQuery.sizeOf(context);
+    _playerController.screenRatio = size.height / size.width;
+    return NativeNavigationForeground(
+      child: Obx(() {
+        final isFullScreen = _playerController.isFullScreen.value;
+        if (isFullScreen) {
+          return PopScope(
+            canPop: false,
+            onPopInvokedWithResult: _playerController.onPopInvokedWithResult,
+            child: ColoredBox(
+              color: Colors.black,
+              child: LayoutBuilder(
+                builder: (context, constraints) => _buildPlayer(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                  title,
                 ),
-                _buildPlaybackInfo(room),
-                _buildTabs(),
-                Expanded(child: _buildTabContent()),
-                if (_tabIndex == 0) _buildCaptionBar(),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoControls(Player? player) => ColoredBox(
-    color: Colors.black.withValues(alpha: .28),
-    child: Stack(
-      children: [
-        Positioned(
-          left: 12,
-          top: 12,
-          child: Text(
-            widget.favorite.title ?? '直播中',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ),
-        Positioned(
-          right: 4,
-          top: 0,
-          child: Row(
-            children: [
+          );
+        }
+        return SimpleScaffold(
+          backgroundColor: pageBackground,
+          appBar: AppBar(
+            titleSpacing: 0,
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  '$anchor · ${widget.favorite.platformId.toUpperCase()}',
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ],
+            ),
+            actions: [
               IconButton(
-                tooltip: _audioOnly ? '恢复画面' : '仅听声音',
-                onPressed: () => setState(() => _audioOnly = !_audioOnly),
-                color: Colors.white,
-                icon: const Icon(Icons.headphones),
+                tooltip: '录制与监控',
+                onPressed: _showRecordActions,
+                icon: const Icon(Icons.fiber_manual_record_outlined),
               ),
               IconButton(
-                tooltip: '投屏',
-                onPressed: _openCast,
-                color: Colors.white,
-                icon: const Icon(Icons.cast),
-              ),
-              IconButton(
-                tooltip: '刷新直播流',
-                onPressed: _resolveAndPlay,
-                color: Colors.white,
-                icon: const Icon(Icons.refresh),
+                tooltip: '更多播放选项',
+                onPressed: _showPlayerMenu,
+                icon: const Icon(Icons.more_vert),
               ),
             ],
           ),
-        ),
-        Center(
-          child: IconButton.filledTonal(
-            tooltip: player?.state.playing == true ? '暂停' : '播放',
-            onPressed: player == null
-                ? null
-                : () => player.state.playing ? player.pause() : player.play(),
-            iconSize: 36,
-            icon: Icon(
-              player?.state.playing == true ? Icons.pause : Icons.play_arrow,
+          body: Material(
+            color: pageBackground,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth > constraints.maxHeight) {
+                  return _buildLandscapeBody(constraints, room, title);
+                }
+                return _buildPortraitBody(constraints, room, title);
+              },
             ),
           ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildPortraitBody(
+    BoxConstraints constraints,
+    LiveRoom? room,
+    String title,
+  ) {
+    final width = constraints.maxWidth;
+    final naturalHeight = width / _videoAspectRatio;
+    final heightLimit = constraints.maxHeight * .5;
+    final viewportHeight = naturalHeight.clamp(160.0, heightLimit);
+    return Column(
+      children: [
+        SizedBox(
+          width: width,
+          height: viewportHeight,
+          child: _buildPlayer(width, viewportHeight, title),
         ),
-        Positioned(
-          left: 8,
-          right: 8,
-          bottom: 4,
-          child: Row(
+        _buildPlaybackInfo(room),
+        _buildTabs(),
+        Expanded(child: _buildTabContent()),
+        if (_tabIndex == 0) _buildCaptionBar(),
+      ],
+    );
+  }
+
+  Widget _buildLandscapeBody(
+    BoxConstraints constraints,
+    LiveRoom? room,
+    String title,
+  ) {
+    final playerWidth = constraints.maxWidth * .62;
+    final panelWidth = constraints.maxWidth - playerWidth;
+    return Row(
+      children: [
+        SizedBox(
+          width: playerWidth,
+          height: constraints.maxHeight,
+          child: _buildPlayer(playerWidth, constraints.maxHeight, title),
+        ),
+        SizedBox(
+          width: panelWidth,
+          child: Column(
             children: [
-              IconButton(
-                tooltip: player?.state.playing == true ? '暂停' : '播放',
-                onPressed: player == null
-                    ? null
-                    : () =>
-                          player.state.playing ? player.pause() : player.play(),
-                color: Colors.white,
-                icon: Icon(
-                  player?.state.playing == true
-                      ? Icons.pause
-                      : Icons.play_arrow,
-                ),
-              ),
-              IconButton(
-                tooltip: '重新连接',
-                onPressed: _resolveAndPlay,
-                color: Colors.white,
-                icon: const Icon(Icons.replay),
-              ),
-              const Spacer(),
-              TextButton(
-                onPressed: _chooseQuality,
-                child: Text(
-                  _activeSource?.quality.quality ?? '画质',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-              IconButton(
-                tooltip: _fullscreen ? '退出全屏' : '全屏',
-                onPressed: _toggleFullscreen,
-                color: Colors.white,
-                icon: Icon(
-                  _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                ),
-              ),
+              _buildPlaybackInfo(room, compact: true),
+              _buildTabs(),
+              Expanded(child: _buildTabContent()),
+              if (_tabIndex == 0) _buildCaptionBar(compact: true),
             ],
           ),
         ),
       ],
-    ),
-  );
-
-  Future<void> _toggleFullscreen() async {
-    final next = !_fullscreen;
-    if (next) {
-      _fullscreenOrientationLocked = true;
-      await _applyFullscreenOrientation();
-    } else {
-      _fullscreenOrientationLocked = false;
-      await SystemChrome.setPreferredOrientations(const [
-        DeviceOrientation.portraitUp,
-      ]);
-    }
-    await SystemChrome.setEnabledSystemUIMode(
-      next ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
     );
-    if (!next) _fullscreenOrientationLocked = false;
-    if (mounted) setState(() => _fullscreen = next);
+  }
+
+  Widget _buildPlayer(double width, double height, String title) {
+    if (_loading) {
+      return const ColoredBox(
+        color: Color(0xFF101114),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 12),
+              Text(
+                '正在获取直播流…',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_error case final error?) {
+      return ColoredBox(
+        color: const Color(0xFF101114),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  error,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _resolveAndPlay,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('重新连接'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (_playerController.videoController == null) {
+      return const ColoredBox(color: Color(0xFF101114));
+    }
+    return PLVideoPlayer(
+      maxWidth: width,
+      maxHeight: height,
+      plPlayerController: _playerController,
+      headerControl: ExternalPlayerHeaderControl(
+        key: _headerKey,
+        title: title,
+        controller: _playerController,
+        onRefresh: _resolveAndPlay,
+        onMore: _showPlayerMenu,
+      ),
+      bottomControl: ExternalPlayerBottomControl(
+        controller: _playerController,
+        qualityLabel: _activeSource?.quality.quality ?? '画质',
+        lineLabel: '线路 ${(_activeSource?.lineIndex ?? 0) + 1}',
+        onQuality: _chooseQuality,
+        onLine: _chooseLine,
+        onDanmaku: () => setState(() => _danmakuEnabled = !_danmakuEnabled),
+        danmakuEnabled: _danmakuEnabled,
+        onAudioOnly: () => setState(() => _audioOnly = !_audioOnly),
+        audioOnly: _audioOnly,
+      ),
+      danmuWidget: _danmakuEnabled && _visibleMessages.isNotEmpty
+          ? _buildDanmakuOverlay()
+          : null,
+      videoOverlay: _audioOnly
+          ? const ColoredBox(
+              color: Color(0xFF101114),
+              child: Center(
+                child: Icon(
+                  Icons.headphones,
+                  color: Colors.white54,
+                  size: 54,
+                ),
+              ),
+            )
+          : null,
+    );
   }
 
   double get _videoAspectRatio {
-    final params = _player?.state.videoParams;
+    final params = _playerController.videoPlayerController?.state.videoParams;
     final explicitRatio = params?.aspect;
     if (explicitRatio != null && explicitRatio.isFinite && explicitRatio > 0) {
       return explicitRatio.clamp(.45, 2.5).toDouble();
@@ -1224,16 +1042,6 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       height: height,
       fallback: _portraitSource == true ? 9 / 16 : 16 / 9,
     );
-  }
-
-  Future<void> _applyFullscreenOrientation() async {
-    final orientations = _portraitSource == true
-        ? const [DeviceOrientation.portraitUp]
-        : const [
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ];
-    await SystemChrome.setPreferredOrientations(orientations);
   }
 
   Widget _buildDanmakuOverlay() {
@@ -1281,7 +1089,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     );
   }
 
-  Widget _buildPlaybackInfo(LiveRoom? room) => SizedBox(
+  Widget _buildPlaybackInfo(LiveRoom? room, {bool compact = false}) => SizedBox(
     height: 58,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1294,11 +1102,21 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
           ),
           TextButton(
             onPressed: _chooseQuality,
-            child: Text(_activeSource?.quality.quality ?? '--'),
+            child: Text(
+              compact
+                  ? (_activeSource?.quality.quality ?? '--')
+                  : (_activeSource?.quality.quality ?? '--'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           TextButton(
             onPressed: _chooseLine,
-            child: Text('线路 ${(_activeSource?.lineIndex ?? 0) + 1}'),
+            child: Text(
+              compact
+                  ? 'L${(_activeSource?.lineIndex ?? 0) + 1}'
+                  : '线路 ${(_activeSource?.lineIndex ?? 0) + 1}',
+            ),
           ),
         ],
       ),
@@ -1398,16 +1216,19 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
         ),
       ),
     );
-    if (action == 'user' && message.userId.isNotEmpty)
+    if (action == 'user' && message.userId.isNotEmpty) {
       setState(() => _blockedUsers.add(message.userId));
-    if (action == 'word' && message.message.trim().isNotEmpty)
+    }
+    if (action == 'word' && message.message.trim().isNotEmpty) {
       setState(() => _blockedWords.add(message.message.trim()));
+    }
     if (action != null) _notice('屏蔽规则已应用');
   }
 
   Widget _buildSuperChatList() {
-    if (_loadingSuperChats)
+    if (_loadingSuperChats) {
       return const Center(child: CircularProgressIndicator());
+    }
     if (_superChats.isEmpty) {
       return Center(
         child: Column(
@@ -1566,17 +1387,18 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
     _blockWordController.clear();
   }
 
-  Widget _buildCaptionBar() => SafeArea(
+  Widget _buildCaptionBar({bool compact = false}) => SafeArea(
     top: false,
     child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       child: Row(
         children: [
-          IconButton(
-            tooltip: '本地互动',
-            onPressed: _showLocalInteraction,
-            icon: const Icon(Icons.auto_awesome),
-          ),
+          if (!compact)
+            IconButton(
+              tooltip: '本地互动',
+              onPressed: _showLocalInteraction,
+              icon: const Icon(Icons.auto_awesome),
+            ),
           Expanded(
             child: TextField(
               controller: _captionController,

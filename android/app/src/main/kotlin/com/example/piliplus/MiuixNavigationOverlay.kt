@@ -48,6 +48,7 @@ internal class MiuixNavigationOverlay(
     private var backdropDebugState by mutableStateOf(FlutterBackdropDebugState())
     private var backdropSamplingPaused = false
     private var overlayOccluded = false
+    private var hostActivityCovered = false
     private var sharedNavigationLiftDp by mutableStateOf(0f)
     private var globalLiftLoadInFlight = false
     private var composeView: ComposeView? = null
@@ -94,9 +95,7 @@ internal class MiuixNavigationOverlay(
                     result.success(null)
                 }
                 "setOverlayOccluded" -> {
-                    overlayOccluded = call.arguments as? Boolean ?: false
-                    composeView?.visibility = if (overlayOccluded) View.INVISIBLE else View.VISIBLE
-                    updateBackdropSampling()
+                    setOverlayOccluded(call.arguments as? Boolean ?: false)
                     result.success(null)
                 }
                 "hide" -> {
@@ -170,8 +169,22 @@ internal class MiuixNavigationOverlay(
 
     private fun updateBackdropSampling() {
         backdropSampler.setEnabled(
-            uiState.visible && uiState.backdropSampling && !backdropSamplingPaused && !overlayOccluded,
+            uiState.visible && uiState.backdropSampling && !backdropSamplingPaused &&
+                !overlayOccluded && !hostActivityCovered,
         )
+    }
+
+    fun setHostActivityCovered(covered: Boolean) {
+        hostActivityCovered = covered
+        composeView?.visibility = if (covered || overlayOccluded) View.INVISIBLE else View.VISIBLE
+        updateBackdropSampling()
+    }
+
+    fun setOverlayOccluded(occluded: Boolean) {
+        overlayOccluded = occluded
+        composeView?.visibility =
+            if (occluded || hostActivityCovered) View.INVISIBLE else View.VISIBLE
+        updateBackdropSampling()
     }
 
     private fun selectDestination(index: Int) {

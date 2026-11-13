@@ -95,6 +95,7 @@ class PLVideoPlayer extends StatefulWidget {
     required this.headerControl,
     this.bottomControl,
     this.danmuWidget,
+    this.videoOverlay,
     this.showEpisodes,
     this.showViewPoints,
     this.fill = Colors.black,
@@ -110,6 +111,7 @@ class PLVideoPlayer extends StatefulWidget {
   final Widget headerControl;
   final Widget? bottomControl;
   final Widget? danmuWidget;
+  final Widget? videoOverlay;
   final void Function([
     int?,
     UgcSeason?,
@@ -1431,6 +1433,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       key: _playerKey,
       children: <Widget>[
         _videoWidget,
+
+        if (widget.videoOverlay case final overlay?)
+          Positioned.fill(child: IgnorePointer(child: overlay)),
 
         if (widget.danmuWidget case final danmaku?)
           Positioned.fill(top: 4, child: danmaku),
