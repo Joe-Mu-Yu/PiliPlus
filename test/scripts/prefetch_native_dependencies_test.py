@@ -31,6 +31,43 @@ class _Response:
 
 
 class PrefetchNativeDependenciesTest(unittest.TestCase):
+    def test_github_api_downloads_use_the_ephemeral_workflow_token(self):
+        with mock.patch.dict(
+            MODULE.os.environ,
+            {'GITHUB_TOKEN': ''.join(('unit', '-', 'test'))},
+            clear=True,
+        ):
+            api_headers = MODULE.download_headers(
+                'https://api.github.com/repos/example/project/releases/assets/1'
+            )
+            release_headers = MODULE.download_headers(
+                'https://github.com/example/project/releases/download/v1/file.zip'
+            )
+
+        self.assertEqual(
+            api_headers['Authorization'],
+            'Bearer unit-test',
+        )
+        self.assertEqual(api_headers['X-GitHub-Api-Version'], '2022-11-28')
+        self.assertNotIn('Authorization', release_headers)
+
+    def test_cross_host_asset_redirect_drops_authorization(self):
+        request = MODULE.Request(
+            'https://api.github.com/repos/example/project/releases/assets/1',
+            headers={'Authorization': 'Bearer unit-test'},
+        )
+        redirected = MODULE.SafeAuthorizationRedirectHandler().redirect_request(
+            request,
+            None,
+            302,
+            'Found',
+            {},
+            'https://release-assets.githubusercontent.com/download/file.zip',
+        )
+
+        self.assertIsNotNone(redirected)
+        self.assertIsNone(redirected.get_header('Authorization'))
+
     def test_parse_dependencies_uses_upstream_urls_and_checksums(self):
         checksum = 'a' * 64
         with tempfile.TemporaryDirectory() as directory:

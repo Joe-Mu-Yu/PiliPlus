@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +77,27 @@ SQLITE_DEPENDENCIES = (
 )
 
 
+class SafeAuthorizationRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, new_url):
+        redirected = super().redirect_request(
+            request,
+            fp,
+            code,
+            msg,
+            headers,
+            new_url,
+        )
+        if (
+            redirected is not None
+            and urlparse(request.full_url).hostname != urlparse(new_url).hostname
+        ):
+            redirected.remove_header('Authorization')
+        return redirected
+
+
+urlopen = build_opener(SafeAuthorizationRedirectHandler()).open
+
+
 def resolved_package_directory(package_config: Path, package_name: str) -> Path:
     packages = json.loads(package_config.read_text())['packages']
     package = next(item for item in packages if item['name'] == package_name)
@@ -103,6 +125,18 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def download_headers(url: str) -> dict[str, str]:
+    headers = {
+        'Accept': 'application/octet-stream',
+        'User-Agent': 'Hyper-PiliPlus-Android-CI',
+    }
+    github_token = os.environ.get('GITHUB_TOKEN', '').strip()
+    if github_token and urlparse(url).hostname == 'api.github.com':
+        headers['Authorization'] = f'Bearer {github_token}'
+        headers['X-GitHub-Api-Version'] = '2022-11-28'
+    return headers
+
+
 def download_verified(
     url: str,
     expected_sha256: str,
@@ -122,13 +156,7 @@ def download_verified(
     for attempt in range(1, attempts + 1):
         temporary.unlink(missing_ok=True)
         try:
-            request = Request(
-                url,
-                headers={
-                    'Accept': 'application/octet-stream',
-                    'User-Agent': 'Hyper-PiliPlus-Android-CI',
-                },
-            )
+            request = Request(url, headers=download_headers(url))
             with urlopen(request, timeout=timeout) as response, temporary.open('wb') as output:
                 while chunk := response.read(1024 * 1024):
                     output.write(chunk)

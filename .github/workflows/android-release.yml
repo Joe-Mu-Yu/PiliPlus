@@ -97,6 +97,10 @@ jobs:
         with:
           distribution: zulu
           java-version: '17'
+      - name: Set up Python 3.11 for Chaquopy
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - name: Reclaim runner disk space
         run: |
           df -h /
@@ -158,6 +162,8 @@ jobs:
           ./scripts/flutterw pub get --enforce-lockfile
           python3 scripts/prepare_android_ci.py
       - name: Prefetch verified native dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/prefetch_native_dependencies.py
       - name: Test release metadata and app
         run: |
