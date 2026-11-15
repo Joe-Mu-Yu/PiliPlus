@@ -4,6 +4,30 @@ import 'package:material_ui/material_ui.dart';
 
 enum MainType { sideBar, bottomNav, body }
 
+/// Applies the host safe-area padding without changing the destination tree.
+///
+/// A destination that paints its own system-bar insets can opt into the full
+/// viewport. Keeping [Padding] in both modes prevents switching destinations
+/// from recreating the nested [PageView] or its platform views.
+class MainBodyViewport extends StatelessWidget {
+  const MainBodyViewport({
+    super.key,
+    required this.safePadding,
+    required this.extendIntoSystemBars,
+    required this.child,
+  });
+
+  final EdgeInsets safePadding;
+  final bool extendIntoSystemBars;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: extendIntoSystemBars ? EdgeInsets.zero : safePadding,
+    child: child,
+  );
+}
+
 class MainLayout
     extends SlottedMultiChildRenderObjectWidget<MainType, RenderBox> {
   const MainLayout({

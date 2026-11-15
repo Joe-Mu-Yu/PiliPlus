@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/main_layout.dart';
 import 'package:PiliPlus/pages/movies/view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,58 @@ void main() {
     expect(find.text('当前平台暂不支持影视'), findsOneWidget);
     expect(find.textContaining('AVBox 集成目前仅支持 Android'), findsOneWidget);
     expect(find.text('打开 AVBox'), findsNothing);
+  });
+
+  testWidgets('Movies can paint through the host system-bar padding', (
+    tester,
+  ) async {
+    const viewportSize = Size(390, 844);
+    const hostSafePadding = EdgeInsets.fromLTRB(12, 32, 12, 0);
+    tester.view.physicalSize = viewportSize;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MainBodyViewport(
+          safePadding: hostSafePadding,
+          extendIntoSystemBars: true,
+          child: SizedBox.expand(key: ValueKey('movies-viewport')),
+        ),
+      ),
+    );
+
+    final viewport = find.byKey(const ValueKey('movies-viewport'));
+    expect(tester.getTopLeft(viewport), Offset.zero);
+    expect(tester.getSize(viewport), viewportSize);
+  });
+
+  testWidgets('Other destinations keep the host safe-area padding', (
+    tester,
+  ) async {
+    const viewportSize = Size(390, 844);
+    const hostSafePadding = EdgeInsets.fromLTRB(12, 32, 12, 0);
+    tester.view.physicalSize = viewportSize;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MainBodyViewport(
+          safePadding: hostSafePadding,
+          extendIntoSystemBars: false,
+          child: SizedBox.expand(key: ValueKey('safe-viewport')),
+        ),
+      ),
+    );
+
+    final viewport = find.byKey(const ValueKey('safe-viewport'));
+    expect(tester.getTopLeft(viewport), const Offset(12, 32));
+    expect(tester.getSize(viewport), const Size(366, 812));
   });
 }
 

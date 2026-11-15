@@ -578,22 +578,6 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   Widget build(BuildContext context) {
-    Widget child;
-    if (_mainController.mainTabBarView) {
-      child = TabBarView(
-        controller: _mainController.controller,
-        physics: const NeverScrollableScrollPhysics(),
-        scrollDirection: _mainController.useBottomNav ? .horizontal : .vertical,
-        children: _mainController.navigationBars.map((i) => i.page).toList(),
-      );
-    } else {
-      child = PageView(
-        controller: _mainController.controller,
-        physics: const NeverScrollableScrollPhysics(),
-        children: _mainController.navigationBars.map((i) => i.page).toList(),
-      );
-    }
-
     Widget? sideBar;
     Widget? bottomNav;
     final useNativeMiuixNavigation = _usesNativeMiuixNavigation;
@@ -633,6 +617,32 @@ class _MainAppState extends PopScopeState<MainApp>
       padding = .only(top: _padding.top, right: _padding.right);
     }
 
+    final destinationPages = _mainController.navigationBars
+        .map(
+          (type) => MainBodyViewport(
+            safePadding: padding,
+            extendIntoSystemBars:
+                Platform.isAndroid && type == NavigationBarType.movies,
+            child: type.page,
+          ),
+        )
+        .toList();
+    Widget child;
+    if (_mainController.mainTabBarView) {
+      child = TabBarView(
+        controller: _mainController.controller,
+        physics: const NeverScrollableScrollPhysics(),
+        scrollDirection: _mainController.useBottomNav ? .horizontal : .vertical,
+        children: destinationPages,
+      );
+    } else {
+      child = PageView(
+        controller: _mainController.controller,
+        physics: const NeverScrollableScrollPhysics(),
+        children: destinationPages,
+      );
+    }
+
     child = Material(
       color: _colorScheme.surface,
       child: Stack(
@@ -640,7 +650,7 @@ class _MainAppState extends PopScopeState<MainApp>
           MainLayout(
             sideBar: sideBar,
             bottomNav: bottomNav,
-            body: Padding(padding: padding, child: child),
+            body: child,
           ),
           if (useNativeMiuixNavigation) _nativeMiuixNavigationSync(),
         ],

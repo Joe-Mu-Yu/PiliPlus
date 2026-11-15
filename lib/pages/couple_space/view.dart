@@ -1492,7 +1492,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
   );
 
   Widget _loginPage() => SimpleScaffold(
-    appBar: AppBar(title: const Text('登录小窝')),
+    appBar: AppBar(),
     body: Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
