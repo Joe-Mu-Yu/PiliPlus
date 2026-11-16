@@ -42,12 +42,22 @@ internal class AvboxBridge(
 
     init {
         App.initialize(activity.applicationContext)
-        check(
-            flutterEngine.platformViewsController.registry.registerViewFactory(
-                VIEW_TYPE,
-                AvboxPlatformViewFactory(activity, ::exitEmbedded),
-            ),
-        ) { "AVBox platform view is already registered" }
+        // A recreated Activity can reuse the cached FlutterEngine, so this bridge
+        // may run twice in one process. PlatformViewRegistry has no unregister
+        // API on this Flutter version, so the factory registers once per process
+        // and resolves the current host/exit callback dynamically; re-registering
+        // must never throw at startup.
+        if (AvboxSharedState.exitCallback == null) {
+            check(
+                flutterEngine.platformViewsController.registry.registerViewFactory(
+                    VIEW_TYPE,
+                    AvboxPlatformViewFactory(activity, ::exitEmbedded),
+                ),
+            ) { "AVBox platform view could not be registered" }
+        }
+        AvboxSharedState.exitOwner = this
+        AvboxSharedState.exitCallback = ::exitEmbedded
+        AvboxSharedState.host = activity
     }
 
     private fun exitEmbedded() {
@@ -55,21 +65,52 @@ internal class AvboxBridge(
     }
 
     fun dispose() {
+        // Only the most recently attached bridge owns the shared callback; a
+        // recreated Activity installs a new bridge before the old one is disposed.
+        if (AvboxSharedState.exitOwner === this) {
+            AvboxSharedState.exitOwner = null
+            AvboxSharedState.exitCallback = null
+            AvboxSharedState.host = null
+        }
         channel.setMethodCallHandler(null)
     }
 
-    private companion object {
+    companion object {
         const val CHANNEL = "com.aritxonly.hyperpiliplus/avbox"
         const val VIEW_TYPE = "com.aritxonly.hyperpiliplus/avbox_view"
     }
 }
 
+/**
+ * Process-wide bridge state. A recreated Activity reuses the cached
+ * FlutterEngine, so the platform-view factory registered by the first bridge
+ * must resolve the current host lazily instead of capturing one Activity.
+ */
+private object AvboxSharedState {
+    @Volatile
+    var exitOwner: AvboxBridge? = null
+
+    @Volatile
+    var exitCallback: (() -> Unit)? = null
+
+    @Volatile
+    var host: MainActivity? = null
+}
+
+/**
+ * Registered once per process. The platform view is created lazily whenever the
+ * Flutter Movies tab mounts, which can happen long after the registering
+ * Activity was destroyed, so the host is resolved dynamically from the shared
+ * bridge state instead of being captured at registration time.
+ */
 private class AvboxPlatformViewFactory(
     private val activity: MainActivity,
     private val onExit: () -> Unit,
 ) : PlatformViewFactory(StandardMessageCodec.INSTANCE) {
-    override fun create(context: Context, viewId: Int, args: Any?): PlatformView =
-        AvboxPlatformView(activity, context, onExit)
+    override fun create(context: Context, viewId: Int, args: Any?): PlatformView {
+        val host = AvboxSharedState.host ?: activity
+        return AvboxPlatformView(host, context, AvboxSharedState.exitCallback ?: onExit)
+    }
 }
 
 private class AvboxPlatformView(

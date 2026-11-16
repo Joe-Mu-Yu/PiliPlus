@@ -292,6 +292,22 @@ class MainController extends GetxController
   void setIndex(int value) {
     feedBack();
 
+    // Tab switches must land on the main tab view. When a pushed page (e.g. the
+    // recorder center) covers the tabs, switching only moves the page under the
+    // route and the user sees nothing change, so pop back to the tab shell first.
+    // A repeated tap on the same tab keeps its scroll-to-top/refresh semantics.
+    final navigator = Get.key.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.pop();
+      if (value != selectedIndex.value) {
+        selectedIndex.value = value;
+        // Jump instead of animating: the pop above is already a transition and
+        // two concurrent page motions fight over the PageView.
+        controller.jumpToPage(value);
+      }
+      return;
+    }
+
     final currentNav = navigationBars[value];
     if (value != selectedIndex.value) {
       selectedIndex.value = value;

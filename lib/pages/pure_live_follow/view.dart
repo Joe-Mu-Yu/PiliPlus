@@ -547,14 +547,11 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
         null => '未创建录制任务，请检查存储权限或稍后重试',
         _ => '录制任务已创建，请在录制中心查看状态',
       };
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+      // Native glass nav bar sits above Flutter overlays, so SnackBars show
+      // through it; SmartDialog toasts render on the native layer instead.
+      SmartDialog.showToast(message);
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('开始录制失败：$error')),
-        );
-      }
+      SmartDialog.showToast('开始录制失败：$error');
     }
   }
 
@@ -604,12 +601,8 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
     if (link == null || link.isEmpty || !mounted) return;
     final added = await _controller.addFromLink(link);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          added ? '已添加到关注' : _controller.errorMessage.value ?? '添加失败',
-        ),
-      ),
+    SmartDialog.showToast(
+      added ? '已添加到关注' : _controller.errorMessage.value ?? '添加失败',
     );
   }
 
@@ -624,12 +617,8 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
     if (link == null || link.isEmpty || !mounted) return;
     final updated = await _controller.updateLegacyDouyinLink(favorite, link);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          updated ? '直播间链接已更新' : _controller.errorMessage.value ?? '更新失败',
-        ),
-      ),
+    SmartDialog.showToast(
+      updated ? '直播间链接已更新' : _controller.errorMessage.value ?? '更新失败',
     );
   }
 

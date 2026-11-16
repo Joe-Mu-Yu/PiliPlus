@@ -886,6 +886,13 @@ class RecorderController extends GetxService {
           return true;
         final status = await Permission.manageExternalStorage.request();
         if (status.isGranted && await _canWriteRecordDirectory()) return true;
+        // After a rejection Android stops showing the "All files access" page
+        // from request(); the only way forward is the system settings screen.
+        if (status.isPermanentlyDenied || status.isRestricted) {
+          ToastUtil.show(i18n('no_storage'));
+          await openAppSettings();
+          return false;
+        }
       } else {
         if (await Permission.storage.isGranted &&
             await _canWriteRecordDirectory())
@@ -914,7 +921,22 @@ class RecorderController extends GetxService {
     final existing = _findTaskWhere(
       (task) => task.roomId == room.roomId && task.platform == room.platform,
     );
-    if (existing != null) return existing;
+    if (existing != null) {
+      // A failed/stopped/waiting task must not swallow the user's record
+      // intent: returning it as-is made every later tap on the record button
+      // a silent no-op until the app restarted. Restart idle tasks instead.
+      final idle =
+          existing.status == RecordStatus.failed ||
+          existing.status == RecordStatus.stopped ||
+          existing.status == RecordStatus.completed;
+      if (idle && startImmediately) {
+        // startTask reports only whether the stream actually started; the task
+        // itself now carries the fresh status/lastError for the UI to surface.
+        await startTask(existing);
+        return existing;
+      }
+      return existing;
+    }
 
     final task = LiveRecordTask.fromRoom(room);
     tasks.add(task);

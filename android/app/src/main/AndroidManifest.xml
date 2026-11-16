@@ -260,6 +260,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 录制中心需要写入用户选择的公共目录；Android 11+ 必须声明
+         MANAGE_EXTERNAL_STORAGE 才能弹出"所有文件访问"授权页，
+         否则 request() 永远被拒并导致录制目录创建报 PathNotFound。 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />

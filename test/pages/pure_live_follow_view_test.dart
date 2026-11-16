@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter/widgets.dart' show Builder, Size, SizedBox, ValueKey;
+import 'package:flutter/widgets.dart'
+    show Builder, Size, SizedBox, Text, ValueKey;
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/pages/pure_live_follow/controller.dart';
@@ -61,7 +63,12 @@ void main() {
         ],
       );
       await tester.pumpWidget(
-        GetMaterialApp(home: PureLiveFollowPage(controller: controller)),
+        GetMaterialApp(
+          builder: FlutterSmartDialog.init(
+            toastBuilder: (msg) => Text(msg),
+          ),
+          home: PureLiveFollowPage(controller: controller),
+        ),
       );
       await tester.pumpAndSettle();
       await controller.refreshFavorites();
@@ -85,6 +92,9 @@ void main() {
       expect(updated.title, 'Verified room');
       expect(updated.tagIds, ['keep']);
       expect(controller.errorMessage.value, isNull);
+      // Flush the SmartDialog toast timer so no fake timer outlives the tree.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );
