@@ -1,6 +1,13 @@
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// Top/bottom player chrome transition.
+///
+/// Uses a short fade plus a small vertical offset instead of sliding the whole
+/// bar off-screen. The offset stays inside the bar so nothing pops in from the
+/// edge, and both animations collapse to zero duration when the platform
+/// disables animations.
 class AppBarAni extends StatelessWidget {
   const AppBarAni({
     super.key,
@@ -18,7 +25,7 @@ class AppBarAni extends StatelessWidget {
   final bool removeSafeArea;
 
   static final _topPos = Tween<Offset>(
-    begin: const Offset(0.0, -1.0),
+    begin: const Offset(0.0, -.18),
     end: Offset.zero,
   );
 
@@ -33,7 +40,7 @@ class AppBarAni extends StatelessWidget {
   );
 
   static final _bottomPos = Tween<Offset>(
-    begin: const Offset(0, 1.2),
+    begin: const Offset(0, .22),
     end: Offset.zero,
   );
 
@@ -49,19 +56,25 @@ class AppBarAni extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = ImmersiveTokens.reduceMotionOf(context);
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: isTop ? _topDecoration : _bottomDecoration,
+      ),
+      child: removeSafeArea
+          ? child
+          : ViewSafeArea(
+              left: isFullScreen,
+              right: isFullScreen,
+              child: child,
+            ),
+    );
+    if (reduceMotion) return content;
     return SlideTransition(
       position: controller.drive(isTop ? _topPos : _bottomPos),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: isTop ? _topDecoration : _bottomDecoration,
-        ),
-        child: removeSafeArea
-            ? child
-            : ViewSafeArea(
-                left: isFullScreen,
-                right: isFullScreen,
-                child: child,
-              ),
+      child: FadeTransition(
+        opacity: controller,
+        child: content,
       ),
     );
   }

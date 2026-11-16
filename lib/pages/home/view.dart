@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
@@ -57,6 +58,8 @@ class _HomePageState extends CommonPageState<HomePage>
   Widget _buildContent() {
     Widget tabBar;
     if (_homeController.tabs.length > 1) {
+      // Segmented capsule track: the selected tab reads as a pill instead of a
+      // bare underline, matching the reference app's channel switcher.
       tabBar = Padding(
         padding: const EdgeInsets.only(top: 4),
         child: SizedBox(
@@ -66,12 +69,28 @@ class _HomePageState extends CommonPageState<HomePage>
             controller: _homeController.tabController,
             tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
             isScrollable: true,
-            labelColor: _colorScheme.onSurface,
+            labelColor: _colorScheme.onSecondaryContainer,
             unselectedLabelColor: _colorScheme.onSurfaceVariant,
-            indicatorColor: _colorScheme.primary,
+            labelStyle: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            unselectedLabelStyle: const TextStyle(fontSize: 13),
+            indicator: BoxDecoration(
+              color: _colorScheme.secondaryContainer,
+              borderRadius: BorderRadius.circular(ImmersiveTokens.pillRadius),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            indicatorPadding: const EdgeInsets.symmetric(vertical: 6),
             dividerColor: Colors.transparent,
             dividerHeight: 0,
-            splashBorderRadius: Style.mdRadius,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+            splashBorderRadius: const BorderRadius.all(
+              Radius.circular(ImmersiveTokens.pillRadius),
+            ),
+            overlayColor: WidgetStatePropertyAll(
+              _colorScheme.primary.withValues(alpha: .08),
+            ),
             tabAlignment: TabAlignment.center,
             onTap: (_) {
               feedBack();
@@ -144,12 +163,16 @@ class _HomePageState extends CommonPageState<HomePage>
       if (_homeController.showTopBar case final showTopBar?) {
         return Obx(() {
           final showSearchBar = showTopBar.value;
+          final duration =
+              MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : const Duration(milliseconds: 350);
           return AnimatedOpacity(
             opacity: showSearchBar ? 1 : 0,
-            duration: const Duration(milliseconds: 300),
+            duration: duration,
             child: AnimatedContainer(
               curve: Curves.easeInOutCubicEmphasized,
-              duration: const Duration(milliseconds: 500),
+              duration: duration,
               height: showSearchBar ? Style.topBarHeight : 0,
               padding: padding,
               child: child,
@@ -166,13 +189,22 @@ class _HomePageState extends CommonPageState<HomePage>
   }
 
   Widget searchBar() {
-    const borderRadius = BorderRadius.all(Radius.circular(25));
+    const borderRadius = BorderRadius.all(
+      Radius.circular(ImmersiveTokens.pillRadius),
+    );
     return Expanded(
       child: SizedBox(
-        height: 44,
+        height: ImmersiveTokens.minTouchTarget,
         child: Material(
           borderRadius: borderRadius,
           color: _colorScheme.onSecondaryContainer.withValues(alpha: 0.05),
+          shape: RoundedRectangleBorder(
+            borderRadius: borderRadius,
+            side: BorderSide(
+              color: ImmersiveTokens.cardOutline(_colorScheme),
+              width: ImmersiveTokens.hairline,
+            ),
+          ),
           child: InkWell(
             borderRadius: borderRadius,
             splashColor: _colorScheme.primaryContainer.withValues(

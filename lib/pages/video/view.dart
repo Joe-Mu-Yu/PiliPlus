@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
@@ -1321,13 +1322,38 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       return TabBar(
         padding: .zero,
         dividerHeight: 0,
-        labelPadding: .zero,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 12),
         dividerColor: Colors.transparent,
         controller: videoDetailController.tabCtr,
-        indicator: flag ? const BoxDecoration() : null,
-        labelColor: flag ? colorScheme.onSurface : null,
+        // Segmented pill track: the selected tab becomes a capsule on a rounded
+        // rail. Both surfaces come from ColorScheme roles, never hard-coded.
+        indicator: flag
+            ? const BoxDecoration()
+            : BoxDecoration(
+                color: colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(ImmersiveTokens.pillRadius),
+              ),
+        indicatorSize: flag ? null : TabBarIndicatorSize.tab,
+        splashBorderRadius: const BorderRadius.all(
+          Radius.circular(ImmersiveTokens.pillRadius),
+        ),
+        overlayColor: WidgetStatePropertyAll(
+          colorScheme.primary.withValues(alpha: .08),
+        ),
+        labelColor: flag
+            ? colorScheme.onSurface
+            : colorScheme.onSecondaryContainer,
+        unselectedLabelColor: colorScheme.onSurfaceVariant,
         labelStyle:
-            TabBarTheme.of(context).labelStyle?.copyWith(fontSize: 13) ??
+            TabBarTheme.of(context).labelStyle?.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ) ??
+            const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+        unselectedLabelStyle:
+            TabBarTheme.of(context).unselectedLabelStyle?.copyWith(
+              fontSize: 13,
+            ) ??
             const TextStyle(fontSize: 13),
         onTap: (value) {
           void animToTop() {

@@ -2,6 +2,8 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
+import 'package:PiliPlus/common/widgets/immersive/press_scale_listener.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/common/widgets/video_card/video_card_transition.dart';
@@ -126,51 +128,63 @@ class _VideoCardVState extends State<VideoCardV> {
         VideoCardHero(
           tag: _heroTag,
           surfaceColor: Theme.of(context).colorScheme.surfaceContainer,
-          child: Card(
-            margin: .zero,
-            color: Theme.of(context).colorScheme.surfaceContainer,
-            child: InkWell(
-              onTap: onPushDetail,
-              onLongPress: onLongPress,
-              onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-              borderRadius: const .all(.circular(12)),
-              child: Column(
-                crossAxisAlignment: .start,
-                children: [
-                  AspectRatio(
-                    aspectRatio: Style.aspectRatio,
-                    child: LayoutBuilder(
-                      builder: (context, boxConstraints) {
-                        double maxWidth = boxConstraints.maxWidth;
-                        double maxHeight = boxConstraints.maxHeight;
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            NetworkImgLayer(
-                              src: videoItem.cover,
-                              width: maxWidth,
-                              height: maxHeight,
-                              borderRadius: const .vertical(
-                                top: .circular(12),
-                              ),
-                            ),
-                            if (videoItem.duration > 0)
-                              PBadge(
-                                bottom: 6,
-                                right: 7,
-                                size: .small,
-                                type: .gray,
-                                text: DurationUtils.formatDuration(
-                                  videoItem.duration,
+          child: PressScaleListener(
+            child: Card(
+              margin: .zero,
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(ImmersiveTokens.cardRadius),
+                side: BorderSide(
+                  color: ImmersiveTokens.cardOutline(
+                    Theme.of(context).colorScheme,
+                  ),
+                  width: ImmersiveTokens.hairline,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onPushDetail,
+                onLongPress: onLongPress,
+                onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
+                borderRadius: BorderRadius.circular(ImmersiveTokens.cardRadius),
+                child: Column(
+                  crossAxisAlignment: .start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: Style.aspectRatio,
+                      child: LayoutBuilder(
+                        builder: (context, boxConstraints) {
+                          double maxWidth = boxConstraints.maxWidth;
+                          double maxHeight = boxConstraints.maxHeight;
+                          return Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              NetworkImgLayer(
+                                src: videoItem.cover,
+                                width: maxWidth,
+                                height: maxHeight,
+                                borderRadius: const .vertical(
+                                  top: .circular(ImmersiveTokens.cardRadius),
                                 ),
                               ),
-                          ],
-                        );
-                      },
+                              if (videoItem.duration > 0)
+                                PBadge(
+                                  bottom: 6,
+                                  right: 7,
+                                  size: .small,
+                                  type: .gray,
+                                  text: DurationUtils.formatDuration(
+                                    videoItem.duration,
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  content(context),
-                ],
+                    content(context),
+                  ],
+                ),
               ),
             ),
           ),

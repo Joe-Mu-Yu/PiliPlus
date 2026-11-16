@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Center the label within the entire menu button's touch target.
@@ -14,7 +15,13 @@ class PlayerControlLabel extends StatelessWidget {
   );
 }
 
-/// Keep the seek rail flexible instead of scaling all controls to fit.
+/// Single-row player controls: a flexible seek rail plus grouped actions,
+/// painted on one rounded chrome surface.
+///
+/// The row is a flat decoration (no blur/shader), so it costs the same as the
+/// old transparent bar. Every interactive slot keeps a >=40dp touch target even
+/// when the text scale grows, and the seek rail stays flexible instead of
+/// shrinking the buttons.
 class CompactPlayerControls extends StatelessWidget {
   const CompactPlayerControls({
     super.key,
@@ -24,6 +31,7 @@ class CompactPlayerControls extends StatelessWidget {
     required this.speed,
     required this.options,
     this.fullscreenButton,
+    this.chromeSurface = true,
   });
 
   final Widget playButton;
@@ -31,6 +39,9 @@ class CompactPlayerControls extends StatelessWidget {
   final Widget time;
   final Widget speed;
   final Widget? fullscreenButton;
+
+  /// Whether to paint the rounded chrome surface behind the row.
+  final bool chromeSurface;
 
   /// Runs a page-level action only after the options dialog is dismissed.
   ///
@@ -127,29 +138,37 @@ class CompactPlayerControls extends StatelessWidget {
           ),
         ),
       ),
+      // The options dialog is an opaque sheet; keep it instant when the platform
+      // disables animations instead of playing a route transition.
+      barrierDismissible: true,
     );
     pendingPageAction?.call();
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final wide = constraints.maxWidth >= 440;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: SizedBox(
-          height: 48,
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 440;
+        final row = SizedBox(
+          height: ImmersiveTokens.controlRowHeight,
           child: Row(
             textDirection: TextDirection.ltr,
             children: [
-              SizedBox(width: 42, height: 44, child: playButton),
+              SizedBox(
+                width: 44,
+                height: ImmersiveTokens.controlRowHeight,
+                child: playButton,
+              ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: progress,
                 ),
               ),
-              if (constraints.maxWidth >= 300)
+              // The time label is the first thing to go so the seek rail never
+              // collapses; it only appears once there is room for both.
+              if (constraints.maxWidth >= 360)
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 120),
                   child: time,
@@ -161,8 +180,8 @@ class CompactPlayerControls extends StatelessWidget {
                 ),
               IconButton(
                 constraints: const BoxConstraints.tightFor(
-                  width: 40,
-                  height: 44,
+                  width: 44,
+                  height: ImmersiveTokens.controlRowHeight,
                 ),
                 padding: EdgeInsets.zero,
                 tooltip: '播放选项',
@@ -170,15 +189,36 @@ class CompactPlayerControls extends StatelessWidget {
                 icon: const Icon(
                   Icons.more_horiz_rounded,
                   size: 22,
-                  color: Colors.white,
+                  color: ImmersiveTokens.playerChromeText,
                 ),
               ),
               if (fullscreenButton case final button?)
-                SizedBox(width: 40, height: 44, child: button),
+                SizedBox(
+                  width: 44,
+                  height: ImmersiveTokens.controlRowHeight,
+                  child: button,
+                ),
             ],
           ),
-        ),
-      );
-    },
-  );
+        );
+        if (!chromeSurface) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: row,
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: DecoratedBox(
+            key: const ValueKey('player-control-chrome'),
+            decoration: ImmersiveTokens.pillSurface(radius: 24),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: row,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

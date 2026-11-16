@@ -12,6 +12,7 @@ import 'package:PiliPlus/common/widgets/disabled_icon.dart';
 import 'package:PiliPlus/common/widgets/gesture/immediate_tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/gesture/mouse_interactive_viewer.dart';
 import 'package:PiliPlus/common/widgets/gesture/player_gesture_recognizer.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
 import 'package:PiliPlus/common/widgets/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
@@ -49,6 +50,7 @@ import 'package:PiliPlus/plugin/pl_player/widgets/common_btn.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/compact_player_controls.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/mpv_convert_webp.dart';
+import 'package:PiliPlus/plugin/pl_player/widgets/player_hud_pill.dart';
 import 'package:PiliPlus/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
@@ -223,7 +225,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       }
     }
 
-    if (visible) {
+    // Reduced motion: jump straight to the target state so the chrome never
+    // animates for users who disabled system animations.
+    if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) {
+      _animationController.value = visible ? 1 : 0;
+    } else if (visible) {
       _animationController.forward();
     } else {
       _animationController.reverse();
@@ -264,7 +270,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 220),
     );
     videoController = plPlayerController.videoController!;
 
@@ -1422,10 +1428,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         : colorScheme.primary;
     late final thumbGlowColor = primary.withAlpha(80);
     late final bufferedBarColor = primary.withValues(alpha: 0.4);
-    const TextStyle textStyle = TextStyle(
-      color: Colors.white,
-      fontSize: 12,
-    );
     final isLive = plPlayerController.isLive;
 
     final child = Stack(
@@ -1469,196 +1471,86 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             },
           ),
 
-        /// 长按倍速 toast
+        /// 播放器 HUD：长按倍速、seek、音量、亮度共用同一胶囊表面
         if (!isLive)
-          IgnorePointer(
-            ignoring: true,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: FractionalTranslation(
-                translation: isFullScreen
-                    ? const Offset(0.0, 1.2)
-                    : const Offset(0.0, 0.8),
-                child: Obx(
-                  () => AnimatedOpacity(
-                    curve: Curves.easeInOut,
-                    opacity: plPlayerController.longPressStatus.value
-                        ? 1.0
-                        : 0.0,
-                    duration: const Duration(milliseconds: 150),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: Color(0x88000000),
-                        borderRadius: BorderRadius.all(Radius.circular(16)),
-                      ),
-                      child: Obx(
-                        () => Text(
-                          '${plPlayerController.enableAutoLongPressSpeed ? (plPlayerController.longPressStatus.value ? plPlayerController.lastPlaybackSpeed : plPlayerController.playbackSpeed) * 2 : plPlayerController.longPressSpeed}倍速中',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: FractionalTranslation(
+              translation: isFullScreen
+                  ? const Offset(0.0, 1.2)
+                  : const Offset(0.0, 0.8),
+              child: Obx(
+                () => PlayerHudPill(
+                  visible: plPlayerController.longPressStatus.value,
+                  icon: const Icon(
+                    Icons.fast_forward_rounded,
+                    size: 18,
+                    color: ImmersiveTokens.playerChromeText,
                   ),
+                  label:
+                      '${plPlayerController.enableAutoLongPressSpeed ? (plPlayerController.longPressStatus.value ? plPlayerController.lastPlaybackSpeed : plPlayerController.playbackSpeed) * 2 : plPlayerController.longPressSpeed}倍速中',
                 ),
               ),
             ),
           ),
 
-        /// 时间进度 toast
+        /// 时间进度 HUD
         if (!isLive)
-          IgnorePointer(
-            ignoring: true,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: FractionalTranslation(
-                translation: isFullScreen
-                    ? const Offset(0.0, 1.2)
-                    : const Offset(0.0, 0.8),
-                child: Obx(
-                  () => AnimatedOpacity(
-                    curve: Curves.easeInOut,
-                    opacity: plPlayerController.isSeeking.value ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 150),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0x88000000),
-                        borderRadius: BorderRadius.all(Radius.circular(64)),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        spacing: 2,
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Obx(
-                            () => Text(
-                              DurationUtils.formatDuration(
-                                plPlayerController.seekPosition.value,
-                              ),
-                              style: textStyle,
-                            ),
-                          ),
-                          const Text('/', style: textStyle),
-                          Obx(
-                            () => Text(
-                              DurationUtils.formatDuration(
-                                plPlayerController.duration.value,
-                              ),
-                              style: textStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: FractionalTranslation(
+              translation: isFullScreen
+                  ? const Offset(0.0, 1.2)
+                  : const Offset(0.0, 0.8),
+              child: Obx(
+                () => PlayerHudPill(
+                  visible: plPlayerController.isSeeking.value,
+                  icon: const Icon(
+                    Icons.schedule_rounded,
+                    size: 18,
+                    color: ImmersiveTokens.playerChromeText,
                   ),
+                  label:
+                      '${DurationUtils.formatDuration(plPlayerController.seekPosition.value)} / ${DurationUtils.formatDuration(plPlayerController.duration.value)}',
                 ),
               ),
             ),
           ),
 
-        /// 音量🔊 控制条展示
-        IgnorePointer(
-          ignoring: true,
-          child: Align(
-            alignment: Alignment.center,
-            child: Obx(
-              () {
-                final volume = plPlayerController.volume.value;
-                return AnimatedOpacity(
-                  curve: Curves.easeInOut,
-                  opacity: plPlayerController.volumeIndicator.value ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 150),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 5,
-                    ),
-                    decoration: const BoxDecoration(
-                      color: Color(0x88000000),
-                      borderRadius: BorderRadius.all(Radius.circular(64)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Icon(
-                          volume == 0.0
-                              ? Icons.volume_off
-                              : volume < 0.5
-                              ? Icons.volume_down
-                              : Icons.volume_up,
-                          color: Colors.white,
-                          size: 20.0,
-                        ),
-                        const SizedBox(width: 2.0),
-                        Text(
-                          '${(volume * 100.0).round()}%',
-                          style: const TextStyle(
-                            fontSize: 13.0,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+        /// 音量 HUD
+        Obx(() {
+          final volume = plPlayerController.volume.value;
+          return PlayerHudPill(
+            visible: plPlayerController.volumeIndicator.value,
+            icon: Icon(
+              volume == 0.0
+                  ? Icons.volume_off_rounded
+                  : volume < 0.5
+                  ? Icons.volume_down_rounded
+                  : Icons.volume_up_rounded,
+              size: 20,
+              color: ImmersiveTokens.playerChromeText,
             ),
-          ),
-        ),
+            label: '${(volume * 100.0).round()}%',
+            semanticLabel: '音量 ${(volume * 100.0).round()}%',
+          );
+        }),
 
-        /// 亮度🌞 控制条展示
-        IgnorePointer(
-          ignoring: true,
-          child: Align(
-            alignment: Alignment.center,
-            child: Obx(
-              () => AnimatedOpacity(
-                curve: Curves.easeInOut,
-                opacity: _brightnessIndicator.value ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 150),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Color(0x88000000),
-                    borderRadius: BorderRadius.all(Radius.circular(64)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Icon(
-                        _brightnessValue.value < 1.0 / 3.0
-                            ? Icons.brightness_low
-                            : _brightnessValue.value < 2.0 / 3.0
-                            ? Icons.brightness_medium
-                            : Icons.brightness_high,
-                        color: Colors.white,
-                        size: 18.0,
-                      ),
-                      const SizedBox(width: 2.0),
-                      Text(
-                        '${(_brightnessValue.value * 100.0).round()}%',
-                        style: const TextStyle(
-                          fontSize: 13.0,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+        /// 亮度 HUD
+        Obx(
+          () => PlayerHudPill(
+            visible: _brightnessIndicator.value,
+            icon: Icon(
+              _brightnessValue.value < 1.0 / 3.0
+                  ? Icons.brightness_low_rounded
+                  : _brightnessValue.value < 2.0 / 3.0
+                  ? Icons.brightness_medium_rounded
+                  : Icons.brightness_high_rounded,
+              size: 20,
+              color: ImmersiveTokens.playerChromeText,
             ),
+            label: '${(_brightnessValue.value * 100.0).round()}%',
+            semanticLabel: '亮度 ${(_brightnessValue.value * 100.0).round()}%',
           ),
         ),
 
