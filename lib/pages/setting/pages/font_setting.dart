@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/utils/extension/box_ext.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
@@ -314,7 +315,7 @@ class _FontSettingPageState extends State<FontSettingPage> {
                           ),
                         ),
                         Expanded(
-                          child: Slider(
+                          child: PiliMiuixSlider(
                             padding: .zero,
                             value: _selectedWeight.toDouble(),
                             min: 100,
@@ -349,7 +350,7 @@ class _FontSettingPageState extends State<FontSettingPage> {
                           child: Text('小', style: TextStyle(fontSize: 11.9)),
                         ),
                         Expanded(
-                          child: Slider(
+                          child: PiliMiuixSlider(
                             padding: .zero,
                             value: _selectedScale,
                             min: 0.85,

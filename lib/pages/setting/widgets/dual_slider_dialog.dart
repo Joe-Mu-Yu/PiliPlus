@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -58,7 +59,7 @@ class _DualSliderDialogState extends State<DualSliderDialog> {
           widget.description1,
           Builder(
             builder: (context) {
-              return Slider(
+              return PiliMiuixSlider(
                 value: _tempValue1,
                 min: widget.min,
                 max: widget.max,
@@ -75,7 +76,7 @@ class _DualSliderDialogState extends State<DualSliderDialog> {
           widget.description2,
           Builder(
             builder: (context) {
-              return Slider(
+              return PiliMiuixSlider(
                 value: _tempValue2,
                 min: widget.min,
                 max: widget.max,

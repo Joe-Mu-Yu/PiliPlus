@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/selection_text.dart';
 import 'package:PiliPlus/grpc/bilibili/im/type.pbenum.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
@@ -460,7 +461,7 @@ abstract final class RequestUtils {
                   groupValue: checkedId,
                   child: Column(
                     children: list.map((item) {
-                      return RadioListTile<int>(
+                      return PiliMiuixRadioListTile<int>(
                         dense: true,
                         title: Text(item.title),
                         value: item.id,

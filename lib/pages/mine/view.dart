@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/player_bar.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/mine_expand_content.dart';
@@ -394,16 +395,15 @@ class _MediaPageState extends CommonPageState<MinePage>
                       const SizedBox(height: 4),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 225),
-                        child: LinearProgressIndicator(
-                          minHeight: 2.25,
-                          value: hasLevel
+                        child: PiliMiuixLinearLoadingIndicator(
+                          height: 2.25,
+                          progress: hasLevel
                               ? levelInfo.currentExp! / levelInfo.nextExp!
                               : 0,
                           backgroundColor: theme.colorScheme.outline.withValues(
                             alpha: 0.4,
                           ),
-                          valueColor: AlwaysStoppedAnimation<Color>(secondary),
-                          stopIndicatorColor: Colors.transparent,
+                          color: secondary,
                         ),
                       ),
                     ],

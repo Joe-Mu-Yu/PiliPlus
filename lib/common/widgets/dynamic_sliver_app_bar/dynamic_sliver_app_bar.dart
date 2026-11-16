@@ -115,9 +115,12 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
         overlapsContent ||
         forceElevated ||
         (shrinkOffset > maxExtent - minExtent);
+    final duration = MediaQuery.maybeOf(context)?.disableAnimations ?? false
+        ? Duration.zero
+        : const Duration(milliseconds: 350);
     final effectiveTitle = AnimatedOpacity(
       opacity: isScrolledUnder ? 1 : 0,
-      duration: const Duration(milliseconds: 500),
+      duration: duration,
       curve: const Cubic(0.2, 0.0, 0.0, 1.0),
       child: title,
     );

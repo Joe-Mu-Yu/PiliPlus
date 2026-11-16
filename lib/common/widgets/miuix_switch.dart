@@ -1,5 +1,3 @@
-import 'package:PiliPlus/models/common/theme/theme_color_type.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_miuix/miuix.dart' as miuix;
 
@@ -21,27 +19,10 @@ class PiliMiuixSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final primary = colorThemeTypes[Pref.customColor].colorFor(
-      scheme.brightness,
-    );
-    final disabledTrack = scheme.onSurface.withValues(alpha: 0.12);
-    final disabledThumb = scheme.onSurface.withValues(alpha: 0.38);
-
     return miuix.MiuixSwitch(
       value: value,
       onChanged: onChanged,
       enabled: enabled,
-      colors: miuix.MiuixSwitchColors(
-        checkedThumbColor: Colors.white,
-        uncheckedThumbColor: scheme.onSecondary,
-        disabledCheckedThumbColor: disabledThumb,
-        disabledUncheckedThumbColor: disabledThumb,
-        checkedTrackColor: primary,
-        uncheckedTrackColor: scheme.secondary,
-        disabledCheckedTrackColor: disabledTrack,
-        disabledUncheckedTrackColor: disabledTrack,
-      ),
     );
   }
 }

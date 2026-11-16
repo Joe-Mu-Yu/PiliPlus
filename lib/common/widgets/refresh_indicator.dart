@@ -1,4 +1,5 @@
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:flutter_miuix/miuix.dart' as miuix;
 import 'package:material_ui/material_ui.dart';
 
 // ignore: camel_case_types
@@ -15,9 +16,8 @@ class RefreshIndicator_ extends StatefulWidget {
 }
 
 class _RefreshIndicatorState extends State<RefreshIndicator_>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController;
-  late final AnimationController _progressController;
   late Color _color;
 
   @override
@@ -26,17 +26,13 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
     _scaleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
-    );
-    _progressController = AnimationController(
-      vsync: this,
-      duration: CircularProgressIndicator.defaultAnimationDuration,
+      value: widget.isRefreshing ? 1 : 0,
     );
   }
 
   @override
   void dispose() {
     _scaleController.dispose();
-    _progressController.dispose();
     super.dispose();
   }
 
@@ -45,13 +41,9 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.isRefreshing != widget.isRefreshing) {
       if (widget.isRefreshing) {
-        _scaleController.value = 1;
-        _progressController
-          ..value = 0.0
-          ..repeat();
+        _scaleController.forward();
       } else {
         _scaleController.reverse();
-        _progressController.stop();
       }
     }
   }
@@ -59,10 +51,12 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final colorScheme = ColorScheme.of(context);
-    _color = colorScheme.isDark
-        ? colorScheme.onInverseSurface
-        : colorScheme.surface;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    _scaleController.duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
+    _color = miuix.MiuixTheme.of(context).colors.surfaceContainerHigh;
   }
 
   @override
@@ -76,12 +70,9 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
             type: .circle,
             elevation: 2.0,
             color: _color,
-            child: Padding(
-              padding: const .all(6),
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                controller: _progressController,
-              ),
+            child: const Padding(
+              padding: .all(6),
+              child: PiliMiuixLoadingIndicator(size: 28),
             ),
           ),
         ),

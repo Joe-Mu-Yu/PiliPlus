@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/dial_prefix.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
@@ -257,7 +258,7 @@ class _LoginPageState extends State<LoginPage> {
         Row(
           children: [
             const SizedBox(width: 10),
-            Checkbox(
+            PiliMiuixCheckbox(
               value: showPassword,
               onChanged: (value) => setState(() => showPassword = value!),
             ),

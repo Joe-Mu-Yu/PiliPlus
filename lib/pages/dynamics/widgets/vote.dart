@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/widgets/avatars.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
@@ -379,10 +380,8 @@ class _VotePanelState extends State<VotePanel> {
                         left: 0,
                         right: 0,
                         bottom: -1,
-                        child: LinearProgressIndicator(
-                          // ignore: deprecated_member_use
-                          year2023: true,
-                          value: _percentage[index],
+                        child: PiliMiuixLinearLoadingIndicator(
+                          progress: _percentage[index],
                         ),
                       ),
                       PBadge(

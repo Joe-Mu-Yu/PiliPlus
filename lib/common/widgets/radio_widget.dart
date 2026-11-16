@@ -1,4 +1,6 @@
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter_miuix/miuix.dart' as miuix;
 import 'package:material_ui/material_ui.dart';
 
 class RadioWidget<T> extends StatefulWidget {
@@ -22,8 +24,6 @@ class RadioWidget<T> extends StatefulWidget {
 }
 
 class RadioWidgetState<T> extends State<RadioWidget<T>> with RadioClient<T> {
-  late final _RadioRegistry<T> _radioRegistry = _RadioRegistry<T>(this);
-
   @override
   final focusNode = FocusNode();
 
@@ -54,9 +54,13 @@ class RadioWidgetState<T> extends State<RadioWidget<T>> with RadioClient<T> {
 
   void _handleTap() {
     if (checked) {
-      if (tristate) registry!.onChanged(null);
+      if (tristate) {
+        HapticFeedback.selectionClick();
+        registry!.onChanged(null);
+      }
       return;
     }
+    HapticFeedback.selectionClick();
     registry!.onChanged(radioValue);
   }
 
@@ -65,24 +69,37 @@ class RadioWidgetState<T> extends State<RadioWidget<T>> with RadioClient<T> {
     final child = Row(
       mainAxisSize: widget.mainAxisSize,
       children: [
-        ExcludeFocus(
-          child: Radio<T>(
-            value: radioValue,
-            groupRegistry: _radioRegistry,
-            materialTapTargetSize: PlatformUtils.isDesktop
-                ? .padded
-                : .shrinkWrap,
+        SizedBox.square(
+          dimension: PlatformUtils.isDesktop ? 40 : 48,
+          child: Center(
+            child: ExcludeSemantics(
+              child: IgnorePointer(
+                child: miuix.MiuixRadioButton(
+                  selected: checked,
+                  enabled: enabled,
+                  onChanged: enabled ? (_) {} : null,
+                ),
+              ),
+            ),
           ),
         ),
         Text(widget.title),
       ],
     );
-    return InkWell(
-      onTap: _handleTap,
-      focusNode: focusNode,
-      child: widget.padding == null
-          ? child
-          : Padding(padding: widget.padding!, child: child),
+    return Semantics(
+      container: true,
+      checked: checked,
+      enabled: enabled,
+      inMutuallyExclusiveGroup: true,
+      onTap: enabled ? _handleTap : null,
+      child: InkWell(
+        onTap: enabled ? _handleTap : null,
+        focusNode: focusNode,
+        borderRadius: const BorderRadius.all(Radius.circular(16)),
+        child: widget.padding == null
+            ? child
+            : Padding(padding: widget.padding!, child: child),
+      ),
     );
   }
 }
@@ -127,28 +144,4 @@ class WrapRadioOptionsGroup<T> extends StatelessWidget {
       ],
     );
   }
-}
-
-/// A registry to controls internal [Radio] and hides it from [RadioGroup]
-/// ancestor.
-///
-/// [RadioListTile] implements the [RadioClient] directly to register to
-/// [RadioGroup] ancestor. Therefore, it has to hide the internal [Radio] from
-/// participate in the [RadioGroup] ancestor.
-class _RadioRegistry<T> extends RadioGroupRegistry<T> {
-  _RadioRegistry(this.state);
-
-  final RadioWidgetState<T> state;
-
-  @override
-  T? get groupValue => state.registry!.groupValue;
-
-  @override
-  ValueChanged<T?> get onChanged => state.registry!.onChanged;
-
-  @override
-  void registerClient(RadioClient<T> radio) {}
-
-  @override
-  void unregisterClient(RadioClient<T> radio) {}
 }

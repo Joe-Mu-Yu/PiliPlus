@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/recorder_center/view.dart';
@@ -502,14 +505,14 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text('${volume.round()}%'),
-              Slider(
+              PiliMiuixSlider(
                 value: volume,
                 min: 0,
                 max: 100,
                 divisions: 100,
                 onChanged: (value) => setDialogState(() => volume = value),
               ),
-              SwitchListTile(
+              PiliMiuixSwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('静音'),
                 value: volume == 0,
@@ -949,7 +952,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(),
+              PiliMiuixLoadingIndicator(),
               SizedBox(height: 12),
               Text(
                 '正在获取直播流…',
@@ -1227,7 +1230,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
 
   Widget _buildSuperChatList() {
     if (_loadingSuperChats) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PiliMiuixLoadingIndicator());
     }
     if (_superChats.isEmpty) {
       return Center(
@@ -1263,21 +1266,21 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   Widget _buildDanmakuSettings() => ListView(
     padding: const EdgeInsets.all(16),
     children: [
-      SwitchListTile(
+      PiliMiuixSwitchListTile(
         title: const Text('显示视频弹幕'),
         value: _danmakuEnabled,
         onChanged: (value) => setState(() => _danmakuEnabled = value),
       ),
       ListTile(
         title: const Text('弹幕透明度'),
-        subtitle: Slider(
+        subtitle: PiliMiuixSlider(
           value: _danmakuOpacity,
           onChanged: (value) => setState(() => _danmakuOpacity = value),
         ),
       ),
       ListTile(
         title: const Text('弹幕字号'),
-        subtitle: Slider(
+        subtitle: PiliMiuixSlider(
           value: _danmakuSize,
           min: 12,
           max: 30,
@@ -1306,7 +1309,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       const SizedBox(height: 16),
       ListTile(
         title: const Text('相似弹幕缓存时长'),
-        subtitle: Slider(
+        subtitle: PiliMiuixSlider(
           value: _cacheSeconds.toDouble(),
           min: 1,
           max: 30,
@@ -1317,7 +1320,7 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
       ),
       ListTile(
         title: const Text('最大缓存数量'),
-        subtitle: Slider(
+        subtitle: PiliMiuixSlider(
           value: _maxCacheCount.toDouble(),
           min: 20,
           max: 500,
@@ -1332,14 +1335,14 @@ class _PureLivePlaybackPageState extends State<PureLivePlaybackPage> {
   Widget _buildBlockList() => ListView(
     padding: const EdgeInsets.all(16),
     children: [
-      SwitchListTile(
+      PiliMiuixSwitchListTile(
         title: const Text('启用相似弹幕过滤'),
         value: _similarFilterEnabled,
         onChanged: (value) => setState(() => _similarFilterEnabled = value),
       ),
       ListTile(
         title: const Text('相似度阈值'),
-        subtitle: Slider(
+        subtitle: PiliMiuixSlider(
           value: _similarity.toDouble(),
           min: 50,
           max: 100,

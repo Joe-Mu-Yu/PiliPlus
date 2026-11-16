@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -41,7 +42,7 @@ class _SliderDialogState extends State<SliderDialog> {
       contentPadding: const .only(top: 20, left: 8, right: 8, bottom: 8),
       content: SizedBox(
         height: 40,
-        child: Slider(
+        child: PiliMiuixSlider(
           value: _tempValue,
           min: widget.min,
           max: widget.max,

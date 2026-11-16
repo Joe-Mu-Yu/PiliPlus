@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart'
     show routeObserver;
 import 'package:PiliPlus/common/widgets/selection_text.dart';
@@ -492,7 +493,9 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
                 preferredSize: Size.zero,
                 child: Obx(
                   () => _progress.value < 1
-                      ? LinearProgressIndicator(value: _progress.value)
+                      ? PiliMiuixLinearLoadingIndicator(
+                          progress: _progress.value,
+                        )
                       : const SizedBox.shrink(),
                 ),
               ),

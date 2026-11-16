@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/services/pure_live_playback_source.dart';
@@ -641,7 +642,7 @@ class _PureLiveLinkParserPageState extends State<PureLiveLinkParserPage> {
             icon: _action == action
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PiliMiuixLoadingIndicator(strokeWidth: 2),
                   )
                 : Icon(buttonIcon),
             label: Text(buttonLabel),

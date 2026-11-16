@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
 import 'package:PiliPlus/common/widgets/reorder_mixin.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -89,7 +90,7 @@ class _BarSetPageState extends State<BarSetPage> with ReorderMixin {
         ),
         children: list
             .map(
-              (e) => CheckboxListTile(
+              (e) => PiliMiuixCheckboxListTile(
                 key: ValueKey(e.hashCode),
                 value: e.second,
                 onChanged: (bool? value) {

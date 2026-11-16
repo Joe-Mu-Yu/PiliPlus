@@ -9,6 +9,7 @@ import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/marquee.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/http/danmaku.dart';
 import 'package:PiliPlus/http/danmaku_block.dart';
 import 'package:PiliPlus/http/init.dart';
@@ -1386,7 +1387,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0.5,
                         max: 2.5,
                         value: subtitleFontScale,
@@ -1407,7 +1408,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0.5,
                         max: 2.5,
                         value: subtitleFontScaleFS,
@@ -1426,7 +1427,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0,
                         max: 8,
                         value: subtitleFontWeight.toDouble(),
@@ -1444,7 +1445,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0,
                         max: 5,
                         value: subtitleStrokeWidth,
@@ -1462,7 +1463,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0,
                         max: 100,
                         value: subtitlePaddingH.toDouble(),
@@ -1480,7 +1481,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0,
                         max: 200,
                         value: subtitlePaddingB.toDouble(),
@@ -1500,7 +1501,7 @@ class HeaderControlState extends State<HeaderControl>
                     ),
                     Padding(
                       padding: sliderPadding,
-                      child: Slider(
+                      child: PiliMiuixSlider(
                         min: 0,
                         max: 1,
                         divisions: 100,

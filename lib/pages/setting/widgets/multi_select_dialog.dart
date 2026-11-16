@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -42,7 +43,7 @@ class _MultiSelectDialogState<T> extends State<MultiSelectDialog<T>> {
               return Builder(
                 builder: (context) {
                   bool isChecked = _tempValues.contains(i.key);
-                  return CheckboxListTile(
+                  return PiliMiuixCheckboxListTile(
                     dense: true,
                     value: isChecked,
                     title: Text(

@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
@@ -94,7 +95,7 @@ class _SetDisplayModeState extends State<SetDisplayMode> {
                 ),
                 itemBuilder: (context, index) {
                   final DisplayMode mode = modes[index];
-                  return RadioListTile<DisplayMode>(
+                  return PiliMiuixRadioListTile<DisplayMode>(
                     value: mode,
                     title: mode == DisplayMode.auto
                         ? const Text('自动')

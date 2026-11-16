@@ -140,11 +140,16 @@ class MiniScaffoldState extends State<MiniScaffold>
     AnimationStyle? sheetAnimationStyle,
   }) {
     _closeCurrentBottomSheet();
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final effectiveAnimationStyle = reduceMotion
+        ? AnimationStyle.noAnimation
+        : sheetAnimationStyle;
     final AnimationController controller =
         (transitionAnimationController ??
               BottomSheet.createAnimationController(
                 this,
-                sheetAnimationStyle: sheetAnimationStyle,
+                sheetAnimationStyle: effectiveAnimationStyle,
               ))
           ..forward();
     setState(() {

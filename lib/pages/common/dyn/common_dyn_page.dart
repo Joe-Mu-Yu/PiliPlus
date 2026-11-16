@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_position_bookmark.dart';
@@ -297,7 +298,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           width: maxWidth / 4,
           height: 32,
           child: Builder(
-            builder: (context) => Slider(
+            builder: (context) => PiliMiuixSlider(
               min: 1,
               max: 100,
               value: controller.ratio.first,

@@ -1,4 +1,6 @@
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:flutter_miuix/miuix.dart' as miuix;
 import 'package:material_ui/material_ui.dart';
 
 class CustomToast extends StatelessWidget {
@@ -10,21 +12,21 @@ class CustomToast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.of(context);
+    final colors = miuix.MiuixTheme.of(context).colors;
     return Container(
       margin: .only(
         bottom: MediaQuery.viewPaddingOf(context).bottom + 30,
       ),
       padding: const .symmetric(horizontal: 17, vertical: 10),
       decoration: BoxDecoration(
-        color: colorScheme.primaryContainer.withValues(alpha: toastOpacity),
-        borderRadius: const .all(.circular(20)),
+        color: colors.surfaceContainerHighest.withValues(alpha: toastOpacity),
+        borderRadius: const .all(.circular(16)),
       ),
       child: Text(
         msg,
         style: TextStyle(
           fontSize: 13,
-          color: colorScheme.onPrimaryContainer,
+          color: colors.onSurfaceContainerHighest,
         ),
       ),
     );
@@ -39,25 +41,21 @@ class LoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+    final colors = miuix.MiuixTheme.of(context).colors;
     return Container(
       padding: const .symmetric(horizontal: 30, vertical: 20),
       decoration: BoxDecoration(
-        color: theme.dialogTheme.backgroundColor,
-        borderRadius: const .all(.circular(15)),
+        color: colors.surfaceContainerHigh,
+        borderRadius: const .all(.circular(16)),
       ),
       child: Column(
         spacing: 20,
         mainAxisSize: .min,
         children: [
           //loading animation
-          CircularProgressIndicator(
-            strokeWidth: 3,
-            valueColor: AlwaysStoppedAnimation(onSurfaceVariant),
-          ),
+          const PiliMiuixLoadingIndicator(),
           //msg
-          Text(msg, style: TextStyle(color: onSurfaceVariant)),
+          Text(msg, style: TextStyle(color: colors.onSurfaceContainerHigh)),
         ],
       ),
     );
@@ -71,12 +69,11 @@ class NotifyWarning extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+    final colors = miuix.MiuixTheme.of(context).colors;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: const .all(.circular(8)),
-        color: theme.dialogTheme.backgroundColor,
+        borderRadius: const .all(.circular(16)),
+        color: colors.surfaceContainerHigh,
       ),
       padding: const .symmetric(horizontal: 20, vertical: 10),
       child: Column(
@@ -86,9 +83,9 @@ class NotifyWarning extends StatelessWidget {
           Icon(
             Icons.warning_amber_rounded,
             size: 22,
-            color: onSurfaceVariant,
+            color: colors.onSurfaceVariantActions,
           ),
-          Text(msg, style: TextStyle(color: onSurfaceVariant)),
+          Text(msg, style: TextStyle(color: colors.onSurfaceContainerHigh)),
         ],
       ),
     );

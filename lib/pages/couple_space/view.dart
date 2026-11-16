@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/models/common/image_preview_type.dart';
 import 'package:PiliPlus/pages/couple_space/cloudbase_repository.dart';
@@ -1443,7 +1445,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
             icon: _busy
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PiliMiuixLoadingIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.cloud_sync_outlined),
           ),
@@ -1483,7 +1485,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
+          PiliMiuixLoadingIndicator(),
           SizedBox(height: 16),
           Text('正在恢复小窝登录…'),
         ],
@@ -1554,7 +1556,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
                     icon: _busy
                         ? const SizedBox.square(
                             dimension: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: PiliMiuixLoadingIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.login),
                     label: const Text('登录'),
@@ -1650,7 +1652,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
               ],
               if (_busy) ...[
                 const SizedBox(height: 18),
-                const Center(child: CircularProgressIndicator()),
+                const Center(child: PiliMiuixLoadingIndicator()),
               ],
             ],
           ),
@@ -2936,7 +2938,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
         if (_uploadingVoice)
           const Padding(
             padding: EdgeInsets.all(24),
-            child: CircularProgressIndicator(),
+            child: PiliMiuixLoadingIndicator(),
           )
         else
           Semantics(
@@ -3035,7 +3037,7 @@ class _CoupleSpacePageState extends State<CoupleSpacePage>
     else
       ..._list('tasks').asMap().entries.map(
         (entry) => _card(
-          child: CheckboxListTile(
+          child: PiliMiuixCheckboxListTile(
             value: entry.value['done'] == true,
             activeColor: _accent,
             contentPadding: EdgeInsets.zero,

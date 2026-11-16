@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
@@ -73,12 +74,9 @@ class _FavPanelState extends State<FavPanel> {
                     subtitle: Text(
                       '${item.mediaCount}个内容 . ${BiliUtils.isPublicFavText(item.attr)}',
                     ),
-                    trailing: Transform.scale(
-                      scale: 0.9,
-                      child: Checkbox(
-                        value: isChecked,
-                        onChanged: (bool? checkValue) => onTap(),
-                      ),
+                    trailing: PiliMiuixCheckbox(
+                      value: isChecked,
+                      onChanged: (bool? checkValue) => onTap(),
                     ),
                   );
                 },

@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/skeleton/fav_pgc_item.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -90,7 +91,7 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
                 ),
                 const SizedBox(width: 12),
                 Obx(
-                  () => Checkbox(
+                  () => PiliMiuixCheckbox(
                     value: _favPgcController.allSelected.value,
                     onChanged: (value) {
                       _favPgcController.handleSelect(

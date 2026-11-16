@@ -1,3 +1,4 @@
+import 'package:flutter_miuix/miuix.dart' as miuix;
 import 'package:material_ui/material_ui.dart';
 
 Widget iconButton({
@@ -13,23 +14,29 @@ Widget iconButton({
   Color? backgroundColor = bgColor;
   Color? foregroundColor = iconColor;
   if (context != null) {
-    final colorScheme = ColorScheme.of(context);
-    backgroundColor = colorScheme.secondaryContainer;
-    foregroundColor = colorScheme.onSecondaryContainer;
+    final colors = miuix.MiuixTheme.of(context).colors;
+    backgroundColor = colors.secondaryVariant;
+    foregroundColor = colors.onSecondaryVariant;
   }
-  return SizedBox(
-    width: size,
-    height: size,
-    child: IconButton(
-      icon: icon,
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        padding: EdgeInsets.zero,
-        iconSize: iconSize ?? size / 2,
-        backgroundColor: backgroundColor,
-        foregroundColor: foregroundColor,
+  final effectiveSize = size < miuix.MiuixIconButtonDefaults.minWidth
+      ? miuix.MiuixIconButtonDefaults.minWidth
+      : size;
+  Widget button = miuix.MiuixIconButton(
+    onPressed: onPressed,
+    minWidth: effectiveSize,
+    minHeight: effectiveSize,
+    cornerRadius: effectiveSize,
+    backgroundColor: backgroundColor,
+    child: IconTheme.merge(
+      data: IconThemeData(
+        size: iconSize ?? size / 2,
+        color: foregroundColor,
       ),
+      child: icon,
     ),
   );
+  if (tooltip?.isNotEmpty == true) {
+    button = Tooltip(message: tooltip!, child: button);
+  }
+  return button;
 }

@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/color_palette.dart';
 import 'package:PiliPlus/common/widgets/custom_toast.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/miuix_switch.dart';
 import 'package:PiliPlus/common/widgets/scale_app.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
@@ -490,7 +491,7 @@ void _showUiScaleDialog(
           spacing: 20,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Slider(
+            PiliMiuixSlider(
               padding: .zero,
               value: uiScale,
               min: minUiScale,

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:flutter/services.dart'
     show LengthLimitingTextInputFormatter, FilteringTextInputFormatter;
 import 'package:get/get.dart';
@@ -58,7 +59,8 @@ class _SlideColorPickerState extends State<SlideColorPicker> {
               trackHeight: 10,
               thumbSize: const WidgetStatePropertyAll(Size(4, 25)),
             ),
-            child: Slider(
+            child: PiliMiuixSlider(
+              forceMaterialFallback: true,
               padding: EdgeInsets.zero,
               min: 0,
               max: 255,

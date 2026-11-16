@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:PiliPlus/common/widgets/select_mask.dart';
 import 'package:PiliPlus/models/common/badge_type.dart';
@@ -434,14 +435,11 @@ class DetailItem extends StatelessWidget {
             ),
           ],
         ),
-        LinearProgressIndicator(
-          // ignore: deprecated_member_use
-          year2023: true,
-          minHeight: 2.5,
-          borderRadius: Style.mdRadius,
+        PiliMiuixLinearLoadingIndicator(
+          height: 2.5,
           color: color,
           backgroundColor: highlightColor,
-          value: progress,
+          progress: progress,
         ),
       ],
     );

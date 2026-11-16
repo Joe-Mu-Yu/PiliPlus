@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/models/common/image_type.dart';
 import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
@@ -38,7 +39,7 @@ class DynMentionItem extends StatelessWidget {
           '${NumUtils.numFormat(item.fans)}粉丝',
           style: TextStyle(color: Theme.of(context).colorScheme.outline),
         ),
-        trailing: Checkbox(
+        trailing: PiliMiuixCheckbox(
           tristate: false,
           value: item.checked,
           onChanged: (value) {

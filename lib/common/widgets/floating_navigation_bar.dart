@@ -22,7 +22,7 @@ class FloatingNavigationBar extends StatelessWidget {
   // ignore: prefer_const_constructors_in_immutables
   FloatingNavigationBar({
     super.key,
-    this.animationDuration = const Duration(milliseconds: 500),
+    this.animationDuration = const Duration(milliseconds: 350),
     this.selectedIndex = 0,
     required this.destinations,
     this.onDestinationSelected,
@@ -65,6 +65,10 @@ class FloatingNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final defaults = _NavigationBarDefaultsM3(context);
+    final effectiveAnimationDuration =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false
+        ? Duration.zero
+        : animationDuration;
 
     final navigationBarTheme = NavigationBarTheme.of(context);
     final effectiveLabelBehavior =
@@ -108,7 +112,7 @@ class FloatingNavigationBar extends StatelessWidget {
                 for (int i = 0; i < destinations.length; i++)
                   Expanded(
                     child: _SelectableAnimatedBuilder(
-                      duration: animationDuration,
+                      duration: effectiveAnimationDuration,
                       isSelected: i == selectedIndex,
                       builder: (context, animation) {
                         return _NavigationDestinationInfo(
@@ -402,7 +406,9 @@ class NavigationIndicator extends StatelessWidget {
         builder: (context, child) {
           return _SelectableAnimatedBuilder(
             isSelected: animation.isForwardOrCompleted,
-            duration: const Duration(milliseconds: 100),
+            duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                ? Duration.zero
+                : const Duration(milliseconds: 100),
             alwaysDoFullAnimation: true,
             builder: (context, fadeAnimation) {
               return FadeTransition(

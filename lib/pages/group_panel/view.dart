@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/member.dart';
 import 'package:PiliPlus/models/member/tags.dart';
@@ -101,12 +102,9 @@ class _GroupPanelState extends State<GroupPanel> {
                   subtitle: item.tip?.isNotEmpty == true
                       ? Text(item.tip!)
                       : null,
-                  trailing: Transform.scale(
-                    scale: 0.9,
-                    child: Checkbox(
-                      value: tags.contains(item.tagid),
-                      onChanged: (_) => onTap(),
-                    ),
+                  trailing: PiliMiuixCheckbox(
+                    value: tags.contains(item.tagid),
+                    onChanged: (_) => onTap(),
                   ),
                 );
               },

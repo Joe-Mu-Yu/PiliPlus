@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/avatars.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/hero.dart';
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
@@ -1001,12 +1002,10 @@ class _HeaderIndicatorState extends State<HeaderIndicator> {
 
   @override
   Widget build(BuildContext context) {
-    return LinearProgressIndicator(
-      // ignore: deprecated_member_use
-      year2023: true,
-      minHeight: 3.5,
+    return PiliMiuixLinearLoadingIndicator(
+      height: 3.5,
       backgroundColor: const Color(0xA09E9E9E),
-      value: _progress,
+      progress: _progress,
     );
   }
 }

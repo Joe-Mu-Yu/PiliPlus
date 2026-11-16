@@ -7,6 +7,7 @@ import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/image_viewer/hero.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -499,7 +500,7 @@ class _AudioPageState extends State<AudioPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('播放倍速(${_controller.speed})'),
-                        Slider(
+                        PiliMiuixSlider(
                           padding: EdgeInsets.zero,
                           min: 0.5,
                           max: 2.0,

@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/miuix_checkbox.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -83,7 +84,7 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
                 ),
                 const SizedBox(width: 12),
                 Obx(
-                  () => Checkbox(
+                  () => PiliMiuixCheckbox(
                     value: _favNoteController.allSelected.value,
                     onChanged: (value) {
                       _favNoteController.handleSelect(

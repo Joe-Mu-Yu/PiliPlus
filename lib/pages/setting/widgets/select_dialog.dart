@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/video.dart';
@@ -51,7 +52,7 @@ class SelectDialog<T> extends StatelessWidget {
                 values.length,
                 (index) {
                   final item = values[index];
-                  return RadioListTile<T>(
+                  return PiliMiuixRadioListTile<T>(
                     toggleable: toggleable,
                     dense: true,
                     value: item.$1,

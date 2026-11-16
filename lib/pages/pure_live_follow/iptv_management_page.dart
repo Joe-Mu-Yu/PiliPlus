@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:get/get.dart';
@@ -127,7 +129,7 @@ class _PureLiveIptvManagementPageState
             icon: _syncingAll
                 ? const SizedBox.square(
                     dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PiliMiuixLoadingIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.sync),
           ),
@@ -142,7 +144,7 @@ class _PureLiveIptvManagementPageState
         future: _initialization,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: PiliMiuixLoadingIndicator());
           }
           if (snapshot.hasError) {
             return _buildFailure('IPTV 初始化失败：${snapshot.error}');
@@ -181,7 +183,7 @@ class _PureLiveIptvManagementPageState
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
       children: [
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
+        if (_loading) const PiliMiuixLinearLoadingIndicator(height: 2),
         _buildImportCard(),
         const SizedBox(height: 12),
         _buildSettingsCard(),
@@ -243,7 +245,7 @@ class _PureLiveIptvManagementPageState
     child: Obx(
       () => Column(
         children: [
-          SwitchListTile(
+          PiliMiuixSwitchListTile(
             key: const ValueKey('iptv-auto-sync-switch'),
             secondary: const Icon(Icons.sync),
             title: const Text('自动同步'),
@@ -430,7 +432,7 @@ class _PureLiveIptvManagementPageState
                     icon: busy
                         ? const SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: PiliMiuixLoadingIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.sync),
                   ),
@@ -676,7 +678,7 @@ class _PureLiveIptvManagementPageState
               mainAxisSize: MainAxisSize.min,
               children: [
                 for (final hours in const [2, 6, 12, 24, 48, 72])
-                  RadioListTile<int>(
+                  PiliMiuixRadioListTile<int>(
                     value: hours,
                     title: Text('$hours 小时'),
                   ),
@@ -706,12 +708,12 @@ class _PureLiveIptvManagementPageState
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const RadioListTile<String>(
+                const PiliMiuixRadioListTile<String>(
                   value: '',
                   title: Text('不使用 EPG'),
                 ),
                 for (final source in _epgSources)
-                  RadioListTile<String>(
+                  PiliMiuixRadioListTile<String>(
                     value: source.id,
                     title: Text(source.name),
                     subtitle: Text(
@@ -886,7 +888,7 @@ class _NetworkImportDialogState extends State<_NetworkImportDialog> {
           ],
           if (_submitting) ...[
             const SizedBox(height: 12),
-            const LinearProgressIndicator(),
+            const PiliMiuixLinearLoadingIndicator(),
           ],
         ],
       ),

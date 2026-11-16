@@ -41,6 +41,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_miuix/miuix.dart' as miuix;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:pure_live/host/recording_i18n.dart';
@@ -358,6 +359,10 @@ class _MyAppState extends State<MyApp> {
         child: child!,
       );
     }
+    child = miuix.MiuixTheme(
+      data: ThemeUtils.getMiuixThemeData(Theme.of(context)),
+      child: child,
+    );
     if (PlatformUtils.isDesktop) {
       return BackDetector(
         onBack: _onBack,

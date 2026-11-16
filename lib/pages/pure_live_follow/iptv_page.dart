@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/native_navigation_occlusion.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/pure_live_follow/iptv_management_page.dart';
@@ -190,7 +191,7 @@ class _PureLiveIptvPageState extends State<PureLiveIptvPage> {
         future: _initialization,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: PiliMiuixLoadingIndicator());
           }
           if (snapshot.hasError) {
             return _buildFailure('IPTV 初始化失败：${snapshot.error}');
@@ -265,7 +266,7 @@ class _PureLiveIptvPageState extends State<PureLiveIptvPage> {
             labelFor: _streamTypeLabel,
             onSelected: (value) => setState(() => _selectedStreamType = value),
           ),
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
+        if (_loading) const PiliMiuixLinearLoadingIndicator(height: 2),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
           child: Align(

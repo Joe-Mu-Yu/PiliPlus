@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/pages/recorder_center/recorder_material_localizations.dart';
 import 'package:PiliPlus/services/service_locator.dart';
@@ -16,7 +17,7 @@ class RecorderCenterPage extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const SimpleScaffold(
-            body: Center(child: CircularProgressIndicator()),
+            body: Center(child: PiliMiuixLoadingIndicator()),
           );
         }
         if (snapshot.hasError) {

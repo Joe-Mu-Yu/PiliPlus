@@ -421,12 +421,18 @@ class _MainAppState extends PopScopeState<MainApp>
         }
         if (_mainController.showBottomBar case final showBottomBar?) {
           return Obx(
-            () => AnimatedSlide(
-              curve: Curves.easeInOutCubicEmphasized,
-              duration: const Duration(milliseconds: 500),
-              offset: Offset(0, showBottomBar.value ? 0 : 1),
-              child: bottomNav,
-            ),
+            () {
+              final duration =
+                  MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                  ? Duration.zero
+                  : const Duration(milliseconds: 350);
+              return AnimatedSlide(
+                curve: Curves.easeInOutCubicEmphasized,
+                duration: duration,
+                offset: Offset(0, showBottomBar.value ? 0 : 1),
+                child: bottomNav,
+              );
+            },
           );
         }
       }

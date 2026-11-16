@@ -10,6 +10,7 @@ import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recogniz
     show deviceTouchSlop, touchSlopH;
 import 'package:PiliPlus/common/widgets/image_grid/image_grid_view.dart'
     show ImageGridView, ImageModel;
+import 'package:PiliPlus/common/widgets/miuix_list_tile.dart';
 import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/grpc/reply.dart';
 import 'package:PiliPlus/http/fav.dart';
@@ -1081,7 +1082,7 @@ Future<void> _showFavDialog(BuildContext context) async {
               child: Column(
                 children: list
                     .map(
-                      (item) => RadioListTile(
+                      (item) => PiliMiuixRadioListTile(
                         toggleable: true,
                         dense: true,
                         title: Text(item.title),

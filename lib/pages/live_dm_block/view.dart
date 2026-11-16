@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/keep_alive_wrapper.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
+import 'package:PiliPlus/common/widgets/miuix_slider.dart';
 import 'package:PiliPlus/common/widgets/miuix_switch.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_behavior.dart'
@@ -212,7 +213,7 @@ class _LiveDmBlockPageState extends State<LiveDmBlockPage> {
           return Row(
             children: [
               const Text('用户等级'),
-              Slider(
+              PiliMiuixSlider(
                 min: 0,
                 max: 60,
                 // ignore: deprecated_member_use
