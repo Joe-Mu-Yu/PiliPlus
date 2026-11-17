@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/more_btn.dart';
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -67,7 +68,7 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
               child: SizedBox(
                 height:
                     Grid.smallCardWidth / 2 / 0.75 +
-                    MediaQuery.textScalerOf(context).scale(96),
+                    MediaQuery.textScalerOf(context).scale(104),
                 child: Obx(
                   () => _buildTimeline(theme, controller.timelineState.value),
                 ),
@@ -106,34 +107,10 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: TabBar(
-                              isScrollable: true,
-                              tabAlignment: TabAlignment.start,
-                              dividerHeight: 0,
-                              overlayColor: const WidgetStatePropertyAll(
-                                Colors.transparent,
-                              ),
-                              splashFactory: NoSplash.splashFactory,
+                            child: categoryTabBar(
+                              context,
                               padding: const EdgeInsets.only(right: 10),
-                              indicatorPadding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 10,
-                              ),
-                              indicator: BoxDecoration(
-                                color: theme.colorScheme.secondaryContainer,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(20),
-                                ),
-                              ),
-                              indicatorSize: TabBarIndicatorSize.tab,
-                              labelColor:
-                                  theme.colorScheme.onSecondaryContainer,
-                              labelStyle:
-                                  TabBarTheme.of(
-                                    context,
-                                  ).labelStyle?.copyWith(fontSize: 14) ??
-                                  const TextStyle(fontSize: 14),
-                              dividerColor: Colors.transparent,
+                              controller: null,
                               tabs: response.map(
                                 (item) {
                                   return Tab(
@@ -258,7 +235,9 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
                           return Column(
                             children: [
                               ViewSafeArea(
-                                child: TabBar(
+                                child: categoryTabBar(
+                                  context,
+                                  controller: null,
                                   tabs: titles
                                       .map((title) => Tab(text: title))
                                       .toList(),

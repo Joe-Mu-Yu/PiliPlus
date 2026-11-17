@@ -27,11 +27,19 @@ abstract final class PiliAndroidHelper {
         _miuixNavigationChannel.invokeMethod<void>('flutterFrameRendered'),
   );
 
-  static void setMiuixDestinationHandler(void Function(int index)? handler) {
+  static void Function()? _onMiuixSearchAction;
+
+  static void setMiuixDestinationHandler(
+    void Function(int index)? handler, {
+    void Function()? onSearchAction,
+  }) {
     _onMiuixDestinationSelected = handler;
+    _onMiuixSearchAction = onSearchAction;
     _miuixNavigationChannel.setMethodCallHandler((call) async {
       if (call.method == 'selectDestination' && call.arguments is int) {
         _onMiuixDestinationSelected?.call(call.arguments as int);
+      } else if (call.method == 'selectAction' && call.arguments == 'search') {
+        _onMiuixSearchAction?.call();
       }
     });
   }
@@ -51,6 +59,7 @@ abstract final class PiliAndroidHelper {
     required bool backdropDebug,
     required double bottomLiftDp,
     required bool followMyHyperModifierNavigationLift,
+    required bool searchAction,
   }) {
     // Queue native visibility first; enabling the notifier immediately requests
     // a fresh sample, even if the surface is already idle.
@@ -70,6 +79,7 @@ abstract final class PiliAndroidHelper {
       'bottomLiftDp': bottomLiftDp,
       'followMyHyperModifierNavigationLift':
           followMyHyperModifierNavigationLift,
+      'searchAction': searchAction,
     });
     _backdropFrames.configure(visible: visible && backdropSampling);
     return update;

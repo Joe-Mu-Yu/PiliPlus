@@ -72,6 +72,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,7 +106,7 @@ import kotlin.math.sin
 
 private val LocalIosTabScale = staticCompositionLocalOf { { 1f } }
 
-private val iosIndicatorSpecular: Highlight = Highlight(
+internal val iosIndicatorSpecular: Highlight = Highlight(
     width = 1.dp,
     alpha = 1f,
     style = BloomStroke(
@@ -202,6 +203,10 @@ internal fun IosLiquidGlassNavigationBar(
     onBarBoundsChanged: (FlutterBackdropBounds) -> Unit,
     modifier: Modifier = Modifier,
     badge: (Int) -> (@Composable () -> Unit)? = { null },
+    /** Overrides the built-in bottom inset; null keeps the platform default. */
+    bottomInset: Dp? = null,
+    /** Horizontal inset around the pill track. */
+    horizontalInset: Dp = 24.dp,
 ) {
     val isDark = dark
     val pillShape = remember { CircleShape }
@@ -328,7 +333,7 @@ internal fun IosLiquidGlassNavigationBar(
     val combinedBackdrop = backdrop?.let { rememberCombinedBackdrop(it, tabsBackdrop) }
 
     val navBarBottomPadding = WindowInsets.navigationBars.only(WindowInsetsSides.Bottom).asPaddingValues().calculateBottomPadding()
-    val bottomPaddingValue = when (platform()) {
+    val bottomPaddingValue = bottomInset ?: when (platform()) {
         Platform.IOS -> 20.dp
 
         else -> {
@@ -393,7 +398,7 @@ internal fun IosLiquidGlassNavigationBar(
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
-                .padding(bottom = bottomPaddingValue, start = 24.dp, end = 24.dp)
+                .padding(bottom = bottomPaddingValue, start = horizontalInset, end = horizontalInset)
                 .fillMaxWidth(),
             contentAlignment = Alignment.CenterStart,
         ) {

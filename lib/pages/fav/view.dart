@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
@@ -130,13 +131,13 @@ class _FavPageState extends State<FavPage> with SingleTickerProviderStateMixin {
       body: ViewSafeArea(
         child: Column(
           children: [
-            TabBar(
+            categoryTabBar(
+              context,
               controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
               tabs: FavTabType.values
                   .map((item) => Tab(text: item.title))
                   .toList(),
+              padding: const EdgeInsets.only(top: 4),
               onTap: (index) {
                 try {
                   if (!_tabController.indexIsChanging) {

@@ -59,7 +59,10 @@ class _MainAppState extends PopScopeState<MainApp>
   void initState() {
     super.initState();
     if (Platform.isAndroid) {
-      PiliAndroidHelper.setMiuixDestinationHandler(_mainController.setIndex);
+      PiliAndroidHelper.setMiuixDestinationHandler(
+        _mainController.setIndex,
+        onSearchAction: () => Get.toNamed('/search'),
+      );
       PiliAndroidHelper.setAvboxExitHandler(_exitAvboxTab);
     }
     addObserverMobile(this);
@@ -354,55 +357,65 @@ class _MainAppState extends PopScopeState<MainApp>
     if (_mainController.navigationBars.length > 1) {
       if (_mainController.floatingNavBar) {
         bottomNav = Obx(
-          () => FloatingNavigationBar(
-            onDestinationSelected: _mainController.setIndex,
-            selectedIndex: _mainController.selectedIndex.value,
-            destinations: _mainController.navigationBars
-                .map(
-                  (e) => FloatingNavigationDestination(
-                    label: e.label,
-                    icon: _buildIcon(type: e),
-                    selectedIcon: _buildIcon(type: e, selected: true),
-                  ),
-                )
-                .toList(),
+          () => _bottomNavWithSearch(
+            FloatingNavigationBar(
+              onDestinationSelected: _mainController.setIndex,
+              selectedIndex: _mainController.selectedIndex.value,
+              destinations: _mainController.navigationBars
+                  .map(
+                    (e) => FloatingNavigationDestination(
+                      label: e.label,
+                      icon: _buildIcon(type: e),
+                      selectedIcon: _buildIcon(type: e, selected: true),
+                    ),
+                  )
+                  .toList(),
+            ),
+            _colorScheme,
+            destinationCount: _mainController.navigationBars.length,
           ),
         );
       } else if (_mainController.enableMYBar) {
         bottomNav = Obx(
-          () => NavigationBar(
-            maintainBottomViewPadding: true,
-            onDestinationSelected: _mainController.setIndex,
-            selectedIndex: _mainController.selectedIndex.value,
-            destinations: _mainController.navigationBars
-                .map(
-                  (e) => NavigationDestination(
-                    label: e.label,
-                    icon: _buildIcon(type: e),
-                    selectedIcon: _buildIcon(type: e, selected: true),
-                  ),
-                )
-                .toList(),
+          () => _bottomNavWithSearch(
+            NavigationBar(
+              maintainBottomViewPadding: true,
+              onDestinationSelected: _mainController.setIndex,
+              selectedIndex: _mainController.selectedIndex.value,
+              destinations: _mainController.navigationBars
+                  .map(
+                    (e) => NavigationDestination(
+                      label: e.label,
+                      icon: _buildIcon(type: e),
+                      selectedIcon: _buildIcon(type: e, selected: true),
+                    ),
+                  )
+                  .toList(),
+            ),
+            _colorScheme,
           ),
         );
       } else {
         bottomNav = Obx(
-          () => BottomNavigationBar(
-            currentIndex: _mainController.selectedIndex.value,
-            onTap: _mainController.setIndex,
-            iconSize: 16,
-            selectedFontSize: 12,
-            unselectedFontSize: 12,
-            type: .fixed,
-            items: _mainController.navigationBars
-                .map(
-                  (e) => BottomNavigationBarItem(
-                    label: e.label,
-                    icon: _buildIcon(type: e),
-                    activeIcon: _buildIcon(type: e, selected: true),
-                  ),
-                )
-                .toList(),
+          () => _bottomNavWithSearch(
+            BottomNavigationBar(
+              currentIndex: _mainController.selectedIndex.value,
+              onTap: _mainController.setIndex,
+              iconSize: 16,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              type: .fixed,
+              items: _mainController.navigationBars
+                  .map(
+                    (e) => BottomNavigationBarItem(
+                      label: e.label,
+                      icon: _buildIcon(type: e),
+                      activeIcon: _buildIcon(type: e, selected: true),
+                    ),
+                  )
+                  .toList(),
+            ),
+            _colorScheme,
           ),
         );
       }
@@ -439,6 +452,93 @@ class _MainAppState extends PopScopeState<MainApp>
     }
 
     return bottomNav;
+  }
+
+  /// Independent circular search entry shown beside the bottom navigation,
+  /// mirroring the reference design's detached glass search button.
+  Widget _searchCircleButton(ColorScheme scheme, {double size = 72}) {
+    final borderRadius = BorderRadius.circular(size / 2);
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Material(
+        borderRadius: borderRadius,
+        color: scheme.surfaceContainer,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: BorderSide(
+            color: scheme.outline.withValues(alpha: 0.2),
+            width: 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Get.toNamed('/search'),
+          child: Icon(
+            Icons.search_outlined,
+            semanticLabel: '搜索',
+            size: 24,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Wraps a bottom navigation bar with the circular search entry on its
+  /// right. The group is laid out against the available width so the bar and
+  /// the circle share one baseline and never overflow narrow screens.
+  Widget _bottomNavWithSearch(
+    Widget navBar,
+    ColorScheme scheme, {
+    int destinationCount = 5,
+  }) {
+    const double circleSize = 64;
+    const double gap = 10;
+    const double sideInset = 16;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth - sideInset * 2 - circleSize - gap
+            : 0.0;
+        final tabWidth = available > 0
+            ? (available / destinationCount).clamp(52.0, 84.0)
+            : null;
+        final Widget bar;
+        if (navBar is NavigationBar || navBar is BottomNavigationBar) {
+          bar = Expanded(child: navBar);
+        } else if (navBar is FloatingNavigationBar) {
+          bar = FloatingNavigationBar(
+            animationDuration: navBar.animationDuration,
+            selectedIndex: navBar.selectedIndex,
+            destinations: navBar.destinations,
+            onDestinationSelected: navBar.onDestinationSelected,
+            tabWidth: tabWidth,
+          );
+        } else {
+          bar = navBar;
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: sideInset),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              bar,
+              const SizedBox(width: gap),
+              // Same bottom inset as the bar's own bottomPadding so both sit
+              // on a single baseline.
+              // Same height as the bar: the bottom inset matches the bar's own
+              // bottomPadding, so both share one baseline.
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _searchCircleButton(scheme, size: circleSize),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   bool get _usesNativeMiuixNavigation =>
@@ -498,6 +598,7 @@ class _MainAppState extends PopScopeState<MainApp>
         bottomLiftDp: Pref.floatingNavBottomLift,
         followMyHyperModifierNavigationLift:
             Pref.followMyHyperModifierNavigationLift,
+        searchAction: true,
       ).catchError((_) async {
         // Do not expose Flutter's fallback until the native overlay confirms
         // it has hidden; otherwise a transient bridge failure can leave both
@@ -601,6 +702,9 @@ class _MainAppState extends PopScopeState<MainApp>
         bottomNav = MediaQuery.removePadding(
           context: context,
           removeTop: true,
+          // Keep the slot content-sized: the layout pass gives it loose
+          // constraints, so any expanding wrapper would cover the whole screen
+          // and swallow touch input (breaking the edge back gesture).
           child: bottomNav,
         );
       }
@@ -670,7 +774,11 @@ class _MainAppState extends PopScopeState<MainApp>
           statusBarBrightness: _colorScheme.brightness,
           statusBarIconBrightness: _colorScheme.brightness.reverse,
           systemStatusBarContrastEnforced: false,
-          systemNavigationBarColor: Colors.transparent,
+          // Paint the system navigation strip with the page surface so the
+          // area under the floating bar is covered, never a bare black band.
+          systemNavigationBarColor: _colorScheme.surface,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarContrastEnforced: false,
           systemNavigationBarIconBrightness: _colorScheme.brightness.reverse,
         ),
         child: child,

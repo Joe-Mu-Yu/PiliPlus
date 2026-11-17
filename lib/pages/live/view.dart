@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/button/more_btn.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/widgets/category_chip_bar.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
@@ -14,7 +15,6 @@ import 'package:PiliPlus/pages/live/controller.dart';
 import 'package:PiliPlus/pages/live/widgets/live_item_app.dart';
 import 'package:PiliPlus/pages/live_area/view.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart';
-import 'package:PiliPlus/pages/search/widgets/search_text.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
@@ -90,45 +90,20 @@ class _LivePageState extends State<LivePage>
                 child: Row(
                   children: [
                     Expanded(
-                      child: SizedBox(
-                        // 10+14*textScaler
-                        height: 10.0 + textScaler.scale(14),
-                        child: Obx(() {
-                          final areaIndex = controller.areaIndex.value;
-                          return ListView.separated(
-                            scrollDirection: .horizontal,
-                            padding: const .only(right: 8),
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 12),
-                            itemBuilder: (context, index) {
-                              final isFirst = index == 0;
-                              late final item = list[index - 1];
-                              final isCurr = index == areaIndex;
-                              return SearchText(
-                                fontSize: 14,
-                                height: 1,
-                                padding: const .symmetric(
-                                  horizontal: 8,
-                                  vertical: 5,
-                                ),
-                                text: isFirst ? '推荐' : item.title!,
-                                bgColor: isCurr
-                                    ? theme.colorScheme.secondaryContainer
-                                    : Colors.transparent,
-                                textColor: isCurr
-                                    ? theme.colorScheme.onSecondaryContainer
-                                    : null,
-                                onTap: (_) => controller.onSelectArea(
-                                  index,
-                                  isFirst ? null : item,
-                                ),
-                              );
-                            },
-                            itemCount: list.length + 1,
-                          );
-                        }),
-                      ),
+                      child: Obx(() {
+                        final areaIndex = controller.areaIndex.value;
+                        return categoryChipBar(
+                          context,
+                          itemCount: list.length + 1,
+                          selectedIndex: areaIndex,
+                          labelOf: (index) =>
+                              index == 0 ? '推荐' : list[index - 1].title!,
+                          onSelected: (index) => controller.onSelectArea(
+                            index,
+                            index == 0 ? null : list[index - 1],
+                          ),
+                        );
+                      }),
                     ),
                     iconButton(
                       size: 26,
@@ -198,38 +173,18 @@ class _LivePageState extends State<LivePage>
           if (controller.newTags case final newTags?)
             if (newTags.isNotEmpty)
               SliverToBoxAdapter(
-                child: SizedBox(
-                  // 8+10+13*textScaler
-                  height: 18.0 + textScaler.scale(13),
-                  child: Obx(() {
-                    final tagIndex = controller.tagIndex.value;
-                    return ListView.separated(
-                      scrollDirection: .horizontal,
-                      padding: const .only(bottom: 8),
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final item = newTags[index];
-                        final isCurr = index == tagIndex;
-                        return SearchText(
-                          height: 1,
-                          fontSize: 13,
-                          padding: const .symmetric(horizontal: 8, vertical: 5),
-                          text: item.name!,
-                          bgColor: isCurr
-                              ? theme.colorScheme.secondaryContainer
-                              : Colors.transparent,
-                          textColor: isCurr
-                              ? theme.colorScheme.onSecondaryContainer
-                              : null,
-                          onTap: (value) =>
-                              controller.onSelectTag(index, item.sortType),
-                        );
-                      },
-                      itemCount: newTags.length,
-                    );
-                  }),
-                ),
+                child: Obx(() {
+                  final tagIndex = controller.tagIndex.value;
+                  return categoryChipBar(
+                    context,
+                    itemCount: newTags.length,
+                    selectedIndex: tagIndex,
+                    labelOf: (index) => newTags[index].name!,
+                    onSelected: (index) =>
+                        controller.onSelectTag(index, newTags[index].sortType),
+                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
+                  );
+                }),
               ),
           response != null && response.isNotEmpty
               ? SliverGrid.builder(

@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/member/tags.dart';
@@ -161,10 +162,10 @@ class _FollowPageState extends State<FollowPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ViewSafeArea(
-            child: TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
+            child: categoryTabBar(
+              context,
               controller: _followController.tabController,
+              padding: const EdgeInsets.only(top: 4),
               tabs: List.generate(_followController.tabs.length, (index) {
                 return Obx(() {
                   final item = _followController.tabs[index];

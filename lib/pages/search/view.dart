@@ -1,13 +1,16 @@
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 
 import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
 import 'package:PiliPlus/common/widgets/disabled_icon.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/sliver_wrap.dart';
 import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/search/search_rcmd/data.dart';
+import 'package:PiliPlus/pages/home/view.dart' show msgBadge, userAvatar;
+import 'package:PiliPlus/utils/extension/get_ext.dart';
+import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/search/controller.dart';
 import 'package:PiliPlus/pages/search/widgets/hot_keyword.dart';
 import 'package:PiliPlus/pages/search/widgets/search_text.dart';
@@ -28,6 +31,7 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final _tag = Utils.generateRandomString(6);
+  final _mainController = Get.putOrFind(MainController.new);
   late final SSearchController _searchController;
   late ThemeData theme;
   late bool isPortrait;
@@ -56,80 +60,164 @@ class _SearchPageState extends State<SearchPage> {
         ? _buildHotSearch(isTrending: false)
         : null;
 
-    return SimpleScaffold(
-      appBar: _buildAppBar,
-      body: Padding(
-        padding: .only(left: padding.left, right: padding.right),
-        child: ViewInsetsSafeArea(
-          child: CustomScrollView(
-            slivers: [
-              if (_searchController.searchSuggestion) _buildSearchSuggest(),
-              if (isPortrait) ...[
-                ?trending,
-                _buildHistory,
-                ?rcmd,
-              ] else if (trending != null || rcmd != null)
-                SliverCrossAxisGroup(
+    // The content flows behind a floating glass search bar so the blur has
+    // real pixels to sample; a plain opaque AppBar cannot show a gaussian
+    // blur of anything.
+    final appBarHeight = kToolbarHeight + padding.top;
+    return Material(
+      color: theme.colorScheme.surface,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: .only(left: padding.left, right: padding.right),
+              child: ViewInsetsSafeArea(
+                child: CustomScrollView(
                   slivers: [
-                    SliverMainAxisGroup(slivers: [?trending, ?rcmd]),
-                    _buildHistory,
+                    // Reserve the bar's slot at the top, but let the list run
+                    // underneath it while scrolling so the blur samples real
+                    // content.
+                    SliverPadding(padding: EdgeInsets.only(top: appBarHeight)),
+                    if (_searchController.searchSuggestion)
+                      _buildSearchSuggest(),
+                    if (isPortrait) ...[
+                      ?trending,
+                      _buildHistory,
+                      ?rcmd,
+                    ] else if (trending != null || rcmd != null)
+                      SliverCrossAxisGroup(
+                        slivers: [
+                          SliverMainAxisGroup(slivers: [?trending, ?rcmd]),
+                          _buildHistory,
+                        ],
+                      )
+                    else
+                      _buildHistory,
+                    SliverPadding(padding: .only(bottom: padding.bottom)),
                   ],
-                )
-              else
-                _buildHistory,
-              SliverPadding(padding: .only(bottom: padding.bottom)),
-            ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: _buildGlassAppBar(appBarHeight),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlassAppBar(double height) {
+    final scheme = theme.colorScheme;
+    return SizedBox(
+      height: height,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: ColoredBox(
+            color: scheme.surface.withValues(alpha: 0.82),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(6, padding.top + 6, 10, 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: '返回',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_back, size: 22),
+                    onPressed: Get.back,
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(child: _buildSearchField()),
+                  const SizedBox(width: 4),
+                  msgBadge(_mainController),
+                  const SizedBox(width: 2),
+                  userAvatar(
+                    colorScheme: scheme,
+                    mainController: _mainController,
+                  ),
+                  const SizedBox(width: 2),
+                  Obx(
+                    () => _searchController.showUidBtn.value
+                        ? IconButton(
+                            tooltip: 'UID搜索用户',
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.person_outline, size: 22),
+                            onPressed: () => Get.toNamed(
+                              '/member?mid=${_searchController.controller.text}',
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  PreferredSizeWidget get _buildAppBar => AppBar(
-    shape: Border(
-      bottom: BorderSide(
-        color: theme.dividerColor.withValues(alpha: 0.08),
-        width: 1,
+  /// Single translucent capsule. The field itself draws no border of any
+  /// state: the app-wide [InputDecorationTheme] supplies a primary-coloured
+  /// focusedBorder, which used to appear as a stray blue ring inside the pill.
+  Widget _buildSearchField() {
+    const radius = BorderRadius.all(Radius.circular(18));
+    final scheme = theme.colorScheme;
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: scheme.onSurface.withValues(alpha: 0.06),
+        borderRadius: radius,
+        border: Border.all(
+          color: scheme.outlineVariant.withValues(alpha: 0.35),
+          width: 1,
+        ),
       ),
-    ),
-    actions: [
-      Obx(
-        () => _searchController.showUidBtn.value
-            ? IconButton(
-                tooltip: 'UID搜索用户',
-                icon: const Icon(Icons.person_outline, size: 22),
-                onPressed: () => Get.toNamed(
-                  '/member?mid=${_searchController.controller.text}',
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Icon(
+            Icons.search_outlined,
+            size: 18,
+            color: scheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              autofocus: true,
+              focusNode: _searchController.searchFocusNode,
+              controller: _searchController.controller,
+              textInputAction: TextInputAction.search,
+              onChanged: _searchController.onChange,
+              style: TextStyle(fontSize: 14, color: scheme.onSurface),
+              cursorColor: scheme.primary,
+              cursorHeight: 16,
+              decoration: InputDecoration(
+                isCollapsed: true,
+                filled: false,
+                hintText: _searchController.hintText ?? '搜索',
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: scheme.onSurfaceVariant,
                 ),
-              )
-            : const SizedBox.shrink(),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onSubmitted: (value) => _searchController.submit(),
+            ),
+          ),
+        ],
       ),
-      IconButton(
-        tooltip: '清空',
-        icon: const Icon(Icons.clear, size: 22),
-        onPressed: _searchController.onClear,
-      ),
-      IconButton(
-        tooltip: '搜索',
-        onPressed: _searchController.submit,
-        icon: const Icon(Icons.search, size: 22),
-      ),
-      const SizedBox(width: 10),
-    ],
-    title: TextField(
-      autofocus: true,
-      focusNode: _searchController.searchFocusNode,
-      controller: _searchController.controller,
-      textInputAction: TextInputAction.search,
-      onChanged: _searchController.onChange,
-      decoration: InputDecoration(
-        visualDensity: .standard,
-        hintText: _searchController.hintText ?? '搜索',
-        border: InputBorder.none,
-      ),
-      onSubmitted: (value) => _searchController.submit(),
-    ),
-  );
+    );
+  }
 
   Widget _buildSearchSuggest() {
     return Obx(() {

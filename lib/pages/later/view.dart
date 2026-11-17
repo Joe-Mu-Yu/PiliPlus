@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/widgets/appbar/appbar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
@@ -113,10 +114,12 @@ class _LaterPageState extends State<LaterPage>
             body: ViewSafeArea(
               child: Column(
                 children: [
-                  TabBar(
-                    // isScrollable: true,
-                    // tabAlignment: TabAlignment.start,
+                  categoryTabBar(
+                    context,
                     controller: _tabController,
+                    isScrollable: false,
+                    tabAlignment: TabAlignment.fill,
+                    padding: const EdgeInsets.only(top: 4),
                     tabs: LaterViewType.values.map((item) {
                       final count = _baseCtr.counts[item.index];
                       return Tab(

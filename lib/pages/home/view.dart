@@ -1,15 +1,11 @@
-import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/custom_height_widget.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/mine/controller.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
-import 'package:PiliPlus/utils/extension/size_ext.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -58,48 +54,19 @@ class _HomePageState extends CommonPageState<HomePage>
   Widget _buildContent() {
     Widget tabBar;
     if (_homeController.tabs.length > 1) {
-      // Segmented capsule track: the selected tab reads as a pill instead of a
-      // bare underline, matching the reference app's channel switcher.
-      tabBar = Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: SizedBox(
-          height: 42,
-          width: double.infinity,
-          child: TabBar(
-            controller: _homeController.tabController,
-            tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
-            isScrollable: true,
-            labelColor: _colorScheme.onSecondaryContainer,
-            unselectedLabelColor: _colorScheme.onSurfaceVariant,
-            labelStyle: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            unselectedLabelStyle: const TextStyle(fontSize: 13),
-            indicator: BoxDecoration(
-              color: _colorScheme.secondaryContainer,
-              borderRadius: BorderRadius.circular(ImmersiveTokens.pillRadius),
-            ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            indicatorPadding: const EdgeInsets.symmetric(vertical: 6),
-            dividerColor: Colors.transparent,
-            dividerHeight: 0,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
-            splashBorderRadius: const BorderRadius.all(
-              Radius.circular(ImmersiveTokens.pillRadius),
-            ),
-            overlayColor: WidgetStatePropertyAll(
-              _colorScheme.primary.withValues(alpha: .08),
-            ),
-            tabAlignment: TabAlignment.center,
-            onTap: (_) {
-              feedBack();
-              if (!_homeController.tabController.indexIsChanging) {
-                _homeController.animateToTop();
-              }
-            },
-          ),
-        ),
+      // Floating capsule track shared with other browsing pages: the selected
+      // tab reads as a pill instead of a bare underline.
+      tabBar = categoryTabBar(
+        context,
+        controller: _homeController.tabController,
+        tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
+        tabAlignment: TabAlignment.center,
+        padding: const EdgeInsets.only(top: 4, left: 14, right: 14),
+        onTap: (_) {
+          if (!_homeController.tabController.indexIsChanging) {
+            _homeController.animateToTop();
+          }
+        },
       );
       if (_homeController.hideTopBar &&
           _mainController.barHideType == .instant) {
@@ -116,9 +83,6 @@ class _HomePageState extends CommonPageState<HomePage>
       color: _colorScheme.surface,
       child: Column(
         children: [
-          if (!_mainController.useSideBar &&
-              MediaQuery.sizeOf(context).isPortrait)
-            customAppBar(),
           tabBar,
           Expanded(
             child: onBuild(
@@ -129,117 +93,6 @@ class _HomePageState extends CommonPageState<HomePage>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget customAppBar() {
-    const padding = EdgeInsets.fromLTRB(14, 6, 14, 0);
-    final child = Row(
-      children: [
-        searchBar(),
-        const SizedBox(width: 4),
-        msgBadge(_mainController),
-        const SizedBox(width: 8),
-        userAvatar(colorScheme: _colorScheme, mainController: _mainController),
-      ],
-    );
-    if (_homeController.hideTopBar) {
-      if (_mainController.barOffset case final barOffset?) {
-        return Obx(
-          () {
-            final offset = barOffset.value;
-            return CustomHeightWidget(
-              offset: Offset(0, -offset),
-              height: Style.topBarHeight - offset,
-              child: Padding(
-                padding: padding,
-                child: child,
-              ),
-            );
-          },
-        );
-      }
-      if (_homeController.showTopBar case final showTopBar?) {
-        return Obx(() {
-          final showSearchBar = showTopBar.value;
-          final duration =
-              MediaQuery.maybeOf(context)?.disableAnimations ?? false
-              ? Duration.zero
-              : const Duration(milliseconds: 350);
-          return AnimatedOpacity(
-            opacity: showSearchBar ? 1 : 0,
-            duration: duration,
-            child: AnimatedContainer(
-              curve: Curves.easeInOutCubicEmphasized,
-              duration: duration,
-              height: showSearchBar ? Style.topBarHeight : 0,
-              padding: padding,
-              child: child,
-            ),
-          );
-        });
-      }
-    }
-    return Container(
-      height: Style.topBarHeight,
-      padding: padding,
-      child: child,
-    );
-  }
-
-  Widget searchBar() {
-    const borderRadius = BorderRadius.all(
-      Radius.circular(ImmersiveTokens.pillRadius),
-    );
-    return Expanded(
-      child: SizedBox(
-        height: ImmersiveTokens.minTouchTarget,
-        child: Material(
-          borderRadius: borderRadius,
-          color: _colorScheme.onSecondaryContainer.withValues(alpha: 0.05),
-          shape: RoundedRectangleBorder(
-            borderRadius: borderRadius,
-            side: BorderSide(
-              color: ImmersiveTokens.cardOutline(_colorScheme),
-              width: ImmersiveTokens.hairline,
-            ),
-          ),
-          child: InkWell(
-            borderRadius: borderRadius,
-            splashColor: _colorScheme.primaryContainer.withValues(
-              alpha: 0.3,
-            ),
-            onTap: () => Get.toNamed(
-              '/search',
-              parameters: _homeController.enableSearchWord
-                  ? {'hintText': _homeController.defaultSearch.value}
-                  : null,
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 14),
-                Icon(
-                  Icons.search_outlined,
-                  color: _colorScheme.onSecondaryContainer,
-                  semanticLabel: '搜索',
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Obx(
-                    () => Text(
-                      _homeController.defaultSearch.value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: _colorScheme.outline),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 5),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

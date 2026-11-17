@@ -1,7 +1,7 @@
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
-import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliPlus/models/dynamics/up.dart';
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
@@ -24,54 +24,49 @@ class DynamicsPage extends StatefulWidget {
 class _DynamicsPageState extends CommonPageState<DynamicsPage>
     with AutomaticKeepAliveClientMixin {
   final _dynamicsController = Get.putOrFind(DynamicsController.new);
-  UpPanelPosition get upPanelPosition => _dynamicsController.upPanelPosition;
   late final MainController _mainController = Get.find<MainController>();
 
   @override
   bool get wantKeepAlive => true;
 
-  Widget _createDynamicBtn(ColorScheme colorScheme, {bool isRight = true}) =>
-      Container(
-        width: 34,
-        height: 34,
-        margin: isRight ? const .only(right: 16) : const .only(left: 16),
-        child: IconButton(
-          tooltip: '发布动态',
-          style: ButtonStyle(
-            padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-            backgroundColor: WidgetStatePropertyAll(
-              colorScheme.secondaryContainer,
+  Widget _createDynamicBtn(ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: Material(
+          color: colorScheme.secondaryContainer,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => CreateDynPanel.onCreateDyn(context),
+            child: Icon(
+              Icons.add,
+              size: 20,
+              color: colorScheme.onSecondaryContainer,
             ),
           ),
-          onPressed: () => CreateDynPanel.onCreateDyn(context),
-          icon: Icon(
-            Icons.add,
-            size: 18,
-            color: colorScheme.onSecondaryContainer,
-          ),
         ),
-      );
+      ),
+    );
+  }
 
   Widget upPanelPart(ColorScheme colorScheme) {
-    final isTop = upPanelPosition == .top;
-    final needBg = upPanelPosition.index > 2;
+    // Let the panel size itself: the previous fixed 106dp box clipped the
+    // avatar labels when the text scale grew.
     return Material(
-      type: needBg ? .canvas : .transparency,
-      color: needBg ? colorScheme.surface : null,
-      child: SizedBox(
-        width: isTop ? null : 64,
-        height: isTop ? 76 : null,
-        child: NotificationListener<ScrollEndNotification>(
-          onNotification: (notification) {
-            final metrics = notification.metrics;
-            if (metrics.pixels >= metrics.maxScrollExtent - 300) {
-              _dynamicsController.onLoadMore();
-            }
-            return false;
-          },
-          child: Obx(
-            () => _buildUpPanel(_dynamicsController.loadingState.value),
-          ),
+      type: .transparency,
+      child: NotificationListener<ScrollEndNotification>(
+        onNotification: (notification) {
+          final metrics = notification.metrics;
+          if (metrics.pixels >= metrics.maxScrollExtent - 300) {
+            _dynamicsController.onLoadMore();
+          }
+          return false;
+        },
+        child: Obx(
+          () => _buildUpPanel(_dynamicsController.loadingState.value),
         ),
       ),
     );
@@ -119,10 +114,6 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
     final colorScheme = ColorScheme.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    Widget? drawer;
-    Widget? endDrawer;
-
-    Widget? leading;
     Widget actions;
 
     Widget child = tabBarView(
@@ -132,40 +123,16 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
           .toList(),
     );
 
-    switch (upPanelPosition) {
-      case .top:
-        child = Column(
-          children: [
-            upPanelPart(colorScheme),
-            Expanded(child: child),
-          ],
-        );
-        actions = _createDynamicBtn(colorScheme);
-      case .leftFixed:
-        child = Row(
-          children: [
-            upPanelPart(colorScheme),
-            Expanded(child: child),
-          ],
-        );
-        actions = _createDynamicBtn(colorScheme);
-      case .rightFixed:
-        child = Row(
-          children: [
-            Expanded(child: child),
-            upPanelPart(colorScheme),
-          ],
-        );
-        actions = _createDynamicBtn(colorScheme);
-      case .leftDrawer:
-        drawer = upPanelPart(colorScheme);
-        actions = _createDynamicBtn(colorScheme);
-        leading = const DrawerButton();
-      case .rightDrawer:
-        endDrawer = upPanelPart(colorScheme);
-        leading = _createDynamicBtn(colorScheme, isRight: false);
-        actions = const EndDrawerButton();
-    }
+    // Unified layout: the up panel always renders horizontally below the
+    // category tab bar, matching the reference design; the position setting
+    // no longer switches side panels or drawers.
+    child = Column(
+      children: [
+        upPanelPart(colorScheme),
+        Expanded(child: child),
+      ],
+    );
+    actions = _createDynamicBtn(colorScheme);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -178,41 +145,24 @@ class _DynamicsPageState extends CommonPageState<DynamicsPage>
         resizeToAvoidBottomInset: false,
         backgroundColor: colorScheme.surface,
         appBar: PreferredSize(
-          preferredSize: const .fromHeight(50),
-          child: Row(
-            children: [
-              ?leading,
-              Expanded(
-                child: TabBar(
-                  dividerHeight: 0,
-                  isScrollable: true,
-                  tabAlignment: .start,
-                  dividerColor: Colors.transparent,
-                  labelColor: colorScheme.primary,
-                  indicatorColor: colorScheme.primary,
-                  controller: _dynamicsController.tabController,
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  labelStyle:
-                      TabBarTheme.of(context).labelStyle?.copyWith(
-                        fontSize: 13,
-                      ) ??
-                      const TextStyle(fontSize: 13),
-                  tabs: DynamicsTabType.values
-                      .map((e) => Tab(text: e.label))
-                      .toList(),
-                  onTap: (index) {
-                    if (!_dynamicsController.tabController.indexIsChanging) {
-                      _dynamicsController.animateToTop();
-                    }
-                  },
-                ),
-              ),
-              actions,
-            ],
+          preferredSize: const .fromHeight(70),
+          child: categoryTabBar(
+            context,
+            controller: _dynamicsController.tabController,
+            tabs: DynamicsTabType.values
+                .map((e) => Tab(text: e.label))
+                .toList(),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            // The compose action lives inside the same capsule so the header
+            // stays one continuous surface instead of a detached button.
+            trailing: actions,
+            onTap: (index) {
+              if (!_dynamicsController.tabController.indexIsChanging) {
+                _dynamicsController.animateToTop();
+              }
+            },
           ),
         ),
-        drawer: drawer,
-        endDrawer: endDrawer,
         body: onBuild(child),
       ),
     );

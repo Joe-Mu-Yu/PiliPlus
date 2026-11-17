@@ -1,6 +1,5 @@
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
 import 'package:PiliPlus/models/dynamics/up.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart';
@@ -28,9 +27,15 @@ class UpPanel extends StatefulWidget {
 
 class _UpPanelState extends State<UpPanel> {
   late final controller = widget.dynamicsController;
-  late final isTop = controller.upPanelPosition == UpPanelPosition.top;
 
-  void toFollowPage() => Get.to(const LiveFollowPage());
+  /// The panel always renders as a horizontal row under the category tabs;
+  /// the legacy side/drawer positions are no longer used.
+  static const bool isTop = true;
+
+  /// "更多" opens the account-follow (UP) detail page.
+  void toAccountFollowPage() => Get.toNamed('/follow');
+
+  void toLiveFollowPage() => Get.to(const LiveFollowPage());
 
   @override
   Widget build(BuildContext context) {
@@ -38,8 +43,90 @@ class _UpPanelState extends State<UpPanel> {
     final upData = widget.upData;
     final upList = upData.upList;
     final liveList = upData.liveUsers?.items;
+    if (isTop) {
+      final List<UpItem> panelItems = [
+        if (controller.showLiveUp) ...?liveList,
+        UpItem(face: '', uname: '全部动态', mid: -1),
+        UpItem(
+          uname: '我',
+          face: controller.accountService.face.value,
+          mid: Accounts.main.mid,
+        ),
+        ...?upList,
+      ];
+      // Reference-style horizontal panel under the category tabs: a titled
+      // avatar row with a trailing "more" entry to the account-follow page.
+      return Column(
+        crossAxisAlignment: .start,
+        children: [
+          Padding(
+            padding: const .fromLTRB(16, 10, 8, 2),
+            child: Row(
+              children: [
+                Text(
+                  '最常访问',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: toAccountFollowPage,
+                  style: TextButton.styleFrom(
+                    padding: const .symmetric(horizontal: 8),
+                  ),
+                  child: Row(
+                    mainAxisSize: .min,
+                    children: [
+                      Text(
+                        '更多',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_right,
+                        size: 16,
+                        color: theme.colorScheme.outline,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 92,
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (notification) {
+                final metrics = notification.metrics;
+                if (metrics.pixels >= metrics.maxScrollExtent - 300) {
+                  controller.onLoadMore();
+                }
+                return false;
+              },
+              child: ListView.custom(
+                scrollDirection: .horizontal,
+                physics: const AlwaysScrollableScrollPhysics(),
+                controller: controller.scrollController,
+                childrenDelegate: SliverChildBuilderDelegate(
+                  (context, index) => upItemBuild(theme, panelItems[index]),
+                  childCount: panelItems.length,
+                ),
+              ),
+            ),
+          ),
+          // Hairline separator between the access panel and the feed so the
+          // three sections stay visually distinct.
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: theme.colorScheme.outlineVariant.withValues(alpha: .35),
+          ),
+        ],
+      );
+    }
     return CustomScrollView(
-      scrollDirection: isTop ? .horizontal : .vertical,
+      scrollDirection: .vertical,
       physics: const AlwaysScrollableScrollPhysics(),
       controller: controller.scrollController,
       slivers: [
@@ -48,12 +135,11 @@ class _UpPanelState extends State<UpPanel> {
             onTap: () => setState(() {
               controller.showLiveUp = !controller.showLiveUp;
             }),
-            onLongPress: toFollowPage,
-            onSecondaryTap: PlatformUtils.isMobile ? null : toFollowPage,
+            onLongPress: toLiveFollowPage,
+            onSecondaryTap: PlatformUtils.isMobile ? null : toLiveFollowPage,
             child: Container(
               alignment: .center,
-              height: isTop ? 76 : 60,
-              padding: isTop ? const .only(left: 12, right: 6) : null,
+              height: 60,
               child: Text.rich(
                 textAlign: .center,
                 style: TextStyle(
@@ -65,29 +151,17 @@ class _UpPanelState extends State<UpPanel> {
                     TextSpan(
                       text: 'Live(${upData.liveUsers?.count ?? 0})',
                     ),
-                    if (!isTop) ...[
-                      const TextSpan(text: '\n'),
-                      WidgetSpan(
-                        alignment: .middle,
-                        child: Icon(
-                          controller.showLiveUp
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 12,
-                          color: theme.colorScheme.primary,
-                        ),
+                    const TextSpan(text: '\n'),
+                    WidgetSpan(
+                      alignment: .middle,
+                      child: Icon(
+                        controller.showLiveUp
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                        size: 12,
+                        color: theme.colorScheme.primary,
                       ),
-                    ] else
-                      WidgetSpan(
-                        alignment: .middle,
-                        child: Icon(
-                          controller.showLiveUp
-                              ? Icons.keyboard_arrow_right
-                              : Icons.keyboard_arrow_left,
-                          color: theme.colorScheme.primary,
-                          size: 14,
-                        ),
-                      ),
+                    ),
                   ],
                 ),
               ),
@@ -150,9 +224,9 @@ class _UpPanelState extends State<UpPanel> {
           color: Color(0xFF5CB67B),
         ),
         child: Image.asset(
-          width: 38,
-          height: 38,
-          cacheWidth: 38.cacheSize(context),
+          width: 44,
+          height: 44,
+          cacheWidth: 44.cacheSize(context),
           Assets.logo2,
           color: Colors.white,
         ),
@@ -161,8 +235,8 @@ class _UpPanelState extends State<UpPanel> {
       avatar = Padding(
         padding: const .symmetric(horizontal: 4),
         child: NetworkImgLayer(
-          width: 38,
-          height: 38,
+          width: 44,
+          height: 44,
           src: item.face,
           type: .avatar,
         ),
@@ -203,8 +277,7 @@ class _UpPanelState extends State<UpPanel> {
     }
 
     return SizedBox(
-      height: 76,
-      width: isTop ? 70 : null,
+      height: 92,
       child: InkWell(
         onTap: () {
           feedBack();
@@ -220,23 +293,27 @@ class _UpPanelState extends State<UpPanel> {
         child: Opacity(
           opacity: isCurrent ? 1 : 0.6,
           child: Column(
-            spacing: 4,
+            spacing: 6,
             mainAxisSize: .min,
             mainAxisAlignment: .center,
             children: [
               avatar,
               Padding(
-                padding: const .symmetric(horizontal: 4),
-                child: Text(
-                  isTop ? '${item.uname}\n' : item.uname!,
-                  maxLines: 2,
-                  textAlign: .center,
-                  style: TextStyle(
-                    color: currentMid == item.mid
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.outline,
-                    height: 1.1,
-                    fontSize: 12.5,
+                padding: const .fromLTRB(2, 0, 2, 4),
+                child: SizedBox(
+                  width: 56,
+                  child: Text(
+                    item.uname!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: .center,
+                    style: TextStyle(
+                      color: currentMid == item.mid
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline,
+                      height: 1.15,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
               ),

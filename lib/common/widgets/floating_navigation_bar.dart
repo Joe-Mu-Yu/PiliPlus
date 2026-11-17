@@ -9,7 +9,7 @@ const double _kMaxLabelTextScaleFactor = 1.3;
 
 const _kNavigationHeight = 64.0;
 const _kIndicatorHeight = _kNavigationHeight - 2 * _kIndicatorPaddingInt;
-const _kIndicatorWidth = 86.0;
+const _kIndicatorWidth = 84.0;
 const _kIndicatorPaddingInt = 4.0;
 const _kIndicatorPadding = EdgeInsets.all(_kIndicatorPaddingInt);
 const _kBorderRadius = BorderRadius.all(.circular(_kNavigationHeight / 2));
@@ -37,6 +37,8 @@ class FloatingNavigationBar extends StatelessWidget {
     this.labelTextStyle,
     this.labelPadding,
     this.bottomPadding = 8.0,
+    this.tabWidth,
+    this.indicatorWidth,
   }) : assert(destinations.length >= 2),
        assert(0 <= selectedIndex && selectedIndex < destinations.length);
 
@@ -55,6 +57,15 @@ class FloatingNavigationBar extends StatelessWidget {
   final WidgetStateProperty<TextStyle?>? labelTextStyle;
   final EdgeInsetsGeometry? labelPadding;
   final double bottomPadding;
+
+  /// Optional per-tab width; when null the bar keeps its default intrinsic
+  /// width. Callers pass a value derived from the available width so the bar
+  /// and its trailing action never overflow narrow screens.
+  final double? tabWidth;
+
+  /// Optional selected-indicator width, normally [tabWidth] minus the pill
+  /// padding. Defaults to the built-in constant.
+  final double? indicatorWidth;
 
   VoidCallback _handleTap(int index) {
     return onDestinationSelected != null
@@ -87,7 +98,7 @@ class FloatingNavigationBar extends StatelessWidget {
       ),
       child: SizedBox(
         height: _kNavigationHeight,
-        width: destinations.length * _kIndicatorWidth,
+        width: destinations.length * (tabWidth ?? _kIndicatorWidth),
         child: DecoratedBox(
           decoration: ShapeDecoration(
             color: ElevationOverlay.applySurfaceTint(
@@ -176,12 +187,19 @@ class FloatingNavigationDestination extends StatelessWidget {
       alignment: .center,
       clipBehavior: .none,
       children: [
-        NavigationIndicator(
-          animation: animation,
-          color:
-              info.indicatorColor ??
-              navigationBarTheme.indicatorColor ??
-              defaults.indicatorColor!,
+        // The indicator follows the actual tab width so the bar can shrink on
+        // narrow screens without the pill overflowing its slot.
+        LayoutBuilder(
+          builder: (context, constraints) => NavigationIndicator(
+            animation: animation,
+            width: constraints.maxWidth.isFinite
+                ? (constraints.maxWidth - 8).clamp(0, _kIndicatorWidth)
+                : _kIndicatorWidth,
+            color:
+                info.indicatorColor ??
+                navigationBarTheme.indicatorColor ??
+                defaults.indicatorColor!,
+          ),
         ),
         _NavigationDestinationBuilder(
           label: label,

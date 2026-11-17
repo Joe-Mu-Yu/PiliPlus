@@ -8,14 +8,22 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -27,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +44,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
@@ -45,9 +56,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Badge
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
@@ -60,6 +73,11 @@ import top.yukonga.miuix.kmp.icon.extended.Messages
 import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Recording
 import top.yukonga.miuix.kmp.icon.extended.ScreenMirroring
+import top.yukonga.miuix.kmp.icon.extended.Search
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.darkColorScheme as miuixDarkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme as miuixLightColorScheme
@@ -75,6 +93,7 @@ internal fun DeadlinerNavigationOverlayContent(
     backdropDebugState: FlutterBackdropDebugState,
     onBackdropBoundsChanged: (FlutterBackdropBounds) -> Unit,
     onDestinationSelected: (Int) -> Unit,
+    onSearchActionSelected: () -> Unit,
 ) {
     val miuixColors = if (state.dark) {
         miuixDarkColorScheme(
@@ -109,6 +128,13 @@ internal fun DeadlinerNavigationOverlayContent(
     }
     val backdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
+    // System gesture/nav inset keeps the whole chrome above the handle; the
+    // pill and the search circle share this single bottom inset so they sit on
+    // one baseline with the same height.
+    val systemBottomInset: Dp = WindowInsets.navigationBars
+        .only(WindowInsetsSides.Bottom)
+        .asPaddingValues()
+        .calculateBottomPadding()
     var rootPositionInWindow by remember { mutableStateOf(Offset.Zero) }
     val blurActive = backdropSnapshot != null && isRuntimeShaderSupported()
 
@@ -184,33 +210,62 @@ internal fun DeadlinerNavigationOverlayContent(
                                         .layerBackdrop(backdrop),
                                 )
                             }
-                            IosLiquidGlassNavigationBar(
-                                items = destinations,
-                                selectedIndex = state.selectedIndex.coerceIn(
-                                    0,
-                                    destinations.lastIndex,
-                                ),
-                                onItemClick = onDestinationSelected,
-                                backdrop = backdrop,
-                                isBlurActive = blurActive,
-                                dark = state.dark,
-                                onBarBoundsChanged = onBackdropBoundsChanged,
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .padding(horizontal = 14.dp)
                                     .padding(top = FLUTTER_BACKDROP_BLEED_DP.dp)
+                                    // Sit just above the gesture handle; the
+                                    // strip below keeps the page surface so no
+                                    // bare black band shows.
+                                    .padding(bottom = systemBottomInset + 8.dp)
                                     .offset(y = -state.bottomLiftDp.dp),
-                                badge = { index ->
-                                    state.destinations.getOrNull(index)?.badge?.let { badgeText ->
-                                        @Composable {
-                                            if (badgeText.isEmpty()) {
-                                                Badge()
-                                            } else {
-                                                Badge { Text(badgeText) }
+                                // Bottom-aligned: the pill owns the height, the
+                                // smaller circle rests on the same baseline.
+                                verticalAlignment = Alignment.Bottom,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    IosLiquidGlassNavigationBar(
+                                        items = destinations,
+                                        selectedIndex = state.selectedIndex.coerceIn(
+                                            0,
+                                            destinations.lastIndex,
+                                        ),
+                                        onItemClick = onDestinationSelected,
+                                        backdrop = backdrop,
+                                        isBlurActive = blurActive,
+                                        dark = state.dark,
+                                        onBarBoundsChanged = onBackdropBoundsChanged,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        // Zero insets: the overlay row owns the
+                                        // spacing so the pill and the search circle
+                                        // share one baseline and one height.
+                                        bottomInset = 0.dp,
+                                        horizontalInset = 0.dp,
+                                        // Baseline is owned by the row's bottom inset.
+                                        badge = { index ->
+                                            state.destinations.getOrNull(index)?.badge?.let { badgeText ->
+                                                @Composable {
+                                                    if (badgeText.isEmpty()) {
+                                                        Badge()
+                                                    } else {
+                                                        Badge { Text(badgeText) }
+                                                    }
+                                                }
                                             }
-                                        }
-                                    }
-                                },
-                            )
+                                        },
+                                    )
+                                }
+                                if (state.searchAction) {
+                                    SearchGlassCircleButton(
+                                        backdrop = backdrop,
+                                        isBlurActive = blurActive,
+                                        dark = state.dark,
+                                        onClick = onSearchActionSelected,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -318,4 +373,68 @@ private fun DebugLine(text: String, color: Color) {
             lineHeight = 13.sp,
         ),
     )
+}
+
+/**
+ * Detached circular glass search entry shown beside the navigation pill,
+ * mirroring the reference design. Shares the same backdrop layer so the
+ * refraction stays continuous with the bar.
+ */
+@Composable
+internal fun SearchGlassCircleButton(
+    backdrop: LayerBackdrop?,
+    isBlurActive: Boolean,
+    dark: Boolean,
+    onClick: () -> Unit,
+) {
+    val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
+    val containerColor =
+        if (isBlurActive) surfaceContainer.copy(alpha = 0.4f) else surfaceContainer
+    val pillShape = CircleShape
+    val contentColor = MiuixTheme.colorScheme.onSurface
+    val baseHighlight = iosIndicatorSpecular
+
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .dropShadow(
+                shape = pillShape,
+                shadow = Shadow(
+                    radius = 10.dp,
+                    color = Color.Black,
+                    alpha = if (dark) 0.2f else 0.1f,
+                ),
+            )
+            .clip(pillShape)
+            .then(
+                if (isBlurActive && backdrop != null) {
+                    Modifier.drawBackdrop(
+                        backdrop = backdrop,
+                        shape = { pillShape },
+                        effects = {
+                            vibrancy()
+                            blur(4.dp.toPx(), 4.dp.toPx())
+                            lens(
+                                refractionHeight = 24.dp.toPx(),
+                                refractionAmount = 24.dp.toPx(),
+                            )
+                        },
+                        highlight = { baseHighlight.copy(alpha = 0.75f) },
+                        onDrawSurface = { drawRect(containerColor) },
+                    )
+                } else {
+                    Modifier.background(containerColor, pillShape)
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Icon(
+                modifier = Modifier.size(24.dp),
+                imageVector = MiuixIcons.Search,
+                contentDescription = "搜索",
+            )
+        }
+    }
 }

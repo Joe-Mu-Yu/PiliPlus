@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/models/common/search/search_type.dart';
 import 'package:PiliPlus/pages/search/controller.dart';
@@ -101,11 +102,10 @@ class _SearchResultPageState extends State<SearchResultPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TabBar(
-              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-              splashFactory: NoSplash.splashFactory,
-              padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
+            categoryTabBar(
+              context,
               controller: _tabController,
+              padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
               tabs: SearchType.values
                   .map(
                     (item) => Obx(
@@ -119,27 +119,6 @@ class _SearchResultPageState extends State<SearchResultPage>
                     ),
                   )
                   .toList(),
-              isScrollable: true,
-              indicatorWeight: 0,
-              indicatorPadding: const EdgeInsets.symmetric(
-                horizontal: 3,
-                vertical: 8,
-              ),
-              indicator: BoxDecoration(
-                color: theme.colorScheme.secondaryContainer,
-                borderRadius: const BorderRadius.all(Radius.circular(20)),
-              ),
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: theme.colorScheme.onSecondaryContainer,
-              labelStyle:
-                  TabBarTheme.of(
-                    context,
-                  ).labelStyle?.copyWith(fontSize: 13) ??
-                  const TextStyle(fontSize: 13),
-              dividerColor: Colors.transparent,
-              dividerHeight: 0,
-              unselectedLabelColor: theme.colorScheme.outline,
-              tabAlignment: TabAlignment.start,
               onTap: (index) {
                 if (!_tabController.indexIsChanging) {
                   if (_searchResultController.toTopIndex.value == index) {
