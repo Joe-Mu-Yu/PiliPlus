@@ -291,6 +291,7 @@ internal data class NavigationUiState(
     val selectedIndex: Int = 0,
     val visible: Boolean = false,
     val searchAction: Boolean = false,
+    val searchActionOnLeft: Boolean = false,
     val backdropSampling: Boolean = false,
     val backdropDebug: Boolean = false,
     val bottomLiftDp: Float = 0f,
@@ -321,6 +322,7 @@ internal data class NavigationUiState(
                     .coerceIn(0, (destinations.size - 1).coerceAtLeast(0)),
                 visible = (args["visible"] as? Boolean == true) && destinations.size > 1,
                 searchAction = args["searchAction"] as? Boolean ?: false,
+                searchActionOnLeft = args["searchActionOnLeft"] as? Boolean ?: false,
                 backdropSampling = args["backdropSampling"] as? Boolean ?: false,
                 backdropDebug = args["backdropDebug"] as? Boolean ?: false,
                 bottomLiftDp = ((args["bottomLiftDp"] as? Number)?.toFloat() ?: 0f)

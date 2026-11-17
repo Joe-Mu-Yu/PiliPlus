@@ -60,6 +60,7 @@ abstract final class PiliAndroidHelper {
     required double bottomLiftDp,
     required bool followMyHyperModifierNavigationLift,
     required bool searchAction,
+    required bool searchActionOnLeft,
   }) {
     // Queue native visibility first; enabling the notifier immediately requests
     // a fresh sample, even if the surface is already idle.
@@ -80,6 +81,7 @@ abstract final class PiliAndroidHelper {
       'followMyHyperModifierNavigationLift':
           followMyHyperModifierNavigationLift,
       'searchAction': searchAction,
+      'searchActionOnLeft': searchActionOnLeft,
     });
     _backdropFrames.configure(visible: visible && backdropSampling);
     return update;

@@ -1031,12 +1031,14 @@ abstract final class Pref {
   static bool get floatingNavBar =>
       _setting.get(SettingBoxKey.floatingNavBar, defaultValue: true);
 
+  /// Places the circular search entry on the left of the floating bar.
+  static bool get searchActionOnLeft =>
+      _setting.get(SettingBoxKey.searchActionOnLeft, defaultValue: false);
+
   static double get floatingNavBottomLift => (_setting.get(
-        SettingBoxKey.floatingNavBottomLift,
-        defaultValue: 0.0,
-      ) as num)
-      .toDouble()
-      .clamp(0.0, 48.0);
+    SettingBoxKey.floatingNavBottomLift,
+    defaultValue: 0.0,
+  ) as num).toDouble().clamp(0.0, 48.0);
 
   static bool get followMyHyperModifierNavigationLift => _setting.get(
     SettingBoxKey.followMyHyperModifierNavigationLift,

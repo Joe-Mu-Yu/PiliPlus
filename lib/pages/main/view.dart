@@ -599,6 +599,7 @@ class _MainAppState extends PopScopeState<MainApp>
         followMyHyperModifierNavigationLift:
             Pref.followMyHyperModifierNavigationLift,
         searchAction: true,
+        searchActionOnLeft: Pref.searchActionOnLeft,
       ).catchError((_) async {
         // Do not expose Flutter's fallback until the native overlay confirms
         // it has hidden; otherwise a transient bridge failure can leave both

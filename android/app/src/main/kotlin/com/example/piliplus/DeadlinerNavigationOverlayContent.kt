@@ -225,6 +225,14 @@ internal fun DeadlinerNavigationOverlayContent(
                                 verticalAlignment = Alignment.Bottom,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
+                                if (state.searchAction && state.searchActionOnLeft) {
+                                    SearchGlassCircleButton(
+                                        backdrop = backdrop,
+                                        isBlurActive = blurActive,
+                                        dark = state.dark,
+                                        onClick = onSearchActionSelected,
+                                    )
+                                }
                                 Box(modifier = Modifier.weight(1f)) {
                                     IosLiquidGlassNavigationBar(
                                         items = destinations,
@@ -257,7 +265,7 @@ internal fun DeadlinerNavigationOverlayContent(
                                         },
                                     )
                                 }
-                                if (state.searchAction) {
+                                if (state.searchAction && !state.searchActionOnLeft) {
                                     SearchGlassCircleButton(
                                         backdrop = backdrop,
                                         isBlurActive = blurActive,

@@ -127,6 +127,14 @@ List<SettingsModel> get styleSettings => [
     defaultVal: true,
     needReboot: true,
   ),
+  const SwitchModel(
+    title: '搜索按钮放在左侧',
+    subtitle: '关闭时搜索按钮显示在底栏右侧',
+    leading: Icon(Icons.swap_horiz_rounded),
+    setKey: SettingBoxKey.searchActionOnLeft,
+    defaultVal: false,
+    needReboot: true,
+  ),
   NormalModel(
     title: '悬浮底栏底部高度',
     getSubtitle: () => Pref.followMyHyperModifierNavigationLift

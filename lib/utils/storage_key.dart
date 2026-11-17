@@ -153,6 +153,7 @@ abstract final class SettingBoxKey {
       touchSlopH = 'touchSlopH',
       floatingNavBar = 'floatingNavBar',
       floatingNavBottomLift = 'floatingNavBottomLift',
+      searchActionOnLeft = 'searchActionOnLeft',
       followMyHyperModifierNavigationLift =
           'followMyHyperModifierNavigationLift',
       miuixBackdropSampling = 'miuixBackdropSampling',
