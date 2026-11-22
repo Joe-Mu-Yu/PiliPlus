@@ -73,6 +73,8 @@ void main() {
       await tester.pumpAndSettle();
       await controller.refreshFavorites();
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('更多直播功能与筛选'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('未开播'));
       await tester.pumpAndSettle();
 
@@ -111,18 +113,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('favorite-status-tabs')), findsOneWidget);
-    expect(find.text('直播中'), findsOneWidget);
-    expect(find.text('录播'), findsOneWidget);
-    expect(find.text('未开播'), findsOneWidget);
-    expect(find.text('录制'), findsOneWidget);
+    expect(find.byKey(const ValueKey('favorite-status-tabs')), findsNothing);
+    expect(find.text('直播中'), findsNothing);
+    expect(find.text('录播'), findsNothing);
+    expect(find.text('未开播'), findsNothing);
+    expect(find.text('录制'), findsNothing);
     expect(
       find.byKey(const ValueKey('recorder-center-action')),
       findsOneWidget,
     );
-    expect(find.byTooltip('链接解析'), findsOneWidget);
-    expect(find.byTooltip('IPTV 频道'), findsOneWidget);
-    expect(find.byTooltip('更多直播功能'), findsOneWidget);
+    expect(find.byTooltip('链接解析'), findsNothing);
+    expect(find.byTooltip('IPTV 频道'), findsNothing);
+    expect(find.byTooltip('更多直播功能与筛选'), findsOneWidget);
+    await tester.tap(find.byTooltip('更多直播功能与筛选'));
+    await tester.pumpAndSettle();
+    expect(find.text('直播中'), findsOneWidget);
+    expect(find.text('录播'), findsOneWidget);
+    expect(find.text('未开播'), findsOneWidget);
+    expect(find.text('链接解析'), findsOneWidget);
+    expect(find.text('IPTV 频道'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -326,6 +335,8 @@ void main() {
 
     expect(find.text('Live room'), findsOneWidget);
     expect(find.text('Replay room'), findsNothing);
+    await tester.tap(find.byTooltip('更多直播功能与筛选'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('录播'));
     await tester.pumpAndSettle();
     expect(find.text('Replay room'), findsOneWidget);

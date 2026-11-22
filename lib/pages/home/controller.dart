@@ -66,17 +66,31 @@ class HomeController extends GetxController
 
   void setTabConfig() {
     final tabs = GStorage.setting.get(SettingBoxKey.tabBarSort) as List?;
-    if (tabs != null) {
-      this.tabs = tabs.map((i) => HomeTabType.values[i]).toList();
-    } else {
-      this.tabs = HomeTabType.values;
-    }
+    final configuredTabs = tabs == null
+        ? <HomeTabType>[]
+        : tabs.map((i) => HomeTabType.values[i]).toList();
+    this.tabs = [
+      ...configuredTabs,
+      for (final tab in HomeTabType.values)
+        if (!configuredTabs.contains(tab)) tab,
+    ];
 
     tabController = TabController(
       initialIndex: max(0, this.tabs.indexOf(HomeTabType.rcmd)),
       length: this.tabs.length,
       vsync: this,
     );
+  }
+
+  void selectTab(HomeTabType tab) {
+    final index = tabs.indexOf(tab);
+    if (index < 0) return;
+    tabController.animateTo(
+      index,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+    animateToTop();
   }
 
   @override

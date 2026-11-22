@@ -42,18 +42,22 @@ internal class AvboxBridge(
 
     init {
         App.initialize(activity.applicationContext)
-        // A recreated Activity can reuse the cached FlutterEngine, so this bridge
-        // may run twice in one process. PlatformViewRegistry has no unregister
-        // API on this Flutter version, so the factory registers once per process
-        // and resolves the current host/exit callback dynamically; re-registering
-        // must never throw at startup.
-        if (AvboxSharedState.exitCallback == null) {
-            check(
+        // A cached FlutterEngine can be reconfigured after its Activity has been
+        // recreated. The platform-view registry is engine-scoped and has no
+        // unregister API, so register exactly once per engine; per-process state
+        // alone is insufficient when multiple FlutterEngines exist.
+        synchronized(registeredEngines) {
+            if (!registeredEngines.contains(flutterEngine)) {
+                // Activity recreation can retain both the engine and platform
+                // registry. A false result here means this view type already
+                // has a factory; treat that as the existing registration rather
+                // than crashing FlutterActivity.onCreate.
                 flutterEngine.platformViewsController.registry.registerViewFactory(
                     VIEW_TYPE,
                     AvboxPlatformViewFactory(activity, ::exitEmbedded),
-                ),
-            ) { "AVBox platform view could not be registered" }
+                )
+                registeredEngines.add(flutterEngine)
+            }
         }
         AvboxSharedState.exitOwner = this
         AvboxSharedState.exitCallback = ::exitEmbedded
@@ -76,6 +80,10 @@ internal class AvboxBridge(
     }
 
     companion object {
+        private val registeredEngines = java.util.Collections.newSetFromMap(
+            java.util.WeakHashMap<FlutterEngine, Boolean>(),
+        )
+
         const val CHANNEL = "com.aritxonly.hyperpiliplus/avbox"
         const val VIEW_TYPE = "com.aritxonly.hyperpiliplus/avbox_view"
     }

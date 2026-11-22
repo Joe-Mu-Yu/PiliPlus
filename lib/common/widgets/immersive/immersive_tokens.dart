@@ -29,14 +29,47 @@ abstract final class ImmersiveTokens {
   /// Hairline border width for low-contrast card outlines.
   static const double hairline = 1;
 
-  /// Press feedback scale for tappable cards. Kept well above the reference
-  /// project's 0.9 so text stays legible during the press.
+  /// Press feedback scale for tappable cards; remains subtle for readability.
   static const double pressedScale = .985;
+
+  /// Press feedback scale for compact buttons, inspired by Mochi's elastic
+  /// controls while keeping Flutter gesture ownership unchanged.
+  static const double buttonPressedScale = .96;
+
+  /// Default ease curve for shared short content transitions.
+  static const Curve contentCurve = Curves.easeInOutCubic;
+
+  /// Spring-like settle curve for prominent but non-layout-changing entrances.
+  static const Curve settleCurve = Curves.easeOutCubic;
 
   /// Press feedback duration; zero when the platform disables animations.
   static Duration pressDuration(BuildContext context) => reduceMotionOf(context)
       ? Duration.zero
       : const Duration(milliseconds: 120);
+
+  /// Short in-place content changes use a quiet 160ms outgoing motion.
+  static Duration contentExitDuration(BuildContext context) =>
+      reduceMotionOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 160);
+
+  /// Incoming replacement content settles in about 220ms without a hard cut.
+  static Duration contentEnterDuration(BuildContext context) =>
+      reduceMotionOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 220);
+
+  /// Duration for layered content replacements such as carousel covers.
+  static Duration contentChangeDuration(BuildContext context) =>
+      reduceMotionOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 240);
+
+  /// Page motion follows Mochi's smooth 300ms container/push timing.
+  static Duration pageTransitionDuration(BuildContext context) =>
+      reduceMotionOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 300);
 
   /// Chrome fade/slide duration kept inside the 120-300ms budget.
   static Duration chromeDuration(BuildContext context) =>

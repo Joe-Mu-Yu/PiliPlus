@@ -1,10 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
-import 'package:PiliPlus/common/widgets/immersive/immersive_pill.dart';
-import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/models/common/live_favorite.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart' as account_follow;
 import 'package:PiliPlus/pages/pure_live_follow/iptv_page.dart';
@@ -90,126 +86,27 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
         title: const Text('直播关注'),
         titleSpacing: 16,
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHigh
-                    .withValues(
-                      alpha: Theme.of(context).colorScheme.isLight ? .72 : .56,
-                    ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: ImmersiveTokens.cardOutline(
-                    Theme.of(context).colorScheme,
-                  ),
-                  width: ImmersiveTokens.hairline,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: '链接解析',
-                    onPressed: _openLinkParser,
-                    icon: const Icon(Icons.link),
-                  ),
-                  TextButton(
-                    key: const ValueKey('recorder-center-action'),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .secondaryContainer,
-                      foregroundColor: Theme.of(context)
-                          .colorScheme
-                          .onSecondaryContainer,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: const StadiumBorder(),
-                    ),
-                    onPressed: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const RecorderCenterPage(),
-                      ),
-                    ),
-                    child: const Text('录制'),
-                  ),
-                  IconButton(
-                    tooltip: 'IPTV 频道',
-                    onPressed: _openIptv,
-                    icon: const Icon(Icons.playlist_play),
-                  ),
-                  PopupMenuButton<_LiveHeaderAction>(
-                    tooltip: '更多直播功能',
-                    onSelected: (action) {
-                      switch (action) {
-                        case _LiveHeaderAction.accountFollows:
-                          Get.to<void>(
-                            () => const account_follow.LiveFollowPage(),
-                          );
-                        case _LiveHeaderAction.addFavorite:
-                          unawaited(_showAddDialog());
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: _LiveHeaderAction.addFavorite,
-                        child: ListTile(
-                          leading: Icon(Icons.add_link),
-                          title: Text('添加到关注'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _LiveHeaderAction.accountFollows,
-                        child: ListTile(
-                          leading: Icon(Icons.live_tv_outlined),
-                          title: Text('B站账号关注'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+          PopupMenuButton<_LiveHeaderAction>(
+            tooltip: '更多直播功能与筛选',
+            onSelected: _onHeaderAction,
+            itemBuilder: (context) => _buildHeaderMenuItems(),
+          ),
+          IconButton(
+            tooltip: '录制中心',
+            key: const ValueKey('recorder-center-action'),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (_) => const RecorderCenterPage(),
               ),
             ),
+            icon: const Icon(Icons.fiber_manual_record_outlined),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Obx(() {
-        final favorites = _controller.favorites.toList(growable: false);
-        final platforms =
-            favorites.map((item) => item.platformId).toSet().toList()..sort();
-        final tags = favorites.expand((item) => item.tagIds).toSet().toList()
-          ..sort();
         return Column(
           children: [
-            categoryTabBar(
-              context,
-              key: const ValueKey('favorite-status-tabs'),
-              controller: _statusTabs,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-              tabs: const [
-                Tab(text: '直播中'),
-                Tab(text: '录播'),
-                Tab(text: '未开播'),
-              ],
-            ),
-            _buildHorizontalFilters<String?>(
-              key: const ValueKey('favorite-platform-tabs'),
-              values: [null, ...platforms],
-              selected: _platformFilter,
-              allLabel: '全部平台',
-              labelFor: (value) =>
-                  value == null ? '全部平台' : _platformLabel(value),
-              onSelected: (value) => setState(() => _platformFilter = value),
-            ),
-            if (tags.isNotEmpty)
-              _buildHorizontalFilters<String?>(
-                key: const ValueKey('favorite-tag-tabs'),
-                values: [null, ...tags],
-                selected: _tagFilter,
-                allLabel: '全部标签',
-                labelFor: (value) => value ?? '全部标签',
-                onSelected: (value) => setState(() => _tagFilter = value),
-              ),
             if (_controller.errorMessage.value case final message?)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
@@ -261,53 +158,116 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
     );
   }
 
-  Widget _buildHorizontalFilters<T>({
-    required Key key,
-    required List<T> values,
-    required T selected,
-    required String allLabel,
-    required String Function(T value) labelFor,
-    required ValueChanged<T> onSelected,
-  }) {
-    final scheme = ColorScheme.of(context);
-    final trackColor = scheme.surfaceContainerHigh.withValues(
-      alpha: scheme.isLight ? .72 : .56,
-    );
-    return Padding(
-      key: key,
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: trackColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: ImmersiveTokens.cardOutline(scheme),
-            width: ImmersiveTokens.hairline,
-          ),
-        ),
-        child: SizedBox(
-          height: 40,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            itemCount: values.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 4),
-            itemBuilder: (context, index) {
-              final value = values[index];
-              return Center(
-                child: ImmersivePill(
-                  selected: value == selected,
-                  height: 32,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  onTap: () => onSelected(value),
-                  child: Text(index == 0 ? allLabel : labelFor(value)),
-                ),
-              );
-            },
-          ),
+  List<PopupMenuEntry<_LiveHeaderAction>> _buildHeaderMenuItems() {
+    final platforms =
+        _controller.favorites.map((item) => item.platformId).toSet().toList()
+          ..sort();
+    final tags =
+        _controller.favorites.expand((item) => item.tagIds).toSet().toList()
+          ..sort();
+    return [
+      const PopupMenuItem<_LiveHeaderAction>(
+        value: _LiveHeaderAction.linkParser(),
+        child: ListTile(leading: Icon(Icons.link), title: Text('链接解析')),
+      ),
+      const PopupMenuItem<_LiveHeaderAction>(
+        value: _LiveHeaderAction.iptv(),
+        child: ListTile(
+          leading: Icon(Icons.playlist_play),
+          title: Text('IPTV 频道'),
         ),
       ),
-    );
+      const PopupMenuItem<_LiveHeaderAction>(
+        value: _LiveHeaderAction.addFavorite(),
+        child: ListTile(leading: Icon(Icons.add_link), title: Text('添加到关注')),
+      ),
+      const PopupMenuItem<_LiveHeaderAction>(
+        value: _LiveHeaderAction.accountFollows(),
+        child: ListTile(
+          leading: Icon(Icons.live_tv_outlined),
+          title: Text('B站账号关注'),
+        ),
+      ),
+      const PopupMenuDivider(),
+      for (var index = 0; index < 3; index++)
+        PopupMenuItem(
+          value: _LiveHeaderAction.status(index),
+          child: ListTile(
+            leading: Icon(
+              _statusTabs.index == index
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+            ),
+            title: Text(['直播中', '录播', '未开播'][index]),
+          ),
+        ),
+      const PopupMenuDivider(),
+      PopupMenuItem(
+        value: const _LiveHeaderAction.platform(null),
+        child: ListTile(
+          leading: Icon(_platformFilter == null ? Icons.check : Icons.public),
+          title: const Text('全部平台'),
+        ),
+      ),
+      for (final platform in platforms)
+        PopupMenuItem(
+          value: _LiveHeaderAction.platform(platform),
+          child: ListTile(
+            leading: Icon(
+              _platformFilter == platform ? Icons.check : Icons.public,
+            ),
+            title: Text(_platformLabel(platform)),
+          ),
+        ),
+      if (tags.isNotEmpty) ...[
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: const _LiveHeaderAction.tag(null),
+          child: ListTile(
+            leading: Icon(
+              _tagFilter == null ? Icons.check : Icons.label_outline,
+            ),
+            title: const Text('全部标签'),
+          ),
+        ),
+        for (final tag in tags)
+          PopupMenuItem(
+            value: _LiveHeaderAction.tag(tag),
+            child: ListTile(
+              leading: Icon(
+                _tagFilter == tag ? Icons.check : Icons.label_outline,
+              ),
+              title: Text(tag),
+            ),
+          ),
+      ],
+    ];
+  }
+
+  void _onHeaderAction(_LiveHeaderAction action) {
+    switch (action.type) {
+      case _LiveHeaderActionType.linkParser:
+        unawaited(_openLinkParser());
+        break;
+      case _LiveHeaderActionType.iptv:
+        unawaited(_openIptv());
+        break;
+      case _LiveHeaderActionType.addFavorite:
+        unawaited(_showAddDialog());
+        break;
+      case _LiveHeaderActionType.accountFollows:
+        Get.to<void>(() => const account_follow.LiveFollowPage());
+        break;
+      case _LiveHeaderActionType.status:
+        _statusTabs.animateTo(action.index!);
+        break;
+      case _LiveHeaderActionType.platform:
+        setState(() => _platformFilter = action.value);
+        break;
+      case _LiveHeaderActionType.tag:
+        setState(() => _tagFilter = action.value);
+        break;
+    }
   }
 
   Widget _buildStatusPage(int statusIndex) {
@@ -714,7 +674,37 @@ class _PureLiveFollowPageState extends State<PureLiveFollowPage>
   }
 }
 
-enum _LiveHeaderAction { addFavorite, accountFollows }
+enum _LiveHeaderActionType {
+  linkParser,
+  iptv,
+  addFavorite,
+  accountFollows,
+  status,
+  platform,
+  tag,
+}
+
+class _LiveHeaderAction {
+  const _LiveHeaderAction._(this.type, {this.index, this.value});
+
+  const _LiveHeaderAction.linkParser()
+    : this._(_LiveHeaderActionType.linkParser);
+  const _LiveHeaderAction.iptv() : this._(_LiveHeaderActionType.iptv);
+  const _LiveHeaderAction.addFavorite()
+    : this._(_LiveHeaderActionType.addFavorite);
+  const _LiveHeaderAction.accountFollows()
+    : this._(_LiveHeaderActionType.accountFollows);
+  const _LiveHeaderAction.status(int index)
+    : this._(_LiveHeaderActionType.status, index: index);
+  const _LiveHeaderAction.platform(String? value)
+    : this._(_LiveHeaderActionType.platform, value: value);
+  const _LiveHeaderAction.tag(String? value)
+    : this._(_LiveHeaderActionType.tag, value: value);
+
+  final _LiveHeaderActionType type;
+  final int? index;
+  final String? value;
+}
 
 class _AddLiveRoomDialog extends StatefulWidget {
   const _AddLiveRoomDialog({

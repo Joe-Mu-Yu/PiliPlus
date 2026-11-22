@@ -19,10 +19,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
@@ -44,19 +40,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Badge
@@ -127,14 +121,6 @@ internal fun DeadlinerNavigationOverlayContent(
         NavigationItem(label = destination.label, icon = icon)
     }
     val backdrop = rememberLayerBackdrop()
-    val density = LocalDensity.current
-    // System gesture/nav inset keeps the whole chrome above the handle; the
-    // pill and the search circle share this single bottom inset so they sit on
-    // one baseline with the same height.
-    val systemBottomInset: Dp = WindowInsets.navigationBars
-        .only(WindowInsetsSides.Bottom)
-        .asPaddingValues()
-        .calculateBottomPadding()
     var rootPositionInWindow by remember { mutableStateOf(Offset.Zero) }
     val blurActive = backdropSnapshot != null && isRuntimeShaderSupported()
 
@@ -180,45 +166,40 @@ internal fun DeadlinerNavigationOverlayContent(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                // The sampled crop extends past this box on
+                                // every side; let it paint outside so the
+                                // pill's edges keep real backdrop pixels.
+                                .graphicsLayer { clip = false }
                                 .onGloballyPositioned { coordinates ->
                                     rootPositionInWindow = coordinates.positionInWindow()
                                 },
                         ) {
-                            backdropSnapshot?.let { snapshot ->
-                                Image(
-                                    bitmap = snapshot.bitmap.asImageBitmap(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillBounds,
-                                    modifier = Modifier
-                                        .offset {
-                                            IntOffset(
-                                                x = snapshot.sourceLeftInWindowPx -
-                                                    rootPositionInWindow.x.toInt(),
-                                                y = snapshot.sourceTopInWindowPx -
-                                                    rootPositionInWindow.y.toInt(),
-                                            )
-                                        }
-                                        .size(
-                                            width = with(density) {
-                                                snapshot.sourceWidthPx.toDp()
-                                            },
-                                            height = with(density) {
-                                                snapshot.sourceHeightPx.toDp()
-                                            },
-                                        )
-                                        .alpha(0f)
-                                        .layerBackdrop(backdrop),
-                                )
-                            }
+                            // Row is declared first so it alone defines the
+                            // Box height. The transparent sample Image below
+                            // uses matchParentSize() and never inflates the
+                            // Box, which keeps the reserved bottom gap honest.
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    // Sample the whole chrome (pill + search
+                                    // circle), not just the pill. Sampling the
+                                    // pill alone left the outer half of the
+                                    // circle outside the crop, so its glass had
+                                    // no backdrop and read as a black wedge.
+                                    .onGloballyPositioned { coordinates ->
+                                        val position = coordinates.positionInWindow()
+                                        onBackdropBoundsChanged(
+                                            FlutterBackdropBounds(
+                                                left = position.x.toInt(),
+                                                top = position.y.toInt(),
+                                                width = coordinates.size.width,
+                                                height = coordinates.size.height,
+                                            ),
+                                        )
+                                    }
                                     .padding(horizontal = 14.dp)
-                                    .padding(top = FLUTTER_BACKDROP_BLEED_DP.dp)
-                                    // Sit just above the gesture handle; the
-                                    // strip below keeps the page surface so no
-                                    // bare black band shows.
-                                    .padding(bottom = systemBottomInset + 8.dp)
+                                    // Breathing gap above the screen edge.
+                                    .padding(bottom = 10.dp)
                                     .offset(y = -state.bottomLiftDp.dp),
                                 // Bottom-aligned: the pill owns the height, the
                                 // smaller circle rests on the same baseline.
@@ -244,11 +225,10 @@ internal fun DeadlinerNavigationOverlayContent(
                                         backdrop = backdrop,
                                         isBlurActive = blurActive,
                                         dark = state.dark,
-                                        onBarBoundsChanged = onBackdropBoundsChanged,
                                         modifier = Modifier.fillMaxWidth(),
                                         // Zero insets: the overlay row owns the
-                                        // spacing so the pill and the search circle
-                                        // share one baseline and one height.
+                                        // spacing so the pill and the search
+                                        // circle share one baseline and height.
                                         bottomInset = 0.dp,
                                         horizontalInset = 0.dp,
                                         // Baseline is owned by the row's bottom inset.
@@ -274,6 +254,51 @@ internal fun DeadlinerNavigationOverlayContent(
                                     )
                                 }
                             }
+
+                            // Overlay the sample behind the chrome. matchParentSize()
+                            // makes it exactly the Row's bounds: it can never grow
+                            // the Box or reserve bottom space. graphicsLayer then
+                            // translates and scales the downsampled crop back to
+                            // its real window position and size, so the glass
+                            // (including the search circle on either side) reads
+                            // the correct pixels instead of an offset/gap.
+                            backdropSnapshot?.takeIf { blurActive }?.let { snapshot ->
+                                Image(
+                                    bitmap = snapshot.bitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillBounds,
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .graphicsLayer {
+                                            // The crop is wider and taller than
+                                            // this box (it includes sampler
+                                            // bleed), so it must be allowed to
+                                            // paint outside the bounds; clipping
+                                            // would leave the pill's lower edge
+                                            // with an un-sampled grey band.
+                                            clip = false
+                                            // Scale from the top-left so the
+                                            // translation is a pure window-space
+                                            // offset, not a center-pivot shift.
+                                            transformOrigin = TransformOrigin(0f, 0f)
+                                            val parentWidthPx = size.width.coerceAtLeast(1f)
+                                            val parentHeightPx = size.height.coerceAtLeast(1f)
+                                            scaleX = snapshot.sourceWidthPx / parentWidthPx
+                                            scaleY = snapshot.sourceHeightPx / parentHeightPx
+                                            translationX = snapshot.sourceLeftInWindowPx -
+                                                rootPositionInWindow.x
+                                            translationY = snapshot.sourceTopInWindowPx -
+                                                rootPositionInWindow.y
+                                        }
+                                        // A tiny non-zero alpha keeps the
+                                        // layer alive: alpha(0f) is culled by
+                                        // some HyperOS renderers, which leaves
+                                        // the glass with no backdrop pixels and
+                                        // renders its lower edge as grey.
+                                        .alpha(0.001f)
+                                        .layerBackdrop(backdrop),
+                                )
+                            }
                         }
                     }
                 }
@@ -282,7 +307,6 @@ internal fun DeadlinerNavigationOverlayContent(
     }
 }
 
-private const val FLUTTER_BACKDROP_BLEED_DP = 48
 /**
  * Shows the PixelCopy diagnostic sample and sampler metrics. The standard
  * navigation bar itself uses Miuix's solid surface and does not consume it.
@@ -400,19 +424,13 @@ internal fun SearchGlassCircleButton(
         if (isBlurActive) surfaceContainer.copy(alpha = 0.4f) else surfaceContainer
     val pillShape = CircleShape
     val contentColor = MiuixTheme.colorScheme.onSurface
-    val baseHighlight = iosIndicatorSpecular
 
     Box(
         modifier = Modifier
             .size(64.dp)
-            .dropShadow(
-                shape = pillShape,
-                shadow = Shadow(
-                    radius = 10.dp,
-                    color = Color.Black,
-                    alpha = if (dark) 0.2f else 0.1f,
-                ),
-            )
+            // No drop shadow: a black halo bleeds through the translucent
+            // glass on dark pages and reads as a dirty ring around the button.
+            // The pill itself relies on its backdrop refraction, not a shadow.
             .clip(pillShape)
             .then(
                 if (isBlurActive && backdrop != null) {
@@ -427,7 +445,9 @@ internal fun SearchGlassCircleButton(
                                 refractionAmount = 24.dp.toPx(),
                             )
                         },
-                        highlight = { baseHighlight.copy(alpha = 0.75f) },
+                        // Same reason as the pill: the BloomStroke rim's
+                        // inner blur darkens the circle's lower edge.
+                        highlight = { null },
                         onDrawSurface = { drawRect(containerColor) },
                     )
                 } else {

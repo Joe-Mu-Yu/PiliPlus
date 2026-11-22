@@ -10,6 +10,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,19 +50,15 @@ import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
@@ -117,10 +114,13 @@ internal val iosIndicatorSpecular: Highlight = Highlight(
             color = Color.White,
             intensity = 1f,
         ),
+        // The secondary light sits at the bottom edge. A negative z there
+        // scatters a dark rim along the pill's lower edge (visible as a grey
+        // line on light pages); keep it above the surface and softer.
         secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
+            position = LightPosition(0.5f, 0.8f, 0.5f),
             color = Color.White,
-            intensity = 0.4f,
+            intensity = 0.25f,
         ),
         dualPeak = true,
     ),
@@ -200,7 +200,6 @@ internal fun IosLiquidGlassNavigationBar(
     backdrop: LayerBackdrop?,
     isBlurActive: Boolean,
     dark: Boolean,
-    onBarBoundsChanged: (FlutterBackdropBounds) -> Unit,
     modifier: Modifier = Modifier,
     badge: (Int) -> (@Composable () -> Unit)? = { null },
     /** Overrides the built-in bottom inset; null keeps the platform default. */
@@ -411,27 +410,11 @@ internal fun IosLiquidGlassNavigationBar(
                             val contentWidthPx = totalWidthPx - with(density) { 8.dp.toPx() }
                             tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
                         }
-                        .onGloballyPositioned { coordinates ->
-                            val position = coordinates.positionInWindow()
-                            onBarBoundsChanged(
-                                FlutterBackdropBounds(
-                                    left = position.x.toInt(),
-                                    top = position.y.toInt(),
-                                    width = coordinates.size.width,
-                                    height = coordinates.size.height,
-                                ),
-                            )
-                        }
                         .graphicsLayer { translationX = panelOffset }
-                        .dropShadow(
-                            shape = pillShape,
-                            shadow = Shadow(
-                                radius = 10.dp,
-                                color = Color.Black,
-                                // Lighter in light theme to avoid a visible gray fringe.
-                                alpha = if (isDark) 0.2f else 0.1f,
-                            ),
-                        )
+                        // No drop shadow: a black halo under the translucent
+                        // glass reads as a pale grey band along the pill's
+                        // bottom edge. The hairline border below provides the
+                        // edge definition instead.
                         .then(
                             if (isBlurActive && backdrop != null) {
                                 Modifier.drawBackdrop(
@@ -450,7 +433,12 @@ internal fun IosLiquidGlassNavigationBar(
                                             refractionAmount = 24.dp.toPx(),
                                         )
                                     },
-                                    highlight = { baseHighlight.value.copy(alpha = 0.75f) },
+                                    // The BloomStroke specular rim renders a
+                                    // dark 2dp line along the pill's bottom
+                                    // edge (its inner blur mixes with the
+                                    // backdrop there). Drop it and rely on the
+                                    // glass surface + border for definition.
+                                    highlight = { null },
                                     layerBlock = {
                                         val width = size.width.coerceAtLeast(1f)
                                         val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDrag.pressProgress)
@@ -463,6 +451,19 @@ internal fun IosLiquidGlassNavigationBar(
                                 Modifier
                                     .background(containerColor, pillShape)
                             },
+                        )
+                        // A hairline border keeps the capsule edge legible
+                        // now that the specular rim is gone; it is drawn on
+                        // top of the glass and has no inner blur, so it never
+                        // darkens the pill interior.
+                        .border(
+                            width = 1.dp,
+                            color = if (isDark) {
+                                Color.White.copy(alpha = 0.10f)
+                            } else {
+                                Color.Black.copy(alpha = 0.06f)
+                            },
+                            shape = pillShape,
                         )
                         .then(
                             if (isBlurActive) {

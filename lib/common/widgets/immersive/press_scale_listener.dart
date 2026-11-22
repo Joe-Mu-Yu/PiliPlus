@@ -12,7 +12,7 @@ class PressScaleListener extends StatefulWidget {
     super.key,
     required this.child,
     this.scale = ImmersiveTokens.pressedScale,
-    this.curve = Curves.easeOutCubic,
+    this.curve = ImmersiveTokens.settleCurve,
     this.enabled = true,
   });
 

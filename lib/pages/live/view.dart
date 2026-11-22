@@ -1,10 +1,10 @@
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/button/icon_button.dart';
-import 'package:PiliPlus/common/widgets/button/more_btn.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/category_chip_bar.dart';
+import 'package:PiliPlus/common/widgets/button/more_btn.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
+import 'package:PiliPlus/common/widgets/immersive/press_scale_listener.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/pair.dart';
@@ -15,13 +15,13 @@ import 'package:PiliPlus/pages/live/controller.dart';
 import 'package:PiliPlus/pages/live/widgets/live_item_app.dart';
 import 'package:PiliPlus/pages/live_area/view.dart';
 import 'package:PiliPlus/pages/live_follow/view.dart';
+import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:get/get.dart';
-import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 
 class LivePage extends StatefulWidget {
@@ -54,26 +54,122 @@ class _LivePageState extends State<LivePage>
       clipBehavior: Clip.hardEdge,
       margin: const EdgeInsets.symmetric(horizontal: Style.safeSpace),
       decoration: const BoxDecoration(borderRadius: Style.mdRadius),
-      child: refreshIndicator(
-        onRefresh: controller.onRefresh,
-        child: CustomScrollView(
-          controller: controller.scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.only(
-                top: Style.cardSpace,
-                bottom: 100,
-              ),
-              sliver: SliverMainAxisGroup(
-                slivers: [
-                  Obx(() => _buildTop(theme, controller.topState.value)),
-                  Obx(() => _buildBody(theme, controller.loadingState.value)),
-                ],
-              ),
+      child: Stack(
+        children: [
+          refreshIndicator(
+            onRefresh: controller.onRefresh,
+            child: CustomScrollView(
+              controller: controller.scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.only(
+                    top: Style.cardSpace,
+                    bottom: 100,
+                  ),
+                  sliver: SliverMainAxisGroup(
+                    slivers: [
+                      Obx(() => _buildTop(theme, controller.topState.value)),
+                      Obx(
+                        () => _buildBody(theme, controller.loadingState.value),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+          Positioned(
+            top: MediaQuery.viewPaddingOf(context).top + Style.cardSpace,
+            right: 8,
+            child: _buildCategoryMenu(theme),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryMenu(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    final reduceMotion = ImmersiveTokens.reduceMotionOf(context);
+    return PressScaleListener(
+      child: Material(
+        color: scheme.surfaceContainer.withValues(
+          alpha: Get.find<MainController>().floatingNavBar ? .4 : 1,
         ),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: Obx(() {
+          final topData = controller.topState.value.second;
+          final areas = topData?.cardData?.areaEntranceV3?.list ?? const [];
+          final tags = controller.newTags ?? const [];
+          return PopupMenuButton<String>(
+            tooltip: '直播分类',
+            position: PopupMenuPosition.under,
+            icon: const Icon(Icons.more_horiz_rounded),
+            popUpAnimationStyle: AnimationStyle(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 240),
+              reverseDuration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: reduceMotion ? Curves.linear : Curves.easeOutBack,
+            ),
+            onSelected: (value) {
+              if (value == 'action:frame') {
+                controller.showFirstFrame = !controller.showFirstFrame;
+                setState(() {});
+                return;
+              }
+              if (value == 'action:match') {
+                Get.toNamed(
+                  '/webview',
+                  parameters: {
+                    'uaType': 'mob',
+                    'url':
+                        'https://www.bilibili.com/h5/match/data/home?navhide=1&${ThemeUtils.themeUrl(theme.isDark)}',
+                  },
+                );
+                return;
+              }
+              if (value == 'action:areas') {
+                Get.to(const LiveAreaPage());
+                return;
+              }
+              final parts = value.split(':');
+              final index = int.parse(parts[1]);
+              if (parts[0] == 'area') {
+                controller.onSelectArea(
+                  index,
+                  index == 0 ? null : areas[index - 1],
+                );
+              } else if (index < tags.length) {
+                controller.onSelectTag(index, tags[index].sortType);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'area:0', child: Text('推荐')),
+              PopupMenuItem(
+                value: 'action:frame',
+                child: Text(controller.showFirstFrame ? '显示封面' : '显示首帧'),
+              ),
+              const PopupMenuItem(value: 'action:match', child: Text('游戏赛事')),
+              const PopupMenuItem(value: 'action:areas', child: Text('全部标签')),
+              for (var i = 0; i < areas.length; i++)
+                PopupMenuItem(
+                  value: 'area:${i + 1}',
+                  child: Text(areas[i].title ?? '分区'),
+                ),
+              if (tags.isNotEmpty) const PopupMenuDivider(),
+              for (var i = 0; i < tags.length; i++)
+                PopupMenuItem(
+                  value: 'tag:$i',
+                  child: Text(tags[i].name ?? '标签'),
+                ),
+            ],
+          );
+        }),
       ),
     );
   }
@@ -82,71 +178,6 @@ class _LivePageState extends State<LivePage>
     return SliverMainAxisGroup(
       slivers: [
         if (data.first != null) ..._buildFollowList(theme, data.first!),
-        if (data.second?.cardData?.areaEntranceV3?.list case final list?)
-          if (list.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const .only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Obx(() {
-                        final areaIndex = controller.areaIndex.value;
-                        return categoryChipBar(
-                          context,
-                          itemCount: list.length + 1,
-                          selectedIndex: areaIndex,
-                          labelOf: (index) =>
-                              index == 0 ? '推荐' : list[index - 1].title!,
-                          onSelected: (index) => controller.onSelectArea(
-                            index,
-                            index == 0 ? null : list[index - 1],
-                          ),
-                        );
-                      }),
-                    ),
-                    iconButton(
-                      size: 26,
-                      iconSize: 18,
-                      context: context,
-                      tooltip: '切换${controller.showFirstFrame ? '封面' : '首帧'}',
-                      icon: controller.showFirstFrame
-                          ? const Icon(MdiIcons.alphaFBox)
-                          : const Icon(MdiIcons.image),
-                      onPressed: () {
-                        controller.showFirstFrame = !controller.showFirstFrame;
-                        setState(() {});
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    iconButton(
-                      size: 26,
-                      iconSize: 16,
-                      context: context,
-                      tooltip: '游戏赛事',
-                      icon: const Icon(Icons.gamepad),
-                      onPressed: () => Get.toNamed(
-                        '/webview',
-                        parameters: {
-                          'uaType': 'mob',
-                          'url':
-                              'https://www.bilibili.com/h5/match/data/home?navhide=1&${ThemeUtils.themeUrl(theme.isDark)}',
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    iconButton(
-                      size: 26,
-                      iconSize: 16,
-                      context: context,
-                      tooltip: '全部标签',
-                      icon: const Icon(Icons.widgets),
-                      onPressed: () => Get.to(const LiveAreaPage()),
-                    ),
-                  ],
-                ),
-              ),
-            ),
       ],
     );
   }
@@ -170,22 +201,6 @@ class _LivePageState extends State<LivePage>
       ),
       Success(:final response) => SliverMainAxisGroup(
         slivers: [
-          if (controller.newTags case final newTags?)
-            if (newTags.isNotEmpty)
-              SliverToBoxAdapter(
-                child: Obx(() {
-                  final tagIndex = controller.tagIndex.value;
-                  return categoryChipBar(
-                    context,
-                    itemCount: newTags.length,
-                    selectedIndex: tagIndex,
-                    labelOf: (index) => newTags[index].name!,
-                    onSelected: (index) =>
-                        controller.onSelectTag(index, newTags[index].sortType),
-                    padding: const EdgeInsets.fromLTRB(0, 4, 0, 8),
-                  );
-                }),
-              ),
           response != null && response.isNotEmpty
               ? SliverGrid.builder(
                   gridDelegate: gridDelegate,

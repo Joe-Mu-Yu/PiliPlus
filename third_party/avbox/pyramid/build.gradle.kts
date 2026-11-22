@@ -43,10 +43,11 @@ chaquopy {
             ?.absolutePath
         (explicitBuildPython ?: pathBuildPython)?.let { buildPython(it) }
         pip {
-            options("-i", "https://repo.huaweicloud.com/repository/pypi/simple/")
             options("--extra-index-url", "https://chaquo.com/pypi-13.1")
+            options("-i", "https://pypi.org/simple")
             install("lxml")
-            install("pyquery==2.0.2")
+            install(file("wheels/pyquery-2.0.2-py3-none-any.whl").absolutePath)
+            install(file("wheels/cssselect-1.3.0-py3-none-any.whl").absolutePath)
             install("requests")
             install(file("wheels/jsonpath-0.54-py3-none-any.whl").absolutePath)
             install("cachetools")

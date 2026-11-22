@@ -1,6 +1,9 @@
+import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/widgets/immersive/immersive_tokens.dart';
+import 'package:PiliPlus/common/widgets/immersive/press_scale_listener.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/category_tab_bar.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:PiliPlus/models/common/home_tab_type.dart';
 import 'package:PiliPlus/pages/common/common_page.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
@@ -52,47 +55,93 @@ class _HomePageState extends CommonPageState<HomePage>
   }
 
   Widget _buildContent() {
-    Widget tabBar;
-    if (_homeController.tabs.length > 1) {
-      // Floating capsule track shared with other browsing pages: the selected
-      // tab reads as a pill instead of a bare underline.
-      tabBar = categoryTabBar(
-        context,
-        controller: _homeController.tabController,
-        tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
-        tabAlignment: TabAlignment.center,
-        padding: const EdgeInsets.only(top: 4, left: 14, right: 14),
-        onTap: (_) {
-          if (!_homeController.tabController.indexIsChanging) {
-            _homeController.animateToTop();
-          }
-        },
+    Widget buildTopActions() {
+      final scheme = ColorScheme.of(context);
+      final reduceMotion = ImmersiveTokens.reduceMotionOf(context);
+      return Material(
+        color: scheme.surfaceContainer.withValues(
+          alpha: _mainController.floatingNavBar ? .4 : 1,
+        ),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: PopupMenuButton<HomeTabType>(
+          tooltip: '首页频道',
+          position: PopupMenuPosition.under,
+          icon: const Icon(Icons.more_horiz_rounded),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            foregroundColor: scheme.onSurface,
+            backgroundColor: Colors.transparent,
+            shape: const CircleBorder(),
+          ),
+          popUpAnimationStyle: AnimationStyle(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 240),
+            reverseDuration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            curve: reduceMotion ? Curves.linear : Curves.easeOutBack,
+            reverseCurve: reduceMotion ? Curves.linear : Curves.easeInCubic,
+          ),
+          onSelected: _homeController.selectTab,
+          itemBuilder: (context) => [
+            for (final tab in HomeTabType.values)
+              PopupMenuItem(value: tab, child: Text(tab.label)),
+          ],
+        ),
       );
-      if (_homeController.hideTopBar &&
-          _mainController.barHideType == .instant) {
-        tabBar = Material(
-          color: Theme.of(context).colorScheme.surface,
-          child: tabBar,
-        );
-      }
-    } else {
-      tabBar = const SizedBox(height: 6);
     }
+
     return Material(
       type: MaterialType.canvas,
       color: _colorScheme.surface,
       child: Column(
         children: [
-          tabBar,
           Expanded(
-            child: onBuild(
-              tabBarView(
-                controller: _homeController.tabController,
-                children: _homeController.tabs.map((e) => e.page).toList(),
-              ),
+            child: Stack(
+              children: [
+                onBuild(
+                  tabBarView(
+                    controller: _homeController.tabController,
+                    children: [
+                      for (final tab in _homeController.tabs)
+                        HomeTabViewport(tab: tab, child: tab.page),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: MediaQuery.viewPaddingOf(context).top + 12,
+                  right: Style.safeSpace + 8,
+                  child: PressScaleListener(child: buildTopActions()),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Only recommendations extend beneath the status bar. Keep the other tab
+/// viewports below the camera cutout without changing their PageView state.
+class HomeTabViewport extends StatelessWidget {
+  const HomeTabViewport({super.key, required this.tab, required this.child});
+
+  final HomeTabType tab;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tab == HomeTabType.rcmd) return child;
+
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.viewPaddingOf(context).top),
+      child: MediaQuery.removeViewPadding(
+        context: context,
+        removeTop: true,
+        child: child,
       ),
     );
   }
@@ -104,103 +153,99 @@ Widget userAvatar({
 }) {
   return Semantics(
     label: "我的",
-    child: Obx(
-      () {
-        if (mainController.accountService.isLogin.value) {
-          return Stack(
-            clipBehavior: .none,
-            children: [
-              NetworkImgLayer(
-                type: .avatar,
-                width: 34,
-                height: 34,
-                src: mainController.accountService.face.value,
-              ),
-              Positioned.fill(
-                child: Material(
-                  type: .transparency,
-                  child: InkWell(
-                    onTap: mainController.toMinePage,
-                    splashColor: colorScheme.primaryContainer.withValues(
-                      alpha: 0.3,
-                    ),
-                    customBorder: const CircleBorder(),
+    child: Obx(() {
+      if (mainController.accountService.isLogin.value) {
+        return Stack(
+          clipBehavior: .none,
+          children: [
+            NetworkImgLayer(
+              type: .avatar,
+              width: 34,
+              height: 34,
+              src: mainController.accountService.face.value,
+            ),
+            Positioned.fill(
+              child: Material(
+                type: .transparency,
+                child: InkWell(
+                  onTap: mainController.toMinePage,
+                  splashColor: colorScheme.primaryContainer.withValues(
+                    alpha: 0.3,
                   ),
+                  customBorder: const CircleBorder(),
                 ),
               ),
-              Positioned(
-                right: -4,
-                bottom: -4,
-                child: Obx(
-                  () => MineController.anonymity.value
-                      ? IgnorePointer(
-                          child: Container(
-                            padding: const .all(2),
-                            decoration: BoxDecoration(
-                              shape: .circle,
-                              color: colorScheme.secondaryContainer,
-                            ),
-                            child: Icon(
-                              size: 14,
-                              MdiIcons.incognito,
-                              color: colorScheme.onSecondaryContainer,
-                            ),
+            ),
+            Positioned(
+              right: -4,
+              bottom: -4,
+              child: Obx(
+                () => MineController.anonymity.value
+                    ? IgnorePointer(
+                        child: Container(
+                          padding: const .all(2),
+                          decoration: BoxDecoration(
+                            shape: .circle,
+                            color: colorScheme.secondaryContainer,
                           ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
+                          child: Icon(
+                            size: 14,
+                            MdiIcons.incognito,
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
               ),
-            ],
-          );
-        }
-        return SizedBox(
-          width: 38,
-          height: 38,
-          child: IconButton(
-            tooltip: '点击登录',
-            style: IconButton.styleFrom(
-              padding: .zero,
-              backgroundColor: colorScheme.onInverseSurface,
             ),
-            onPressed: mainController.toMinePage,
-            icon: Icon(
-              Icons.person_rounded,
-              size: 22,
-              color: colorScheme.primary,
-            ),
-          ),
+          ],
         );
-      },
-    ),
+      }
+      return SizedBox(
+        width: 38,
+        height: 38,
+        child: IconButton(
+          tooltip: '点击登录',
+          style: IconButton.styleFrom(
+            padding: .zero,
+            backgroundColor: colorScheme.onInverseSurface,
+          ),
+          onPressed: mainController.toMinePage,
+          icon: Icon(
+            Icons.person_rounded,
+            size: 22,
+            color: colorScheme.primary,
+          ),
+        ),
+      );
+    }),
   );
 }
 
 Widget msgBadge(MainController mainController) {
-  return Obx(
-    () {
-      if (mainController.accountService.isLogin.value) {
-        final count = mainController.msgUnReadCount.value;
-        final isNumBadge = mainController.msgBadgeMode == .number;
-        return IconButton(
-          tooltip: '消息',
-          onPressed: () {
-            mainController
-              ..clearUnreadMsg()
-              ..lastCheckUnreadAt = DateTime.now().millisecondsSinceEpoch;
-            Get.toNamed('/whisper');
-          },
-          icon: Badge(
-            isLabelVisible:
-                mainController.msgBadgeMode != .hidden && count != null,
-            alignment: isNumBadge
-                ? const Alignment(0.0, -0.85)
-                : const Alignment(1.0, -0.85),
-            label: isNumBadge && count != null ? Text(count) : null,
-            child: const Icon(Icons.notifications_none),
-          ),
-        );
-      }
-      return const SizedBox.shrink();
-    },
-  );
+  return Obx(() {
+    if (mainController.accountService.isLogin.value) {
+      final count = mainController.msgUnReadCount.value;
+      final isNumBadge = mainController.msgBadgeMode == .number;
+      return IconButton(
+        tooltip: '消息',
+        onPressed: () {
+          mainController
+            ..clearUnreadMsg()
+            ..lastCheckUnreadAt = DateTime.now().millisecondsSinceEpoch;
+          Get.toNamed('/whisper');
+        },
+        icon: Badge(
+          isLabelVisible:
+              mainController.msgBadgeMode != .hidden && count != null,
+          alignment: isNumBadge
+              ? const Alignment(0.0, -0.85)
+              : const Alignment(1.0, -0.85),
+          label: isNumBadge && count != null ? Text(count) : null,
+          child: const Icon(Icons.notifications_none),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
+  });
 }

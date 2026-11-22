@@ -199,14 +199,15 @@ fun HeroSpotlight(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(start = 24.dp, end = 24.dp, bottom = 18.dp),
+            horizontalAlignment = Alignment.Start,
         ) {
-            HeroSpotlightCaption(video = current)
+            HeroSpotlightCaption(video = current, fadeToBackdrop = fadeToBackdrop)
             if (count > 1) {
                 HeroSpotlightDots(
                     count = count,
                     selected = pagerState.currentPage % count,
+                    alignedStart = true,
                 )
             }
         }
@@ -214,18 +215,36 @@ fun HeroSpotlight(
 }
 
 @Composable
-private fun HeroSpotlightCaption(video: Movie.Video) {
+private fun HeroSpotlightCaption(video: Movie.Video, fadeToBackdrop: Boolean) {
+    val metadata = listOfNotNull(
+        video.author?.takeIf { it.isNotBlank() }
+            ?: video.actor?.takeIf { it.isNotBlank() },
+        video.hits?.takeIf { it.isNotBlank() }?.let { "播放 $it" },
+    ).joinToString(" · ")
+    if (metadata.isNotEmpty()) {
+        Text(
+            text = metadata,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (fadeToBackdrop) MaterialTheme.colorScheme.onSurfaceVariant else Color.White.copy(alpha = .78f),
+            textAlign = TextAlign.Start,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+        )
+    }
     Text(
         text = video.name ?: "",
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight(800),
-        color = MaterialTheme.colorScheme.onSurface,
-        textAlign = TextAlign.Center,
+        color = if (fadeToBackdrop) MaterialTheme.colorScheme.onSurface else Color.White,
+        textAlign = TextAlign.Start,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp),
+            .padding(top = 6.dp),
     )
     val rating = ratingBadgeText(video.note)
     if (!rating.isNullOrBlank()) {
@@ -233,23 +252,23 @@ private fun HeroSpotlightCaption(video: Movie.Video) {
             text = if (rating != video.note?.trim()) stringResource(R.string.detail_rating, rating) else rating,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
+            color = if (fadeToBackdrop) MaterialTheme.colorScheme.onSurface else Color.White.copy(alpha = .82f),
+            textAlign = TextAlign.Start,
             maxLines = 1,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 4.dp, start = 24.dp, end = 24.dp),
+            .padding(top = 4.dp),
         )
     }
 }
 
 @Composable
-private fun HeroSpotlightDots(count: Int, selected: Int) {
+private fun HeroSpotlightDots(count: Int, selected: Int, alignedStart: Boolean) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 12.dp),
-        horizontalArrangement = Arrangement.Center,
+        horizontalArrangement = if (alignedStart) Arrangement.Start else Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(count) { index ->

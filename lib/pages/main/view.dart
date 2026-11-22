@@ -454,8 +454,8 @@ class _MainAppState extends PopScopeState<MainApp>
     return bottomNav;
   }
 
-  /// Independent circular search entry shown beside the bottom navigation,
-  /// mirroring the reference design's detached glass search button.
+  /// Independent circular search entry shown beside the bottom navigation.
+  /// Uses the same neutral surface as the bar so it reads as one chrome group.
   Widget _searchCircleButton(ColorScheme scheme, {double size = 72}) {
     final borderRadius = BorderRadius.circular(size / 2);
     return SizedBox(
@@ -473,6 +473,7 @@ class _MainAppState extends PopScopeState<MainApp>
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
           onTap: () => Get.toNamed('/search'),
           child: Icon(
             Icons.search_outlined,
@@ -733,7 +734,13 @@ class _MainAppState extends PopScopeState<MainApp>
           (type) => MainBodyViewport(
             safePadding: padding,
             extendIntoSystemBars:
-                Platform.isAndroid && type == NavigationBarType.movies,
+                Platform.isAndroid &&
+                (type == NavigationBarType.movies ||
+                    type == NavigationBarType.home),
+            extendIntoTopSystemBar:
+                Platform.isAndroid &&
+                (type == NavigationBarType.movies ||
+                    type == NavigationBarType.home),
             child: type.page,
           ),
         )

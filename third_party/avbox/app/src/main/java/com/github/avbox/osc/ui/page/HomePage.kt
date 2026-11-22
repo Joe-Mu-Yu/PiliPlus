@@ -256,18 +256,6 @@ fun HomePage(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .clickable { showSearchSettings = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_more_vert),
-                        contentDescription = stringResource(R.string.search_settings),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
                         .clickable {
                             context.startActivity(Intent(context, SearchActivity::class.java))
                         },

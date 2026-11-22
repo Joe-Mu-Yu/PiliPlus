@@ -80,6 +80,14 @@ class Movie : Serializable {
         var actor: String? = null
 
         @JvmField
+        @XStreamAlias("author")
+        var author: String? = null
+
+        @JvmField
+        @XStreamAlias("hits")
+        var hits: String? = null
+
+        @JvmField
         @XStreamAlias("director")
         var director: String? = null
 

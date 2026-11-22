@@ -60,6 +60,7 @@ void main() {
         child: MainBodyViewport(
           safePadding: hostSafePadding,
           extendIntoSystemBars: true,
+          extendIntoTopSystemBar: true,
           child: SizedBox.expand(key: ValueKey('movies-viewport')),
         ),
       ),

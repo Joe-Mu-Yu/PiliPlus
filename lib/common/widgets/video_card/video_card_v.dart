@@ -27,15 +27,74 @@ import 'package:material_ui/material_ui.dart';
 class VideoCardV extends StatefulWidget {
   final BaseRcmdVideoItemModel videoItem;
   final VoidCallback? onRemove;
+  final VoidCallback? onTap;
+  final bool showContent;
+  final double? coverAspectRatio;
 
   const VideoCardV({
     super.key,
     required this.videoItem,
     this.onRemove,
+    this.onTap,
+    this.showContent = true,
+    this.coverAspectRatio,
   });
 
   static final shortFormat = DateFormat('M-d');
   static final longFormat = DateFormat('yy-M-d');
+
+  static Future<void> openItem(BaseRcmdVideoItemModel item) async {
+    final heroTag = Utils.makeHeroTag(item.cid ?? item.bvid ?? item.aid);
+    switch (item.goto) {
+      case 'bangumi':
+        PageUtils.viewPgc(epId: item.param!, heroTag: heroTag);
+        break;
+      case 'av':
+        final bvid = item.bvid ?? IdUtils.av2bv(item.aid!);
+        var cid = item.cid;
+        Dimension? dimension;
+        var isVertical = false;
+        if (item is RcmdVideoItemAppModel) {
+          if (item.uri case final uri?) {
+            isVertical = uri.isVerticalFromUri;
+          }
+        }
+        if (cid == null) {
+          final result = await SearchHttp.ab2cWithDimension(
+            aid: item.aid,
+            bvid: bvid,
+          );
+          if (result != null) {
+            cid = result.cid;
+            dimension = result.dimension;
+          }
+        }
+        if (cid != null) {
+          PageUtils.toVideoPage(
+            aid: item.aid,
+            bvid: bvid,
+            cid: cid,
+            cover: item.cover,
+            title: item.title,
+            isVertical: isVertical,
+            dimension: dimension,
+            heroTag: heroTag,
+          );
+        }
+        break;
+      case 'picture':
+        try {
+          PiliScheme.routePushFromUrl(item.uri!);
+        } catch (err) {
+          SmartDialog.showToast(err.toString());
+        }
+        break;
+      default:
+        if (item.uri?.isNotEmpty == true) {
+          PiliScheme.routePushFromUrl(item.uri!);
+        }
+    }
+  }
 
   @override
   State<VideoCardV> createState() => _VideoCardVState();
@@ -46,7 +105,6 @@ class _VideoCardVState extends State<VideoCardV> {
   VoidCallback? get onRemove => widget.onRemove;
 
   late String _heroTag;
-
   @override
   void initState() {
     super.initState();
@@ -143,46 +201,21 @@ class _VideoCardVState extends State<VideoCardV> {
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: onPushDetail,
+                onTap: widget.onTap ?? onPushDetail,
                 onLongPress: onLongPress,
                 onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
                 borderRadius: BorderRadius.circular(ImmersiveTokens.cardRadius),
                 child: Column(
                   crossAxisAlignment: .start,
                   children: [
-                    AspectRatio(
-                      aspectRatio: Style.aspectRatio,
-                      child: LayoutBuilder(
-                        builder: (context, boxConstraints) {
-                          double maxWidth = boxConstraints.maxWidth;
-                          double maxHeight = boxConstraints.maxHeight;
-                          return Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              NetworkImgLayer(
-                                src: videoItem.cover,
-                                width: maxWidth,
-                                height: maxHeight,
-                                borderRadius: const .vertical(
-                                  top: .circular(ImmersiveTokens.cardRadius),
-                                ),
-                              ),
-                              if (videoItem.duration > 0)
-                                PBadge(
-                                  bottom: 6,
-                                  right: 7,
-                                  size: .small,
-                                  type: .gray,
-                                  text: DurationUtils.formatDuration(
-                                    videoItem.duration,
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                    content(context),
+                    if (widget.coverAspectRatio == null)
+                      AspectRatio(
+                        aspectRatio: Style.aspectRatio,
+                        child: _cover(context),
+                      )
+                    else
+                      Expanded(child: _cover(context)),
+                    if (widget.showContent) content(context),
                   ],
                 ),
               ),
@@ -204,6 +237,34 @@ class _VideoCardVState extends State<VideoCardV> {
       ],
     );
   }
+
+  Widget _cover(BuildContext context) => LayoutBuilder(
+    builder: (context, boxConstraints) {
+      final maxWidth = boxConstraints.maxWidth;
+      final maxHeight = boxConstraints.maxHeight;
+      return Stack(
+        clipBehavior: .none,
+        children: [
+          NetworkImgLayer(
+            src: videoItem.cover,
+            width: maxWidth,
+            height: maxHeight,
+            borderRadius: const .vertical(
+              top: .circular(ImmersiveTokens.cardRadius),
+            ),
+          ),
+          if (videoItem.duration > 0)
+            PBadge(
+              bottom: 6,
+              right: 7,
+              size: .small,
+              type: .gray,
+              text: DurationUtils.formatDuration(videoItem.duration),
+            ),
+        ],
+      );
+    },
+  );
 
   Widget content(BuildContext context) {
     final theme = Theme.of(context);
@@ -281,16 +342,10 @@ class _VideoCardVState extends State<VideoCardV> {
   Widget videoStat(ThemeData theme) {
     return Row(
       children: [
-        StatWidget(
-          type: .play,
-          value: videoItem.stat.view,
-        ),
+        StatWidget(type: .play, value: videoItem.stat.view),
         if (videoItem.goto != 'picture') ...[
           const SizedBox(width: 4),
-          StatWidget(
-            type: .danmaku,
-            value: videoItem.stat.danmu,
-          ),
+          StatWidget(type: .danmaku, value: videoItem.stat.danmu),
         ],
         if (videoItem is RcmdVideoItemModel) ...[
           const Spacer(),

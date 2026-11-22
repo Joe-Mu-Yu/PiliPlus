@@ -14,18 +14,24 @@ class MainBodyViewport extends StatelessWidget {
     super.key,
     required this.safePadding,
     required this.extendIntoSystemBars,
+    this.extendIntoTopSystemBar = false,
     required this.child,
   });
 
   final EdgeInsets safePadding;
   final bool extendIntoSystemBars;
+  final bool extendIntoTopSystemBar;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: extendIntoSystemBars ? EdgeInsets.zero : safePadding,
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final padding = extendIntoSystemBars
+        ? EdgeInsets.only(
+            top: extendIntoTopSystemBar ? 0 : safePadding.top,
+          )
+        : safePadding;
+    return Padding(padding: padding, child: child);
+  }
 }
 
 class MainLayout

@@ -2,12 +2,9 @@
 
 package com.github.avbox.osc.ui.page
 
-import com.github.avbox.osc.api.AppBootstrap
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
-import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +23,9 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationRail
@@ -41,11 +41,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -63,10 +66,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.rememberLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
+import com.github.avbox.osc.api.AppBootstrap
+import com.github.avbox.osc.boot.BootGuard
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
-import com.github.avbox.osc.ui.components.LocalTopBarGlassPauseRecording
 import com.github.avbox.osc.ui.components.LocalSheetDismissThen
 import com.github.avbox.osc.ui.components.LocalSheetHost
+import com.github.avbox.osc.ui.components.LocalTopBarGlassPauseRecording
 import com.github.avbox.osc.ui.components.LocalTopBarSystemInsetConsumed
 import com.github.avbox.osc.ui.components.SheetHost
 import com.github.avbox.osc.ui.components.SheetHostState
@@ -75,14 +80,19 @@ import com.github.avbox.osc.ui.navbar.NavAxis
 import com.github.avbox.osc.ui.navbar.NavMetrics
 import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.ui.theme.LiquidGlassState
-import com.github.avbox.osc.boot.BootGuard
 import com.github.avbox.osc.util.HomeSettings
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
+import androidx.activity.compose.BackHandler
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 
 private enum class AppTab(@StringRes val labelRes: Int, @DrawableRes val icon: Int) {
     HOME(R.string.tab_home, R.drawable.ic_tab_home),
+    RECORDS(R.string.tab_records, R.drawable.ic_tab_records),
+    FOLLOWING(R.string.tab_following, R.drawable.ic_tab_following),
+    MINE(R.string.tab_mine, R.drawable.ic_tab_mine),
 }
 
 @Composable
@@ -136,7 +146,10 @@ private fun MainContent(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(pageCount = { AppTab.entries.size })
+    val tabs = remember(embedded) {
+        if (embedded) AppTab.entries else listOf(AppTab.HOME)
+    }
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
     val homeViewModel: HomeViewModel = viewModel()
 
     LaunchedEffect(Unit) {
@@ -160,6 +173,7 @@ private fun MainContent(
     }
 
     val sheetHost = remember { SheetHostState() }
+    var destinationMenuExpanded by remember { mutableStateOf(false) }
     val sheetVisible = sheetHost.request != null
     BackHandler(enabled = !sheetVisible, onBack = onExit)
     LaunchedEffect(embedded, sheetVisible, onHostNavigationOcclusionChanged) {
@@ -213,12 +227,13 @@ private fun MainContent(
             }
         }
     }
-    // The embedded build exposes only Home, so a one-item navigation capsule
-    // is redundant. Keep the real status-bar inset after removing it; the
-    // former capsule reserve happened to provide this clearance on phones.
-    val pageViewportTopPadding = WindowInsets.statusBars
+    // The Flutter host already extends embedded AVBox beneath the status bar.
+    // Keep the hero at y=0 while controls remain below the cutout.
+    val statusBarTopPadding = WindowInsets.statusBars
         .asPaddingValues()
         .calculateTopPadding()
+    val movieHomeTopInsetConsumed = embedded && pagerState.currentPage == 0
+    val pageViewportTopPadding = if (movieHomeTopInsetConsumed) 0.dp else statusBarTopPadding
     val embeddedHostBottomPadding =
         NavMetrics.embeddedHostBottomReserveDp(embedded, navAxis).dp
     val pageContentPadding = PaddingValues(
@@ -228,10 +243,12 @@ private fun MainContent(
     CompositionLocalProvider(
         LocalSheetHost provides sheetHost,
         LocalTopBarGlassPauseRecording provides pauseTopBarRecording,
-        // The pager below places every page after the host/status and floating
-        // navigation bands, so page TopAppBars must not consume status bars a
-        // second time. This mirrors the host app's top-safe-area structure.
-        LocalTopBarSystemInsetConsumed provides true,
+        // On non-movies-home pages the pager already sits below the status bar
+        // (pageViewportTopPadding), so page TopAppBars must not consume status
+        // bars a second time. On the movies home the pager starts at y=0 to let
+        // the hero extend behind the status bar, so the TopAppBar must consume
+        // the status bar inset itself to keep its controls below the cutout.
+        LocalTopBarSystemInsetConsumed provides !movieHomeTopInsetConsumed,
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(
@@ -245,7 +262,7 @@ private fun MainContent(
                             ),
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         ) {
-                            AppTab.entries.forEachIndexed { index, tab ->
+                            tabs.forEachIndexed { index, tab ->
                                 val selected = pagerState.targetPage == index
                                 ShortNavigationBarItem(
                                     selected = selected,
@@ -280,7 +297,7 @@ private fun MainContent(
                 ) {
                     HorizontalPager(
                         state = pagerState,
-                        userScrollEnabled = navAnimationEnabled,
+                        userScrollEnabled = !embedded && navAnimationEnabled,
                         beyondViewportPageCount = 3,
                         modifier = Modifier
                             .fillMaxSize()
@@ -295,8 +312,14 @@ private fun MainContent(
                             }
                         )
                         CompositionLocalProvider(LocalLifecycleOwner provides pageLifecycleOwner) {
-                            when (AppTab.entries[page]) {
-                                AppTab.HOME -> HomePage(homeViewModel, pageContentPadding)
+                            when (tabs[page]) {
+                                AppTab.HOME -> HomePage(
+                                    homeViewModel,
+                                    pageContentPadding,
+                                )
+                                AppTab.RECORDS -> RecordsPage(pageContentPadding)
+                                AppTab.FOLLOWING -> FollowingPage(pageContentPadding)
+                                AppTab.MINE -> SettingsPage(contentPadding = pageContentPadding)
                             }
                         }
                     }
@@ -310,7 +333,7 @@ private fun MainContent(
                     .windowInsetsPadding(if (embedded) emptyInsets else WindowInsets.systemBars),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    AppTab.entries.forEachIndexed { index, tab ->
+                    tabs.forEachIndexed { index, tab ->
                         NavigationRailItem(
                             selected = pagerState.currentPage == index,
                             onClick = { selectTab(index) },
@@ -322,6 +345,56 @@ private fun MainContent(
                             },
                             label = { Text(stringResource(tab.labelRes)) },
                         )
+                    }
+                }
+            }
+            if (embedded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(
+                            top = statusBarTopPadding + 12.dp,
+                            // Keep the shared overflow button beside (not on top
+                            // of) HomePage's persistent search action.
+                            end = 64.dp,
+                        ),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            // 40dp matches HomePage's search action and source
+                            // capsule; the shared top inset keeps all three
+                            // controls on one vertical baseline.
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.4f))
+                            .clickable { destinationMenuExpanded = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_more_vert),
+                            contentDescription = "更多页面",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = destinationMenuExpanded,
+                        onDismissRequest = { destinationMenuExpanded = false },
+                    ) {
+                        tabs.forEachIndexed { index, tab ->
+                            DropdownMenuItem(
+                                text = { Text(stringResource(tab.labelRes)) },
+                                leadingIcon = {
+                                    Icon(
+                                        painterResource(tab.icon),
+                                        contentDescription = null,
+                                    )
+                                },
+                                onClick = {
+                                    destinationMenuExpanded = false
+                                    selectTab(index)
+                                },
+                            )
+                        }
                     }
                 }
             }
