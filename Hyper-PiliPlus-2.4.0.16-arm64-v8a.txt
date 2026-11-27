@@ -1,0 +1,6 @@
+Hyper-PiliPlus signed Android APK
+
+Version: 2.4.0.16
+ABI: arm64-v8a
+Built from workspace based on 609d761eddbaa541fc5d14f91142a6d00ec0f06b plus local uncommitted changes.
+SHA-256: 8f808215e49e5487ebdaa41761fba93e0a75c1d02188dce49fd7b61c7e84c88c
